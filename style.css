@@ -1,4 +1,4 @@
-/* Override Custom Styles */
+/* Nonaktifkan seleksi teks default untuk keamanan */
 body {
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -6,7 +6,7 @@ body {
   user-select: none;
 }
 
-/* Smooth Scrolling & Input focus */
+/* Izinkan seleksi teks pada input form */
 input, textarea, select {
   -webkit-user-select: auto !important;
   -moz-user-select: auto !important;
@@ -14,7 +14,7 @@ input, textarea, select {
   user-select: auto !important;
 }
 
-/* Custom Scrollbar for Questions List */
+/* Scrollbar Custom */
 ::-webkit-scrollbar {
   width: 6px;
 }
