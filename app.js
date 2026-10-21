@@ -24,13 +24,38 @@ if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
 }
 
 /* ==========================================================================
-   GLOBAL APP STATE & USER DATA
+   GLOBAL STATE & DATA STRUCTURES
    ========================================================================== */
 let currentUser = null; 
-let examSettings = {
-  title: "Ujian Akhir Semester (SMP Qur'an Al Wahdah)",
-  duration: 30
-};
+
+let subjectsData = [
+  {
+    id: "mapel_1",
+    title: "Matematika",
+    duration: 30,
+    questions: [
+      {
+        id: 101,
+        text: "Berapakah hasil dari 12 x 12?",
+        options: { A: "124", B: "144", C: "164", D: "184", E: "200" },
+        correct: "B"
+      }
+    ]
+  },
+  {
+    id: "mapel_2",
+    title: "PAI / Al-Qur'an Hadits",
+    duration: 45,
+    questions: [
+      {
+        id: 201,
+        text: "Surah pertama yang diturunkan kepada Nabi Muhammad SAW adalah...",
+        options: { A: "Al-Fatihah", B: "Al-Ikhlas", C: "Al-'Alaq 1-5", D: "Al-Baqarah", E: "An-Nas" },
+        correct: "C"
+      }
+    ]
+  }
+];
 
 let defaultUsers = [
   { id: 1, name: "Administrator", username: "admin", password: "adminpassword", role: "admin" },
@@ -38,20 +63,12 @@ let defaultUsers = [
 ];
 let usersList = [];
 
-let questions = [
-  {
-    id: 1,
-    text: "Apa nama ibu kota negara Indonesia saat ini?",
-    options: { A: "Surabaya", B: "Jakarta", C: "Bandung", D: "Medan", E: "Semarang" },
-    correct: "B"
-  },
-  {
-    id: 2,
-    text: "Pancasila terdiri dari berapa sila?",
-    options: { A: "3", B: "4", C: "5", D: "6", E: "7" },
-    correct: "C"
-  }
-];
+let selectedAdminSubjectId = "";
+let selectedStudentSubjectId = "";
+
+let currentActiveExamQuestions = [];
+let currentExamDuration = 30;
+let currentExamTitle = "";
 
 let studentAnswers = {}; 
 let currentQuestionIndex = 0;
@@ -66,18 +83,23 @@ let isExamActive = false;
    PERSISTENCE LAYER
    ========================================================================== */
 function loadData() {
-  const savedConfig = localStorage.getItem("cbt_exam_config");
-  if (savedConfig) examSettings = JSON.parse(savedConfig);
+  const savedSubjects = localStorage.getItem("cbt_subjects_data");
+  if (savedSubjects) {
+    subjectsData = JSON.parse(savedSubjects);
+  } else {
+    saveData();
+  }
 
-  const savedQuestions = localStorage.getItem("cbt_questions");
-  if (savedQuestions) questions = JSON.parse(savedQuestions);
+  if (subjectsData.length > 0) {
+    selectedAdminSubjectId = subjectsData[0].id;
+    selectedStudentSubjectId = subjectsData[0].id;
+  }
 
   loadUsersData();
 }
 
 function saveData() {
-  localStorage.setItem("cbt_exam_config", JSON.stringify(examSettings));
-  localStorage.setItem("cbt_questions", JSON.stringify(questions));
+  localStorage.setItem("cbt_subjects_data", JSON.stringify(subjectsData));
 }
 
 function loadUsersData() {
@@ -172,22 +194,68 @@ function logout() {
 }
 
 /* ==========================================================================
-   ADMIN DASHBOARD
+   ADMIN DASHBOARD LOGIC
    ========================================================================== */
 function setupAdminDashboard() {
-  document.getElementById('cfgExamTitle').value = examSettings.title;
-  document.getElementById('cfgExamDuration').value = examSettings.duration;
+  renderSubjectDropdowns();
   renderQuestionListAdmin();
-  renderResultsTableAdmin();
   renderUsersTableAdmin();
   populateAdminProfileForm();
+  renderResultsTableAdmin();
 }
 
-function saveExamSettings() {
-  examSettings.title = document.getElementById('cfgExamTitle').value;
-  examSettings.duration = parseInt(document.getElementById('cfgExamDuration').value) || 30;
+function handleAddSubject() {
+  const title = document.getElementById('newSubjectTitle').value.trim();
+  const duration = parseInt(document.getElementById('newSubjectDuration').value) || 30;
+
+  if (!title) {
+    alert("Nama Mata Pelajaran wajib diisi!");
+    return;
+  }
+
+  const newSubject = {
+    id: "mapel_" + Date.now(),
+    title: title,
+    duration: duration,
+    questions: []
+  };
+
+  subjectsData.push(newSubject);
+  selectedAdminSubjectId = newSubject.id;
   saveData();
-  alert("Pengaturan Ujian Berhasil Disimpan!");
+
+  document.getElementById('newSubjectTitle').value = '';
+  renderSubjectDropdowns();
+  renderQuestionListAdmin();
+  alert(`Mata pelajaran "${title}" berhasil ditambahkan!`);
+}
+
+function renderSubjectDropdowns() {
+  const adminSelect = document.getElementById('adminSubjectSelect');
+  const studentSelect = document.getElementById('studentSubjectSelect');
+
+  if (adminSelect) {
+    adminSelect.innerHTML = '';
+    subjectsData.forEach(sub => {
+      adminSelect.innerHTML += `<option value="${sub.id}" ${sub.id === selectedAdminSubjectId ? 'selected' : ''}>${sub.title} (${sub.duration} Menit)</option>`;
+    });
+  }
+
+  if (studentSelect) {
+    studentSelect.innerHTML = '';
+    subjectsData.forEach(sub => {
+      studentSelect.innerHTML += `<option value="${sub.id}" ${sub.id === selectedStudentSubjectId ? 'selected' : ''}>${sub.title} (${sub.duration} Menit)</option>`;
+    });
+  }
+}
+
+function handleAdminSubjectChange() {
+  selectedAdminSubjectId = document.getElementById('adminSubjectSelect').value;
+  renderQuestionListAdmin();
+}
+
+function getActiveAdminSubject() {
+  return subjectsData.find(s => s.id === selectedAdminSubjectId);
 }
 
 function switchAdminTab(type) {
@@ -206,6 +274,13 @@ function switchAdminTab(type) {
 
 function handleAddQuestionManual(e) {
   e.preventDefault();
+  const activeSub = getActiveAdminSubject();
+  
+  if (!activeSub) {
+    alert("Buat atau pilih Mata Pelajaran terlebih dahulu!");
+    return;
+  }
+
   const newQ = {
     id: Date.now(),
     text: document.getElementById('qText').value,
@@ -219,13 +294,19 @@ function handleAddQuestionManual(e) {
     correct: document.getElementById('qCorrect').value
   };
 
-  questions.push(newQ);
+  activeSub.questions.push(newQ);
   saveData();
   renderQuestionListAdmin();
   document.getElementById('formQuestionManual').reset();
 }
 
 function handleFileUpload() {
+  const activeSub = getActiveAdminSubject();
+  if (!activeSub) {
+    alert("Buat atau pilih Mata Pelajaran terlebih dahulu!");
+    return;
+  }
+
   const fileInput = document.getElementById('fileUploadInput');
   const file = fileInput.files[0];
 
@@ -242,10 +323,10 @@ function handleFileUpload() {
       try {
         const importedQuestions = JSON.parse(e.target.result);
         if (Array.isArray(importedQuestions)) {
-          questions = questions.concat(importedQuestions);
+          activeSub.questions = activeSub.questions.concat(importedQuestions);
           saveData();
           renderQuestionListAdmin();
-          alert(`Berhasil mengimpor ${importedQuestions.length} soal dari JSON!`);
+          alert(`Berhasil mengimpor ${importedQuestions.length} soal ke mapel ${activeSub.title}!`);
           fileInput.value = '';
         } else {
           alert("Format JSON tidak valid.");
@@ -262,10 +343,10 @@ function handleFileUpload() {
         .then(function(result) {
           const parsedQuestions = parseWordTextToQuestions(result.value);
           if (parsedQuestions.length > 0) {
-            questions = questions.concat(parsedQuestions);
+            activeSub.questions = activeSub.questions.concat(parsedQuestions);
             saveData();
             renderQuestionListAdmin();
-            alert(`Berhasil mengimpor ${parsedQuestions.length} soal dari Word!`);
+            alert(`Berhasil mengimpor ${parsedQuestions.length} soal dari Word ke mapel ${activeSub.title}!`);
             fileInput.value = '';
           } else {
             alert("Tidak ada soal yang dibaca. Pastikan penulisan sesuai format!");
@@ -324,10 +405,18 @@ function downloadJSONTemplate() {
 
 function renderQuestionListAdmin() {
   const container = document.getElementById('questionsListContainer');
-  document.getElementById('countQuestions').innerText = questions.length;
+  const activeSub = getActiveAdminSubject();
+
+  if (!activeSub) {
+    container.innerHTML = '<p class="text-xs text-slate-400">Belum ada mata pelajaran dipilih.</p>';
+    document.getElementById('countQuestions').innerText = '0';
+    return;
+  }
+
+  document.getElementById('countQuestions').innerText = activeSub.questions.length;
   container.innerHTML = '';
 
-  questions.forEach((q, index) => {
+  activeSub.questions.forEach((q, index) => {
     container.innerHTML += `
       <div class="p-3 border rounded-lg bg-slate-50 flex justify-between items-start text-sm">
         <div>
@@ -343,16 +432,18 @@ function renderQuestionListAdmin() {
 }
 
 function deleteQuestion(index) {
-  if (confirm("Hapus soal ini?")) {
-    questions.splice(index, 1);
+  const activeSub = getActiveAdminSubject();
+  if (activeSub && confirm("Hapus soal ini?")) {
+    activeSub.questions.splice(index, 1);
     saveData();
     renderQuestionListAdmin();
   }
 }
 
 function clearAllQuestions() {
-  if (confirm("Hapus seluruh bank soal?")) {
-    questions = [];
+  const activeSub = getActiveAdminSubject();
+  if (activeSub && confirm(`Hapus seluruh soal di mapel ${activeSub.title}?`)) {
+    activeSub.questions = [];
     saveData();
     renderQuestionListAdmin();
   }
@@ -457,13 +548,13 @@ function handleUpdateAdminProfile(e) {
 
 async function renderResultsTableAdmin() {
   const tbody = document.getElementById('resultsTableBody');
-  tbody.innerHTML = '<tr><td colspan="5" class="p-3 text-center text-slate-400">Memuat data...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-slate-400">Memuat data...</td></tr>';
   
   const results = await getResultsFromDB();
   tbody.innerHTML = '';
 
   if (results.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="p-3 text-center text-slate-400">Belum ada data nilai.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-slate-400">Belum ada data nilai.</td></tr>';
     return;
   }
 
@@ -475,6 +566,7 @@ async function renderResultsTableAdmin() {
     tbody.innerHTML += `
       <tr class="hover:bg-slate-50">
         <td class="p-3 font-semibold">${r.student}</td>
+        <td class="p-3 text-blue-600 font-semibold">${r.subject || '-'}</td>
         <td class="p-3 text-slate-500">${r.timestamp}</td>
         <td class="p-3">${r.correct} / ${r.wrong}</td>
         <td class="p-3 font-bold text-blue-600">${r.score}</td>
@@ -491,9 +583,9 @@ async function exportToCSV() {
     return;
   }
 
-  let csvContent = "data:text/csv;charset=utf-8,Siswa,Waktu,Benar,Salah,Skor,Pelanggaran\n";
+  let csvContent = "data:text/csv;charset=utf-8,Siswa,Mata Pelajaran,Waktu,Benar,Salah,Skor,Pelanggaran\n";
   results.forEach(r => {
-    csvContent += `"${r.student}","${r.timestamp}",${r.correct},${r.wrong},${r.score},${r.violations}\n`;
+    csvContent += `"${r.student}","${r.subject || '-'}"\,"${r.timestamp}",${r.correct},${r.wrong},${r.score},${r.violations}\n`;
   });
 
   const encodedUri = encodeURI(csvContent);
@@ -509,16 +601,31 @@ async function exportToCSV() {
    SISWA - EXAM LOGIC
    ========================================================================== */
 function setupStudentInstruction() {
-  document.getElementById('instructionExamTitle').innerText = examSettings.title;
-  document.getElementById('instructionDuration').innerText = examSettings.duration;
-  document.getElementById('instructionQuestionCount').innerText = questions.length;
+  renderSubjectDropdowns();
+  handleStudentSubjectChange();
+}
+
+function handleStudentSubjectChange() {
+  selectedStudentSubjectId = document.getElementById('studentSubjectSelect').value;
+  const activeSub = subjectsData.find(s => s.id === selectedStudentSubjectId);
+
+  if (activeSub) {
+    document.getElementById('instructionDuration').innerText = activeSub.duration;
+    document.getElementById('instructionQuestionCount').innerText = activeSub.questions.length;
+  }
 }
 
 function startExam() {
-  if (questions.length === 0) {
-    alert("Belum ada soal yang tersedia. Silakan hubungi Guru/Admin.");
+  const activeSub = subjectsData.find(s => s.id === selectedStudentSubjectId);
+
+  if (!activeSub || activeSub.questions.length === 0) {
+    alert("Mata pelajaran ini belum memiliki soal. Silakan pilih mata pelajaran lain atau hubungi Guru/Admin.");
     return;
   }
+
+  currentActiveExamQuestions = activeSub.questions;
+  currentExamDuration = activeSub.duration;
+  currentExamTitle = activeSub.title;
 
   requestFullScreen();
 
@@ -526,9 +633,10 @@ function startExam() {
   currentQuestionIndex = 0;
   cheatingViolations = 0;
   isExamActive = true;
-  examTimeSeconds = examSettings.duration * 60;
+  examTimeSeconds = currentExamDuration * 60;
 
   document.getElementById('examStudentName').innerText = currentUser.name;
+  document.getElementById('examSubjectName').innerText = currentExamTitle;
   
   showView('viewExamInterface');
   renderCurrentQuestion();
@@ -564,7 +672,7 @@ function startTimer() {
 }
 
 function renderCurrentQuestion() {
-  const q = questions[currentQuestionIndex];
+  const q = currentActiveExamQuestions[currentQuestionIndex];
   document.getElementById('currentQuestionNum').innerText = currentQuestionIndex + 1;
   document.getElementById('examQuestionText').innerText = q.text;
 
@@ -592,7 +700,7 @@ function renderCurrentQuestion() {
 }
 
 function selectAnswer(optKey) {
-  const q = questions[currentQuestionIndex];
+  const q = currentActiveExamQuestions[currentQuestionIndex];
   if (!studentAnswers[q.id]) {
     studentAnswers[q.id] = { answer: optKey, doubtful: false };
   } else {
@@ -603,7 +711,7 @@ function selectAnswer(optKey) {
 }
 
 function toggleDoubtful() {
-  const q = questions[currentQuestionIndex];
+  const q = currentActiveExamQuestions[currentQuestionIndex];
   const isChecked = document.getElementById('btnDoubtful').checked;
   
   if (!studentAnswers[q.id]) {
@@ -617,7 +725,7 @@ function toggleDoubtful() {
 function navigateQuestion(direction) {
   currentQuestionIndex += direction;
   if (currentQuestionIndex < 0) currentQuestionIndex = 0;
-  if (currentQuestionIndex >= questions.length) currentQuestionIndex = questions.length - 1;
+  if (currentQuestionIndex >= currentActiveExamQuestions.length) currentQuestionIndex = currentActiveExamQuestions.length - 1;
   renderCurrentQuestion();
 }
 
@@ -630,7 +738,7 @@ function renderNumberGrid() {
   const grid = document.getElementById('numberGrid');
   grid.innerHTML = '';
 
-  questions.forEach((q, idx) => {
+  currentActiveExamQuestions.forEach((q, idx) => {
     const ans = studentAnswers[q.id];
     let btnClass = "bg-slate-100 border-slate-300 text-slate-700";
 
@@ -662,16 +770,17 @@ async function submitExam() {
   stopExam();
 
   let correctCount = 0;
-  questions.forEach(q => {
+  currentActiveExamQuestions.forEach(q => {
     const userAns = studentAnswers[q.id]?.answer;
     if (userAns === q.correct) correctCount++;
   });
 
-  const wrongCount = questions.length - correctCount;
-  const finalScore = Math.round((correctCount / questions.length) * 100);
+  const wrongCount = currentActiveExamQuestions.length - correctCount;
+  const finalScore = Math.round((correctCount / currentActiveExamQuestions.length) * 100);
 
   const resultPayload = {
     student: currentUser.name,
+    subject: currentExamTitle,
     score: finalScore,
     correct: correctCount,
     wrong: wrongCount,
