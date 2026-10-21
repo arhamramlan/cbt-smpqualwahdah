@@ -182,7 +182,6 @@ function logout() {
    1. DASHBOARD ADMIN LOGIC (PROFIL & MANAJEMEN AKUN)
    ========================================================================== */
 function setupAdminDashboard() {
-  // Set form input profil admin saat ini
   if (currentUser) {
     const adminUserEl = document.getElementById('adminNewUsername');
     const adminPassEl = document.getElementById('adminNewPassword');
@@ -205,7 +204,6 @@ function handleUpdateAdminCredentials(e) {
     return;
   }
 
-  // Update data akun admin di array
   const adminAcc = usersList.find(u => u.id === currentUser.id || u.role === 'admin');
   if (adminAcc) {
     adminAcc.username = newUsername;
@@ -262,7 +260,7 @@ function handleAdminAddSubject() {
 }
 
 /* ==========================================================================
-   2. DASHBOARD GURU LOGIC (PARSER WORD & PDF INCLUDED)
+   2. DASHBOARD GURU LOGIC (EDIT & HAPUS MAPEL INCLUDED)
    ========================================================================== */
 function setupTeacherDashboard() {
   renderTeacherSubjectDropdown();
@@ -278,8 +276,9 @@ function renderTeacherSubjectDropdown() {
 
   if (mySubjects.length === 0) {
     select.innerHTML = '<option value="">Anda belum mengampu mata pelajaran</option>';
+    selectedTeacherSubjectId = "";
     const container = document.getElementById('teacherQuestionsContainer');
-    if (container) container.innerHTML = '<p class="text-xs text-slate-400">Tidak ada data.</p>';
+    if (container) container.innerHTML = '<p class="text-xs text-slate-400">Tidak ada data soal.</p>';
   } else {
     mySubjects.forEach(sub => {
       select.innerHTML += `<option value="${sub.id}">${sub.title} - ${sub.targetClass}</option>`;
@@ -319,6 +318,58 @@ function handleTeacherSubjectChange() {
   if (select) {
     selectedTeacherSubjectId = select.value;
     renderQuestionListAdmin('teacher');
+  }
+}
+
+/* Modal & Logika EDIT Mapel Guru */
+function openEditTeacherSubjectModal() {
+  if (!selectedTeacherSubjectId) return alert("Tidak ada mata pelajaran yang dipilih!");
+  const activeSub = subjectsData.find(s => s.id === selectedTeacherSubjectId);
+  if (!activeSub) return;
+
+  document.getElementById('editTeacherSubjectTitle').value = activeSub.title;
+  document.getElementById('editTeacherSubjectClass').value = activeSub.targetClass;
+  document.getElementById('editTeacherSubjectDuration').value = activeSub.duration;
+
+  document.getElementById('modalEditTeacherSubject').classList.remove('hidden');
+}
+
+function closeEditTeacherSubjectModal() {
+  document.getElementById('modalEditTeacherSubject').classList.add('hidden');
+}
+
+function handleSaveEditedTeacherSubject(e) {
+  if (e) e.preventDefault();
+  const activeSub = subjectsData.find(s => s.id === selectedTeacherSubjectId);
+  if (!activeSub) return;
+
+  const newTitle = document.getElementById('editTeacherSubjectTitle').value.trim();
+  const newClass = document.getElementById('editTeacherSubjectClass').value.trim();
+  const newDuration = parseInt(document.getElementById('editTeacherSubjectDuration').value) || 30;
+
+  if (!newTitle || !newClass) return alert("Nama Mapel dan Target Kelas wajib diisi!");
+
+  activeSub.title = newTitle;
+  activeSub.targetClass = newClass;
+  activeSub.duration = newDuration;
+
+  saveData();
+  renderTeacherSubjectDropdown();
+  closeEditTeacherSubjectModal();
+  alert("Informasi mata pelajaran berhasil diperbarui!");
+}
+
+/* Logika HAPUS Mapel Guru */
+function handleDeleteTeacherSubject() {
+  if (!selectedTeacherSubjectId) return alert("Pilih mata pelajaran yang ingin dihapus!");
+  const activeSub = subjectsData.find(s => s.id === selectedTeacherSubjectId);
+  if (!activeSub) return;
+
+  if (confirm(`Apakah Anda yakin ingin menghapus mata pelajaran "${activeSub.title}" (${activeSub.targetClass}) beserta seluruh bank soal di dalamnya?`)) {
+    subjectsData = subjectsData.filter(s => s.id !== selectedTeacherSubjectId);
+    saveData();
+    renderTeacherSubjectDropdown();
+    alert("Mata pelajaran berhasil dihapus!");
   }
 }
 
@@ -539,7 +590,6 @@ function startExam() {
   examTimeSeconds = currentExamDuration * 60;
 
   document.getElementById('examStudentName').innerText = currentUser.name;
-  document.getElementById('examStudentClassBadge').innerText = currentExamClass;
   document.getElementById('examStudentClassBadge').innerText = currentExamClass;
   document.getElementById('examSubjectName').innerText = currentExamTitle;
   document.getElementById('examTeacherName').innerText = currentExamTeacher;
