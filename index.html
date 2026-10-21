@@ -83,7 +83,7 @@
       </div>
     </section>
 
-    <!-- 2. DASHBOARD ADMIN (FULL CONTROL + UBAH SANDI + SIGHT PASSWORD) -->
+    <!-- 2. DASHBOARD ADMIN -->
     <section id="viewAdmin" class="hidden space-y-6">
       <div class="bg-purple-900 text-white p-4 rounded-xl shadow-md flex justify-between items-center">
         <div>
@@ -112,7 +112,7 @@
         </form>
       </div>
 
-      <!-- Manajemen Akun Pengguna (Lihat Password) -->
+      <!-- Manajemen Akun Pengguna -->
       <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <h3 class="text-lg font-bold border-b pb-3 mb-4"><i class="fa-solid fa-users-gear mr-2 text-blue-600"></i>Manajemen Akun (Guru & Siswa)</h3>
 
@@ -227,7 +227,7 @@
         </div>
       </div>
 
-      <!-- Form Tambah Mapel & Pilihan Mapel Guru -->
+      <!-- Form Tambah Mapel & Pilihan Mapel Guru (DENGAN TOMBOL EDIT & HAPUS) -->
       <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
         <h3 class="text-lg font-bold border-b pb-3"><i class="fa-solid fa-book-open mr-2 text-blue-600"></i>Manajemen Mata Pelajaran Anda</h3>
 
@@ -243,15 +243,25 @@
           </div>
         </div>
 
-        <div class="flex items-center space-x-3 pt-2">
+        <div class="flex flex-wrap items-center gap-3 pt-2">
           <span class="text-sm font-bold text-slate-700">Pilih Mapel Yang Diampu:</span>
-          <select id="teacherSubjectSelect" onchange="handleTeacherSubjectChange()" class="border p-2 text-sm rounded-lg bg-slate-50 font-semibold text-blue-700">
+          <select id="teacherSubjectSelect" onchange="handleTeacherSubjectChange()" class="border p-2 text-sm rounded-lg bg-slate-50 font-semibold text-blue-700 focus:ring-2 focus:ring-blue-500">
             <!-- Dynamic Options Guru -->
           </select>
+
+          <!-- Tombol Edit & Hapus Mapel Guru -->
+          <button onclick="openEditTeacherSubjectModal()" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-lg shadow transition flex items-center space-x-1">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>Edit Mapel</span>
+          </button>
+          <button onclick="handleDeleteTeacherSubject()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow transition flex items-center space-x-1">
+            <i class="fa-solid fa-trash-can"></i>
+            <span>Hapus Mapel</span>
+          </button>
         </div>
       </div>
 
-      <!-- Bank Soal & Input Soal Guru (Manual & Unggah File) -->
+      <!-- Bank Soal & Input Soal Guru -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-1 space-y-6">
           
@@ -428,6 +438,34 @@
     </section>
 
   </main>
+
+  <!-- MODAL EDIT MAPEL GURU -->
+  <div id="modalEditTeacherSubject" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-pen-to-square mr-2 text-amber-500"></i>Edit Informasi Mapel</h3>
+        <button onclick="closeEditTeacherSubjectModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <form onsubmit="handleSaveEditedTeacherSubject(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Mata Pelajaran</label>
+          <input type="text" id="editTeacherSubjectTitle" required class="w-full border p-2 text-sm rounded-lg">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Target Kelas</label>
+          <input type="text" id="editTeacherSubjectClass" required class="w-full border p-2 text-sm rounded-lg">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Durasi Waktu Ujian (Menit)</label>
+          <input type="number" id="editTeacherSubjectDuration" required min="5" class="w-full border p-2 text-sm rounded-lg">
+        </div>
+        <div class="flex justify-end space-x-2 pt-2 border-t">
+          <button type="button" onclick="closeEditTeacherSubjectModal()" class="px-4 py-2 bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-300">Batal</button>
+          <button type="submit" class="px-4 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600">Simpan Perubahan</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
