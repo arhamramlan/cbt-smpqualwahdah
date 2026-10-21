@@ -109,7 +109,7 @@ async function getResultsFromDB() {
 }
 
 /* ==========================================================================
-   AUTHENTICATION & NAVIGATION (VIEW SWITCHING FIX)
+   AUTHENTICATION & NAVIGATION (SWITCHING DASHBOARD)
    ========================================================================== */
 function showView(viewId) {
   const views = ['viewLogin', 'viewAdmin', 'viewTeacher', 'viewStudentInstruction', 'viewExamInterface', 'viewStudentResult'];
@@ -125,12 +125,12 @@ function showView(viewId) {
   if (targetView) {
     targetView.classList.remove('hidden');
   } else {
-    console.error(`Elemen tampilan '${viewId}' tidak ditemukan!`);
+    console.error(`Elemen halaman '${viewId}' tidak ditemukan!`);
   }
 }
 
 function handleLogin(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   
   const inputRole = document.getElementById('loginRole').value.trim().toLowerCase();
   const inputUser = document.getElementById('loginUsername').value.trim().toLowerCase();
@@ -147,13 +147,13 @@ function handleLogin(e) {
   if (foundUser) {
     currentUser = { ...foundUser };
     
-    // Header Info
+    // Header Info User
     const userHeader = document.getElementById('userInfoHeader');
     const userBadge = document.getElementById('userBadge');
     if (userHeader) userHeader.classList.remove('hidden');
     if (userBadge) userBadge.innerText = `${foundUser.name} (${foundUser.role.toUpperCase()})`;
 
-    // Navigasi Dashboard Berdasarkan Peran
+    // Navigasi Tampilan
     if (foundUser.role.toLowerCase() === 'admin') {
       setupAdminDashboard();
       showView('viewAdmin');
@@ -165,7 +165,7 @@ function handleLogin(e) {
       showView('viewStudentInstruction');
     }
   } else {
-    alert("Kredensial atau Peran tidak cocok! Silakan periksa Username dan Password Anda.");
+    alert("Kredensial atau Peran tidak cocok! Periksa kembali Username dan Password Anda.");
   }
 }
 
@@ -179,7 +179,7 @@ function logout() {
 }
 
 /* ==========================================================================
-   1. DASHBOARD ADMIN LOGIC (FULL ACCESS)
+   1. DASHBOARD ADMIN LOGIC
    ========================================================================== */
 function setupAdminDashboard() {
   renderAdminSubjectDropdown();
@@ -291,7 +291,7 @@ function handleTeacherSubjectChange() {
 }
 
 function handleAddQuestionManual(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   const subjectId = currentUser.role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
   const activeSub = subjectsData.find(s => s.id === subjectId);
 
@@ -524,7 +524,7 @@ function toggleUserRoleFields() {
 }
 
 function handleAddUser(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   const name = document.getElementById('newFullName').value.trim();
   const role = document.getElementById('newRole').value;
   const username = document.getElementById('newUsername').value.trim();
