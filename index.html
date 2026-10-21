@@ -17,6 +17,9 @@
   <!-- Firebase SDK (Version 9 CDN - Compatibility Mode) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  
+  <!-- Mammoth.js untuk membaca file Word (.docx) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 antialiased select-none">
 
@@ -139,6 +142,7 @@
           <div id="formQuestionUpload" class="hidden space-y-3">
             <p class="text-xs text-slate-500">Unggah file soal berformat <strong>JSON</strong> sesuai struktur standar CBT.</p>
             <input type="file" id="fileUploadInput" accept=".json" class="w-full border p-2 text-sm rounded-lg">
+            <input type="file" id="fileUploadInput" accept=".json, .docx" class="w-full border p-2 text-sm rounded-lg">
             <button onclick="handleFileUpload()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg text-sm">
               <i class="fa-solid fa-file-import mr-2"></i>Import Soal
             </button>
