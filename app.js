@@ -179,12 +179,44 @@ function logout() {
 }
 
 /* ==========================================================================
-   1. DASHBOARD ADMIN LOGIC
+   1. DASHBOARD ADMIN LOGIC (PROFIL & MANAJEMEN AKUN)
    ========================================================================== */
 function setupAdminDashboard() {
+  // Set form input profil admin saat ini
+  if (currentUser) {
+    const adminUserEl = document.getElementById('adminNewUsername');
+    const adminPassEl = document.getElementById('adminNewPassword');
+    if (adminUserEl) adminUserEl.value = currentUser.username;
+    if (adminPassEl) adminPassEl.value = currentUser.password;
+  }
+
   renderAdminSubjectDropdown();
   renderUsersTableAdmin();
   renderResultsTableAdmin('admin');
+}
+
+function handleUpdateAdminCredentials(e) {
+  if (e) e.preventDefault();
+  const newUsername = document.getElementById('adminNewUsername').value.trim();
+  const newPassword = document.getElementById('adminNewPassword').value.trim();
+
+  if (!newUsername || !newPassword) {
+    alert("Username dan Password Admin tidak boleh kosong!");
+    return;
+  }
+
+  // Update data akun admin di array
+  const adminAcc = usersList.find(u => u.id === currentUser.id || u.role === 'admin');
+  if (adminAcc) {
+    adminAcc.username = newUsername;
+    adminAcc.password = newPassword;
+    currentUser.username = newUsername;
+    currentUser.password = newPassword;
+
+    saveUsersData();
+    renderUsersTableAdmin();
+    alert("Profil Admin berhasil diperbarui! Silakan gunakan kredensial baru Anda saat login berikutnya.");
+  }
 }
 
 function renderAdminSubjectDropdown() {
@@ -226,11 +258,11 @@ function handleAdminAddSubject() {
 
   if (titleInput) titleInput.value = '';
   if (classInput) classInput.value = '';
-  alert("Mapel berhasil ditambahkan!");
+  alert("Mapel berhasil ditambahkan oleh Admin!");
 }
 
 /* ==========================================================================
-   2. DASHBOARD GURU LOGIC
+   2. DASHBOARD GURU LOGIC (PARSER WORD & PDF INCLUDED)
    ========================================================================== */
 function setupTeacherDashboard() {
   renderTeacherSubjectDropdown();
@@ -288,6 +320,110 @@ function handleTeacherSubjectChange() {
     selectedTeacherSubjectId = select.value;
     renderQuestionListAdmin('teacher');
   }
+}
+
+/* Import File Word/PDF untuk Guru */
+async function handleUploadQuestionFile(role) {
+  const fileInput = document.getElementById('qFileInputGuru');
+  const subjectId = role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
+
+  const activeSub = subjectsData.find(s => s.id === subjectId);
+  if (!activeSub) return alert("Pilih mata pelajaran aktif terlebih dahulu!");
+
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    return alert("Pilih file Word (.docx) atau PDF (.pdf) yang akan diunggah!");
+  }
+
+  const file = fileInput.files[0];
+  const fileName = file.name.toLowerCase();
+
+  try {
+    let extractedText = "";
+
+    if (fileName.endsWith('.docx')) {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+      extractedText = result.value;
+    } else if (fileName.endsWith('.pdf')) {
+      extractedText = await readPdfText(file);
+    } else {
+      return alert("Format file tidak didukung! Harus berupa file .docx atau .pdf");
+    }
+
+    const parsedQuestions = parseRawTextToQuestions(extractedText);
+
+    if (parsedQuestions.length === 0) {
+      return alert("Gagal membaca soal! Pastikan format teks dalam file sesuai petunjuk.");
+    }
+
+    activeSub.questions.push(...parsedQuestions);
+    saveData();
+    renderQuestionListAdmin(role);
+
+    fileInput.value = '';
+    alert(`Berhasil mengimpor ${parsedQuestions.length} soal dari file "${file.name}"!`);
+
+  } catch (error) {
+    console.error("Error reading file:", error);
+    alert("Terjadi kesalahan saat membaca isi file.");
+  }
+}
+
+async function readPdfText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = "";
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map(item => item.str).join(" ");
+    fullText += pageText + "\n";
+  }
+
+  return fullText;
+}
+
+function parseRawTextToQuestions(rawText) {
+  const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  const questions = [];
+  let currentQuestion = null;
+
+  lines.forEach(line => {
+    const qMatch = line.match(/^(\d+)[\.\)]\s*(.+)/);
+    if (qMatch) {
+      if (currentQuestion && currentQuestion.text) questions.push(currentQuestion);
+      currentQuestion = {
+        id: Date.now() + Math.random(),
+        text: qMatch[2],
+        options: { A: "", B: "", C: "", D: "", E: "" },
+        correct: "A"
+      };
+      return;
+    }
+
+    if (!currentQuestion) return;
+
+    const optMatch = line.match(/^([A-E])[\.\)]\s*(.+)/i);
+    if (optMatch) {
+      const key = optMatch[1].toUpperCase();
+      currentQuestion.options[key] = optMatch[2];
+      return;
+    }
+
+    const keyMatch = line.match(/^Kunci\s*(?:Jawaban)?\s*[:=]\s*([A-E])/i);
+    if (keyMatch) {
+      currentQuestion.correct = keyMatch[1].toUpperCase();
+      return;
+    }
+
+    if (!currentQuestion.options.A) {
+      currentQuestion.text += " " + line;
+    }
+  });
+
+  if (currentQuestion && currentQuestion.text) questions.push(currentQuestion);
+  return questions;
 }
 
 function handleAddQuestionManual(e) {
@@ -404,6 +540,7 @@ function startExam() {
 
   document.getElementById('examStudentName').innerText = currentUser.name;
   document.getElementById('examStudentClassBadge').innerText = currentExamClass;
+  document.getElementById('examStudentClassBadge').innerText = currentExamClass;
   document.getElementById('examSubjectName').innerText = currentExamTitle;
   document.getElementById('examTeacherName').innerText = currentExamTeacher;
   
@@ -514,7 +651,7 @@ function handleViolation(reason) {
   else { alert(`PERINGATAN (${cheatingViolations}/${MAX_VIOLATIONS}): ${reason}`); requestFullScreen(); }
 }
 
-/* User Account Management (Admin) */
+/* User Account Management (Admin + Sight Password) */
 function toggleUserRoleFields() {
   const role = document.getElementById('newRole').value;
   const teacherField = document.getElementById('fieldTeacherAssigned');
@@ -551,7 +688,14 @@ function renderUsersTableAdmin() {
       <tr class="hover:bg-slate-50">
         <td class="p-2.5 font-semibold">${u.name}</td>
         <td class="p-2.5 font-mono text-xs">${u.username}</td>
-        <td class="p-2.5 font-mono text-xs">${u.password}</td>
+        <td class="p-2.5 font-mono text-xs">
+          <div class="flex items-center space-x-2">
+            <input type="password" id="pass_field_${u.id}" value="${u.password}" readonly class="bg-transparent border-0 font-mono text-xs w-24">
+            <button onclick="togglePasswordVisibility(${u.id})" class="text-slate-500 hover:text-slate-700">
+              <i id="pass_icon_${u.id}" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </td>
         <td class="p-2.5"><span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded font-bold">${u.role.toUpperCase()}</span></td>
         <td class="p-2.5 text-center"><button onclick="deleteUser(${u.id})" class="text-red-500 text-xs font-bold hover:underline">Hapus</button></td>
       </tr>
@@ -559,10 +703,26 @@ function renderUsersTableAdmin() {
   });
 }
 
+function togglePasswordVisibility(userId) {
+  const inputEl = document.getElementById(`pass_field_${userId}`);
+  const iconEl = document.getElementById(`pass_icon_${userId}`);
+  if (inputEl && iconEl) {
+    if (inputEl.type === 'password') {
+      inputEl.type = 'text';
+      iconEl.className = 'fa-solid fa-eye-slash text-blue-600';
+    } else {
+      inputEl.type = 'password';
+      iconEl.className = 'fa-solid fa-eye text-slate-500';
+    }
+  }
+}
+
 function deleteUser(id) {
-  usersList = usersList.filter(u => u.id !== id);
-  saveUsersData();
-  renderUsersTableAdmin();
+  if (confirm("Hapus akun ini secara permanen?")) {
+    usersList = usersList.filter(u => u.id !== id);
+    saveUsersData();
+    renderUsersTableAdmin();
+  }
 }
 
 async function renderResultsTableAdmin(role) {
@@ -576,7 +736,7 @@ async function renderResultsTableAdmin(role) {
 
   tbody.innerHTML = '';
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-xs text-slate-400">Belum ada data rekap nilai.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-xs text-slate-400">Belum ada data rekap nilai.</td></tr>`;
     return;
   }
 
@@ -586,9 +746,10 @@ async function renderResultsTableAdmin(role) {
         <td class="p-2.5 font-semibold">${r.student}</td>
         <td class="p-2.5">${r.studentClass}</td>
         <td class="p-2.5 font-bold text-blue-600">${r.subject}</td>
+        <td class="p-2.5 font-medium text-slate-600">${r.teacherName || '-'}</td>
         <td class="p-2.5">${r.timestamp}</td>
         <td class="p-2.5">${r.correct}/${r.wrong}</td>
-        <td class="p-2.5 font-bold">${r.score}</td>
+        <td class="p-2.5 font-bold text-emerald-600">${r.score}</td>
         <td class="p-2.5 text-xs font-bold text-red-600">${r.violations}x Melanggar</td>
       </tr>
     `;
