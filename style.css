@@ -1,4 +1,4 @@
-/* Nonaktifkan seleksi teks default untuk keamanan */
+/* Styling & Proteksi Seleksi Teks */
 body {
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -6,7 +6,6 @@ body {
   user-select: none;
 }
 
-/* Izinkan seleksi teks pada input form */
 input, textarea, select {
   -webkit-user-select: auto !important;
   -moz-user-select: auto !important;
@@ -14,7 +13,6 @@ input, textarea, select {
   user-select: auto !important;
 }
 
-/* Scrollbar Custom */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -24,7 +22,4 @@ input, textarea, select {
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
 }
