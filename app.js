@@ -32,6 +32,9 @@ let subjectsData = [
   {
     id: "mapel_1",
     title: "Matematika",
+    targetClass: "Kelas 7A",
+    teacherUsername: "guru1",
+    teacherName: "Ustadz Ahmad, S.Pd.",
     duration: 30,
     questions: [
       {
@@ -45,6 +48,9 @@ let subjectsData = [
   {
     id: "mapel_2",
     title: "PAI / Al-Qur'an Hadits",
+    targetClass: "Kelas 7A",
+    teacherUsername: "guru2",
+    teacherName: "Ustadz Mahmud, Lc.",
     duration: 45,
     questions: [
       {
@@ -58,8 +64,10 @@ let subjectsData = [
 ];
 
 let defaultUsers = [
-  { id: 1, name: "Administrator", username: "admin", password: "adminpassword", role: "admin" },
-  { id: 2, name: "Siswa 1", username: "siswa1", password: "siswapassword", role: "siswa" }
+  { id: 1, name: "Administrator Utama", username: "admin", password: "adminpassword", role: "admin" },
+  { id: 2, name: "Ustadz Ahmad, S.Pd.", username: "guru1", password: "gurupassword", role: "guru", assignedInfo: "Matematika - Kelas 7A" },
+  { id: 3, name: "Ustadz Mahmud, Lc.", username: "guru2", password: "gurupassword", role: "guru", assignedInfo: "PAI - Kelas 7A" },
+  { id: 4, name: "Muhammad Ali", username: "siswa1", password: "siswapassword", role: "siswa", studentClass: "Kelas 7A" }
 ];
 let usersList = [];
 
@@ -69,6 +77,8 @@ let selectedStudentSubjectId = "";
 let currentActiveExamQuestions = [];
 let currentExamDuration = 30;
 let currentExamTitle = "";
+let currentExamTeacher = "";
+let currentExamClass = "";
 
 let studentAnswers = {}; 
 let currentQuestionIndex = 0;
@@ -166,9 +176,9 @@ function handleLogin(e) {
   const foundUser = usersList.find(u => u.username === user && u.password === pass && u.role === role);
 
   if (foundUser) {
-    currentUser = { username: foundUser.username, name: foundUser.name, role: foundUser.role };
+    currentUser = { ...foundUser };
     
-    if (foundUser.role === 'admin') {
+    if (foundUser.role === 'admin' || foundUser.role === 'guru') {
       setupAdminDashboard();
       showView('viewAdmin');
     } else {
@@ -194,9 +204,17 @@ function logout() {
 }
 
 /* ==========================================================================
-   ADMIN DASHBOARD LOGIC
+   DASHBOARD GURU & ADMIN (RBAC ACCESS CONTROL)
    ========================================================================== */
 function setupAdminDashboard() {
+  // Kontrol Akses Fitur Manajemen Akun (Hanya Admin)
+  const accMgmtSection = document.getElementById('sectionAccountManagement');
+  if (currentUser.role === 'admin') {
+    accMgmtSection.classList.remove('hidden');
+  } else {
+    accMgmtSection.classList.add('hidden'); // Guru tidak bisa akses manajemen akun
+  }
+
   renderSubjectDropdowns();
   renderQuestionListAdmin();
   renderUsersTableAdmin();
@@ -204,8 +222,20 @@ function setupAdminDashboard() {
   renderResultsTableAdmin();
 }
 
+function getAccessibleSubjectsForCurrentAdmin() {
+  if (!currentUser) return [];
+  if (currentUser.role === 'admin') {
+    return subjectsData; // Admin bisa akses semua mapel
+  } else if (currentUser.role === 'guru') {
+    // Guru hanya bisa mengakses mapel yang terdaftar atas username-nya
+    return subjectsData.filter(s => s.teacherUsername === currentUser.username);
+  }
+  return [];
+}
+
 function handleAddSubject() {
   const title = document.getElementById('newSubjectTitle').value.trim();
+  const targetClass = document.getElementById('newSubjectClass').value.trim() || "Semua Kelas";
   const duration = parseInt(document.getElementById('newSubjectDuration').value) || 30;
 
   if (!title) {
@@ -216,6 +246,9 @@ function handleAddSubject() {
   const newSubject = {
     id: "mapel_" + Date.now(),
     title: title,
+    targetClass: targetClass,
+    teacherUsername: currentUser.username,
+    teacherName: currentUser.name,
     duration: duration,
     questions: []
   };
@@ -225,27 +258,51 @@ function handleAddSubject() {
   saveData();
 
   document.getElementById('newSubjectTitle').value = '';
+  document.getElementById('newSubjectClass').value = '';
   renderSubjectDropdowns();
   renderQuestionListAdmin();
-  alert(`Mata pelajaran "${title}" berhasil ditambahkan!`);
+  alert(`Mata pelajaran "${title}" (${targetClass}) berhasil ditambahkan!`);
 }
 
 function renderSubjectDropdowns() {
   const adminSelect = document.getElementById('adminSubjectSelect');
   const studentSelect = document.getElementById('studentSubjectSelect');
 
+  // Filter mapel untuk Admin / Guru
   if (adminSelect) {
     adminSelect.innerHTML = '';
-    subjectsData.forEach(sub => {
-      adminSelect.innerHTML += `<option value="${sub.id}" ${sub.id === selectedAdminSubjectId ? 'selected' : ''}>${sub.title} (${sub.duration} Menit)</option>`;
-    });
+    const accessibleSubjects = getAccessibleSubjectsForCurrentAdmin();
+
+    if (accessibleSubjects.length === 0) {
+      adminSelect.innerHTML = '<option value="">Belum ada mapel diampu</option>';
+      selectedAdminSubjectId = "";
+    } else {
+      if (!accessibleSubjects.some(s => s.id === selectedAdminSubjectId)) {
+        selectedAdminSubjectId = accessibleSubjects[0].id;
+      }
+      accessibleSubjects.forEach(sub => {
+        adminSelect.innerHTML += `<option value="${sub.id}" ${sub.id === selectedAdminSubjectId ? 'selected' : ''}>${sub.title} - ${sub.targetClass} (${sub.duration} Menit)</option>`;
+      });
+    }
   }
 
-  if (studentSelect) {
+  // Filter mapel untuk Siswa (Sesuai Kelas Siswa)
+  if (studentSelect && currentUser && currentUser.role === 'siswa') {
     studentSelect.innerHTML = '';
-    subjectsData.forEach(sub => {
-      studentSelect.innerHTML += `<option value="${sub.id}" ${sub.id === selectedStudentSubjectId ? 'selected' : ''}>${sub.title} (${sub.duration} Menit)</option>`;
-    });
+    const studentClass = currentUser.studentClass || "Semua Kelas";
+    const availableForStudent = subjectsData.filter(s => s.targetClass === studentClass || s.targetClass === "Semua Kelas");
+
+    if (availableForStudent.length === 0) {
+      studentSelect.innerHTML = '<option value="">Tidak ada ujian aktif untuk kelas Anda</option>';
+      selectedStudentSubjectId = "";
+    } else {
+      if (!availableForStudent.some(s => s.id === selectedStudentSubjectId)) {
+        selectedStudentSubjectId = availableForStudent[0].id;
+      }
+      availableForStudent.forEach(sub => {
+        studentSelect.innerHTML += `<option value="${sub.id}" ${sub.id === selectedStudentSubjectId ? 'selected' : ''}>${sub.title} - ${sub.targetClass} (Guru: ${sub.teacherName})</option>`;
+      });
+    }
   }
 }
 
@@ -266,6 +323,7 @@ function openEditSubjectModal() {
   }
 
   document.getElementById('editSubjectTitle').value = activeSub.title;
+  document.getElementById('editSubjectClass').value = activeSub.targetClass;
   document.getElementById('editSubjectDuration').value = activeSub.duration;
   document.getElementById('modalEditSubject').classList.remove('hidden');
 }
@@ -279,6 +337,7 @@ function handleSaveEditedSubject() {
   if (!activeSub) return;
 
   const newTitle = document.getElementById('editSubjectTitle').value.trim();
+  const newClass = document.getElementById('editSubjectClass').value.trim();
   const newDuration = parseInt(document.getElementById('editSubjectDuration').value) || 30;
 
   if (!newTitle) {
@@ -287,13 +346,14 @@ function handleSaveEditedSubject() {
   }
 
   activeSub.title = newTitle;
+  activeSub.targetClass = newClass;
   activeSub.duration = newDuration;
 
   saveData();
   renderSubjectDropdowns();
   closeEditSubjectModal();
 
-  alert(`Mata pelajaran berhasil diperbarui menjadi "${newTitle}" (${newDuration} Menit)!`);
+  alert(`Mata pelajaran berhasil diperbarui!`);
 }
 
 function handleDeleteSubject() {
@@ -302,15 +362,7 @@ function handleDeleteSubject() {
 
   if (confirm(`Apakah Anda yakin ingin menghapus mata pelajaran "${activeSub.title}" beserta seluruh soal di dalamnya?`)) {
     subjectsData = subjectsData.filter(s => s.id !== activeSub.id);
-
-    if (subjectsData.length > 0) {
-      selectedAdminSubjectId = subjectsData[0].id;
-      selectedStudentSubjectId = subjectsData[0].id;
-    } else {
-      selectedAdminSubjectId = "";
-      selectedStudentSubjectId = "";
-    }
-
+    selectedAdminSubjectId = "";
     saveData();
     renderSubjectDropdowns();
     renderQuestionListAdmin();
@@ -468,7 +520,7 @@ function renderQuestionListAdmin() {
   const activeSub = getActiveAdminSubject();
 
   if (!activeSub) {
-    container.innerHTML = '<p class="text-xs text-slate-400">Belum ada mata pelajaran dipilih.</p>';
+    container.innerHTML = '<p class="text-xs text-slate-400">Belum ada mata pelajaran dipilih atau diampu.</p>';
     document.getElementById('countQuestions').innerText = '0';
     return;
   }
@@ -510,427 +562,19 @@ function clearAllQuestions() {
 }
 
 /* ==========================================================================
-   MANAJEMEN AKUN & ADMIN PROFILE
+   MANAJEMEN AKUN (GURU, SISWA, ADMIN)
    ========================================================================== */
-function handleAddUser(e) {
-  e.preventDefault();
-  const name = document.getElementById('newFullName').value.trim();
+function toggleUserRoleFields() {
   const role = document.getElementById('newRole').value;
-  const username = document.getElementById('newUsername').value.trim();
-  const password = document.getElementById('newPassword').value;
+  const teacherField = document.getElementById('fieldTeacherAssigned');
+  const studentField = document.getElementById('fieldStudentClass');
 
-  if (usersList.some(u => u.username === username)) {
-    alert("Username telah digunakan!");
-    return;
-  }
-
-  usersList.push({ id: Date.now(), name, role, username, password });
-  saveUsersData();
-  renderUsersTableAdmin();
-  document.getElementById('formAddUser').reset();
-  alert(`Akun ${role.toUpperCase()} "${name}" berhasil ditambahkan!`);
-}
-
-function renderUsersTableAdmin() {
-  const tbody = document.getElementById('userTableBody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-
-  usersList.forEach((u) => {
-    const roleBadge = u.role === 'admin' 
-      ? `<span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded font-bold">Admin/Guru</span>`
-      : `<span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded font-bold">Siswa</span>`;
-
-    const deleteBtn = (u.username === 'admin')
-      ? `<span class="text-xs text-slate-400 italic">Utama</span>`
-      : `<button onclick="deleteUser(${u.id})" class="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1"><i class="fa-solid fa-trash mr-1"></i>Hapus</button>`;
-
-    tbody.innerHTML += `
-      <tr class="hover:bg-slate-50">
-        <td class="p-2.5 font-semibold text-slate-800">${u.name}</td>
-        <td class="p-2.5 text-slate-600 font-mono text-xs">${u.username}</td>
-        
-        <td class="p-2.5">
-          <div class="flex items-center space-x-2">
-            <span id="passText_${u.id}" class="font-mono text-xs text-slate-600">••••••••</span>
-            <button onclick="toggleShowPassword(${u.id}, '${u.password}')" title="Lihat/Sembunyikan Sandi" class="text-slate-400 hover:text-blue-600 text-xs p-1 focus:outline-none">
-              <i id="passIcon_${u.id}" class="fa-solid fa-eye"></i>
-            </button>
-          </div>
-        </td>
-
-        <td class="p-2.5">${roleBadge}</td>
-        <td class="p-2.5 text-center">${deleteBtn}</td>
-      </tr>
-    `;
-  });
-}
-
-function toggleShowPassword(userId, actualPassword) {
-  const textEl = document.getElementById(`passText_${userId}`);
-  const iconEl = document.getElementById(`passIcon_${userId}`);
-
-  if (textEl.innerText === '••••••••') {
-    textEl.innerText = actualPassword;
-    textEl.classList.add('font-bold', 'text-blue-700');
-    iconEl.className = 'fa-solid fa-eye-slash text-blue-600';
+  if (role === 'guru') {
+    teacherField.classList.remove('hidden');
+    studentField.classList.add('hidden');
+  } else if (role === 'siswa') {
+    teacherField.classList.add('hidden');
+    studentField.classList.remove('hidden');
   } else {
-    textEl.innerText = '••••••••';
-    textEl.classList.remove('font-bold', 'text-blue-700');
-    iconEl.className = 'fa-solid fa-eye';
-  }
-}
-
-function deleteUser(userId) {
-  if (confirm("Apakah Anda yakin ingin menghapus akun ini?")) {
-    usersList = usersList.filter(u => u.id !== userId);
-    saveUsersData();
-    renderUsersTableAdmin();
-  }
-}
-
-function populateAdminProfileForm() {
-  if (currentUser && currentUser.role === 'admin') {
-    document.getElementById('adminNewUsername').value = currentUser.username;
-    document.getElementById('adminNewPassword').value = '';
-    document.getElementById('adminConfirmPassword').value = '';
-  }
-}
-
-function handleUpdateAdminProfile(e) {
-  e.preventDefault();
-  const newUsername = document.getElementById('adminNewUsername').value.trim();
-  const newPassword = document.getElementById('adminNewPassword').value;
-  const confirmPassword = document.getElementById('adminConfirmPassword').value;
-
-  if (newPassword !== confirmPassword) {
-    alert("Konfirmasi password tidak cocok!");
-    return;
-  }
-
-  loadUsersData();
-  const isUsernameTaken = usersList.some(u => u.username === newUsername && u.username !== currentUser.username);
-  if (isUsernameTaken) {
-    alert("Username tersebut sudah digunakan oleh akun lain!");
-    return;
-  }
-
-  const adminIndex = usersList.findIndex(u => u.username === currentUser.username && u.role === 'admin');
-  if (adminIndex !== -1) {
-    usersList[adminIndex].username = newUsername;
-    usersList[adminIndex].password = newPassword;
-    currentUser.username = newUsername;
-
-    saveUsersData();
-    document.getElementById('userBadge').innerText = `${currentUser.name} (${currentUser.role.toUpperCase()})`;
-    renderUsersTableAdmin();
-
-    alert("Kredensial Admin berhasil diperbarui!");
-    document.getElementById('adminNewPassword').value = '';
-    document.getElementById('adminConfirmPassword').value = '';
-  }
-}
-
-async function renderResultsTableAdmin() {
-  const tbody = document.getElementById('resultsTableBody');
-  tbody.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-slate-400">Memuat data...</td></tr>';
-  
-  const results = await getResultsFromDB();
-  tbody.innerHTML = '';
-
-  if (results.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-slate-400">Belum ada data nilai.</td></tr>';
-    return;
-  }
-
-  results.forEach(r => {
-    const violationBadge = r.violations > 0 
-      ? `<span class="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded font-bold">${r.violations}x Pelanggaran</span>`
-      : `<span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded">Bersih</span>`;
-
-    tbody.innerHTML += `
-      <tr class="hover:bg-slate-50">
-        <td class="p-3 font-semibold">${r.student}</td>
-        <td class="p-3 text-blue-600 font-semibold">${r.subject || '-'}</td>
-        <td class="p-3 text-slate-500">${r.timestamp}</td>
-        <td class="p-3">${r.correct} / ${r.wrong}</td>
-        <td class="p-3 font-bold text-blue-600">${r.score}</td>
-        <td class="p-3">${violationBadge}</td>
-      </tr>
-    `;
-  });
-}
-
-async function exportToCSV() {
-  const results = await getResultsFromDB();
-  if (results.length === 0) {
-    alert("Tidak ada data rekap nilai untuk di-export.");
-    return;
-  }
-
-  let csvContent = "data:text/csv;charset=utf-8,Siswa,Mata Pelajaran,Waktu,Benar,Salah,Skor,Pelanggaran\n";
-  results.forEach(r => {
-    csvContent += `"${r.student}","${r.subject || '-'}", "${r.timestamp}",${r.correct},${r.wrong},${r.score},${r.violations}\n`;
-  });
-
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `rekap_nilai_cbt_${Date.now()}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
-/* ==========================================================================
-   SISWA - EXAM LOGIC
-   ========================================================================== */
-function setupStudentInstruction() {
-  renderSubjectDropdowns();
-  handleStudentSubjectChange();
-}
-
-function handleStudentSubjectChange() {
-  selectedStudentSubjectId = document.getElementById('studentSubjectSelect').value;
-  const activeSub = subjectsData.find(s => s.id === selectedStudentSubjectId);
-
-  if (activeSub) {
-    document.getElementById('instructionDuration').innerText = activeSub.duration;
-    document.getElementById('instructionQuestionCount').innerText = activeSub.questions.length;
-  }
-}
-
-function startExam() {
-  const activeSub = subjectsData.find(s => s.id === selectedStudentSubjectId);
-
-  if (!activeSub || activeSub.questions.length === 0) {
-    alert("Mata pelajaran ini belum memiliki soal. Silakan pilih mata pelajaran lain atau hubungi Guru/Admin.");
-    return;
-  }
-
-  currentActiveExamQuestions = activeSub.questions;
-  currentExamDuration = activeSub.duration;
-  currentExamTitle = activeSub.title;
-
-  requestFullScreen();
-
-  studentAnswers = {};
-  currentQuestionIndex = 0;
-  cheatingViolations = 0;
-  isExamActive = true;
-  examTimeSeconds = currentExamDuration * 60;
-
-  document.getElementById('examStudentName').innerText = currentUser.name;
-  document.getElementById('examSubjectName').innerText = currentExamTitle;
-  
-  showView('viewExamInterface');
-  renderCurrentQuestion();
-  renderNumberGrid();
-  startTimer();
-}
-
-function requestFullScreen() {
-  const docEl = document.documentElement;
-  if (docEl.requestFullscreen) docEl.requestFullscreen();
-  else if (docEl.mozRequestFullScreen) docEl.mozRequestFullScreen();
-  else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
-  else if (docEl.msRequestFullscreen) docEl.msRequestFullscreen();
-}
-
-function startTimer() {
-  clearInterval(timerInterval);
-  timerInterval = setInterval(() => {
-    examTimeSeconds--;
-
-    const hours = String(Math.floor(examTimeSeconds / 3600)).padStart(2, '0');
-    const minutes = String(Math.floor((examTimeSeconds % 3600) / 60)).padStart(2, '0');
-    const seconds = String(examTimeSeconds % 60).padStart(2, '0');
-
-    document.getElementById('examTimer').innerText = `${hours}:${minutes}:${seconds}`;
-
-    if (examTimeSeconds <= 0) {
-      clearInterval(timerInterval);
-      alert("Waktu Habis! Jawaban akan dikirim secara otomatis.");
-      submitExam();
-    }
-  }, 1000);
-}
-
-function renderCurrentQuestion() {
-  const q = currentActiveExamQuestions[currentQuestionIndex];
-  document.getElementById('currentQuestionNum').innerText = currentQuestionIndex + 1;
-  document.getElementById('examQuestionText').innerText = q.text;
-
-  const activeAns = studentAnswers[q.id] || { answer: null, doubtful: false };
-  document.getElementById('btnDoubtful').checked = activeAns.doubtful;
-
-  const optionsContainer = document.getElementById('examOptionsContainer');
-  optionsContainer.innerHTML = '';
-
-  Object.keys(q.options).forEach(optKey => {
-    const isSelected = activeAns.answer === optKey;
-    const activeClass = isSelected ? 'border-blue-600 bg-blue-50 font-bold' : 'border-slate-200 hover:bg-slate-50';
-
-    optionsContainer.innerHTML += `
-      <div onclick="selectAnswer('${optKey}')" class="p-3 border rounded-lg cursor-pointer transition flex items-center space-x-3 ${activeClass}">
-        <div class="w-7 h-7 rounded-full border flex items-center justify-center text-sm ${isSelected ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}">
-          ${optKey}
-        </div>
-        <div class="text-slate-800 text-sm">${q.options[optKey]}</div>
-      </div>
-    `;
-  });
-
-  document.getElementById('btnPrev').disabled = currentQuestionIndex === 0;
-}
-
-function selectAnswer(optKey) {
-  const q = currentActiveExamQuestions[currentQuestionIndex];
-  if (!studentAnswers[q.id]) {
-    studentAnswers[q.id] = { answer: optKey, doubtful: false };
-  } else {
-    studentAnswers[q.id].answer = optKey;
-  }
-  renderCurrentQuestion();
-  renderNumberGrid();
-}
-
-function toggleDoubtful() {
-  const q = currentActiveExamQuestions[currentQuestionIndex];
-  const isChecked = document.getElementById('btnDoubtful').checked;
-  
-  if (!studentAnswers[q.id]) {
-    studentAnswers[q.id] = { answer: null, doubtful: isChecked };
-  } else {
-    studentAnswers[q.id].doubtful = isChecked;
-  }
-  renderNumberGrid();
-}
-
-function navigateQuestion(direction) {
-  currentQuestionIndex += direction;
-  if (currentQuestionIndex < 0) currentQuestionIndex = 0;
-  if (currentQuestionIndex >= currentActiveExamQuestions.length) currentQuestionIndex = currentActiveExamQuestions.length - 1;
-  renderCurrentQuestion();
-}
-
-function jumpToQuestion(index) {
-  currentQuestionIndex = index;
-  renderCurrentQuestion();
-}
-
-function renderNumberGrid() {
-  const grid = document.getElementById('numberGrid');
-  grid.innerHTML = '';
-
-  currentActiveExamQuestions.forEach((q, idx) => {
-    const ans = studentAnswers[q.id];
-    let btnClass = "bg-slate-100 border-slate-300 text-slate-700";
-
-    if (ans && ans.answer) {
-      btnClass = ans.doubtful ? "bg-amber-400 text-white border-amber-500" : "bg-blue-600 text-white border-blue-600";
-    } else if (ans && ans.doubtful) {
-      btnClass = "bg-amber-400 text-white border-amber-500";
-    }
-
-    if (idx === currentQuestionIndex) {
-      btnClass += " ring-2 ring-offset-1 ring-slate-800 font-extrabold";
-    }
-
-    grid.innerHTML += `
-      <button onclick="jumpToQuestion(${idx})" class="h-9 w-full border rounded text-xs flex items-center justify-center font-semibold transition ${btnClass}">
-        ${idx + 1}
-      </button>
-    `;
-  });
-}
-
-function confirmSubmitExam() {
-  if (confirm("Apakah Anda yakin ingin menyelesaikan dan mengirimkan jawaban Anda?")) {
-    submitExam();
-  }
-}
-
-async function submitExam() {
-  stopExam();
-
-  let correctCount = 0;
-  currentActiveExamQuestions.forEach(q => {
-    const userAns = studentAnswers[q.id]?.answer;
-    if (userAns === q.correct) correctCount++;
-  });
-
-  const wrongCount = currentActiveExamQuestions.length - correctCount;
-  const finalScore = Math.round((correctCount / currentActiveExamQuestions.length) * 100);
-
-  const resultPayload = {
-    student: currentUser.name,
-    subject: currentExamTitle,
-    score: finalScore,
-    correct: correctCount,
-    wrong: wrongCount,
-    violations: cheatingViolations,
-    timestamp: new Date().toLocaleString("id-ID")
-  };
-
-  await saveResultToDB(resultPayload);
-
-  document.getElementById('resScore').innerText = finalScore;
-  document.getElementById('resCorrectWrong').innerText = `${correctCount} / ${wrongCount}`;
-  showView('viewStudentResult');
-}
-
-function stopExam() {
-  isExamActive = false;
-  clearInterval(timerInterval);
-  if (document.exitFullscreen && document.fullscreenElement) {
-    document.exitFullscreen().catch(() => {});
-  }
-}
-
-/* ==========================================================================
-   FITUR ANTI-KECURANGAN
-   ========================================================================== */
-function setupAntiCheatingEvents() {
-  document.addEventListener('contextmenu', e => {
-    if (isExamActive) e.preventDefault();
-  });
-
-  document.addEventListener('keydown', e => {
-    if (!isExamActive) return;
-
-    if (
-      e.key === 'F12' ||
-      (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
-      (e.ctrlKey && (e.key === 'u' || e.key === 'c' || e.key === 'v'))
-    ) {
-      e.preventDefault();
-      handleViolation("Aksi tombol keyboard yang dilarang terdeteksi!");
-    }
-  });
-
-  window.addEventListener('blur', () => {
-    if (isExamActive) {
-      handleViolation("Anda terdeteksi meninggalkan tab/jendela ujian!");
-    }
-  });
-
-  document.addEventListener('fullscreenchange', () => {
-    if (isExamActive && !document.fullscreenElement) {
-      handleViolation("Anda terdeteksi keluar dari mode Layar Penuh (Fullscreen)!");
-    }
-  });
-}
-
-function handleViolation(reason) {
-  if (!isExamActive) return;
-
-  cheatingViolations++;
-  if (cheatingViolations >= MAX_VIOLATIONS) {
-    alert(`DITINGKATKAN: ${reason}\n\nAnda telah melanggar batas maksimal (${MAX_VIOLATIONS}x). Jawaban Anda akan langsung DITERIMA PAKSA!`);
-    submitExam();
-  } else {
-    alert(`PERINGATAN KECURANGAN (${cheatingViolations}/${MAX_VIOLATIONS}):\n${reason}\n\nJika melampaui ${MAX_VIOLATIONS}x peringatan, ujian akan di-submit otomatis.`);
-    requestFullScreen();
-  }
-}
+    teacherField.classList.add('hidden');
+    studentField.classList.add
