@@ -1,8 +1,6 @@
 /* ==========================================================================
    CONFIG & INITIALIZATION DATABASE
    ========================================================================== */
-
-// OPSIONAL: Masukkan konfigurasi Firebase Anda jika ingin terkoneksi Cloud Firebase
 const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -15,26 +13,30 @@ const firebaseConfig = {
 let db = null;
 let useFirebase = false;
 
-// Cek apakah Firebase telah dikonfigurasi secara manual
 if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
   try {
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     useFirebase = true;
-    console.log("Database: Cloud Firestore Active");
   } catch (e) {
-    console.warn("Firebase config error, falling back to LocalStorage", e);
+    console.warn("Firebase fallback to LocalStorage", e);
   }
 }
 
 /* ==========================================================================
-   GLOBAL APP STATE
+   GLOBAL APP STATE & USER DATA
    ========================================================================== */
-let currentUser = null; // { username, role }
+let currentUser = null; 
 let examSettings = {
-  title: "Ujian Akhir Semester (CBT Demo)",
-  duration: 30 // Menit
+  title: "Ujian Akhir Semester (SMP Qur'an Al Wahdah)",
+  duration: 30
 };
+
+let defaultUsers = [
+  { id: 1, name: "Administrator", username: "admin", password: "adminpassword", role: "admin" },
+  { id: 2, name: "Siswa 1", username: "siswa1", password: "siswapassword", role: "siswa" }
+];
+let usersList = [];
 
 let questions = [
   {
@@ -51,18 +53,17 @@ let questions = [
   }
 ];
 
-let studentAnswers = {}; // { questionId: { answer: 'A', doubtful: false } }
+let studentAnswers = {}; 
 let currentQuestionIndex = 0;
 let timerInterval = null;
 let examTimeSeconds = 0;
 
-// Anti-Cheating Tracking State
 let cheatingViolations = 0;
 const MAX_VIOLATIONS = 3;
 let isExamActive = false;
 
 /* ==========================================================================
-   PERSISTENCE LAYER (LOCALSTORAGE / FIREBASE WRAPPER)
+   PERSISTENCE LAYER
    ========================================================================== */
 function loadData() {
   const savedConfig = localStorage.getItem("cbt_exam_config");
@@ -70,6 +71,8 @@ function loadData() {
 
   const savedQuestions = localStorage.getItem("cbt_questions");
   if (savedQuestions) questions = JSON.parse(savedQuestions);
+
+  loadUsersData();
 }
 
 function saveData() {
@@ -77,13 +80,25 @@ function saveData() {
   localStorage.setItem("cbt_questions", JSON.stringify(questions));
 }
 
+function loadUsersData() {
+  const savedUsers = localStorage.getItem("cbt_users");
+  if (savedUsers) {
+    usersList = JSON.parse(savedUsers);
+  } else {
+    usersList = [...defaultUsers];
+    saveUsersData();
+  }
+}
+
+function saveUsersData() {
+  localStorage.setItem("cbt_users", JSON.stringify(usersList));
+}
+
 async function saveResultToDB(resultData) {
-  // Always save locally first
   let localResults = JSON.parse(localStorage.getItem("cbt_results") || "[]");
   localResults.push(resultData);
   localStorage.setItem("cbt_results", JSON.stringify(localResults));
 
-  // If Firebase active, sync to cloud
   if (useFirebase && db) {
     try {
       await db.collection("exam_results").add(resultData);
@@ -100,9 +115,7 @@ async function getResultsFromDB() {
       let cloudData = [];
       snapshot.forEach(doc => cloudData.push(doc.data()));
       return cloudData;
-    } catch (err) {
-      console.warn("Fallback to local results");
-    }
+    } catch (err) {}
   }
   return JSON.parse(localStorage.getItem("cbt_results") || "[]");
 }
@@ -117,34 +130,35 @@ window.onload = function() {
 
 function showView(viewId) {
   const views = ['viewLogin', 'viewAdmin', 'viewStudentInstruction', 'viewExamInterface', 'viewStudentResult'];
-  views.forEach(v => {
-    document.getElementById(v).classList.add('hidden');
-  });
+  views.forEach(v => document.getElementById(v).classList.add('hidden'));
   document.getElementById(viewId).classList.remove('hidden');
 }
 
 function handleLogin(e) {
   e.preventDefault();
   const role = document.getElementById('loginRole').value;
-  const user = document.getElementById('loginUsername').value;
+  const user = document.getElementById('loginUsername').value.trim();
   const pass = document.getElementById('loginPassword').value;
 
-  if (role === 'admin' && user === 'admin' && pass === 'adminpassword') {
-    currentUser = { username: user, role: 'admin' };
-    setupAdminDashboard();
-    showView('viewAdmin');
-  } else if (role === 'siswa' && user === 'siswa1' && pass === 'siswapassword') {
-    currentUser = { username: user, role: 'siswa' };
-    setupStudentInstruction();
-    showView('viewStudentInstruction');
-  } else {
-    alert("Username atau Password salah!");
-    return;
-  }
+  loadUsersData();
+  const foundUser = usersList.find(u => u.username === user && u.password === pass && u.role === role);
 
-  // Update Header
-  document.getElementById('userInfoHeader').classList.remove('hidden');
-  document.getElementById('userBadge').innerText = `${currentUser.username.toUpperCase()} (${currentUser.role})`;
+  if (foundUser) {
+    currentUser = { username: foundUser.username, name: foundUser.name, role: foundUser.role };
+    
+    if (foundUser.role === 'admin') {
+      setupAdminDashboard();
+      showView('viewAdmin');
+    } else {
+      setupStudentInstruction();
+      showView('viewStudentInstruction');
+    }
+
+    document.getElementById('userInfoHeader').classList.remove('hidden');
+    document.getElementById('userBadge').innerText = `${foundUser.name} (${foundUser.role.toUpperCase()})`;
+  } else {
+    alert("Username, Password, atau Peran yang dipilih tidak cocok!");
+  }
 }
 
 function logout() {
@@ -158,13 +172,15 @@ function logout() {
 }
 
 /* ==========================================================================
-   ADMIN / GURU DASHBOARD
+   ADMIN DASHBOARD
    ========================================================================== */
 function setupAdminDashboard() {
   document.getElementById('cfgExamTitle').value = examSettings.title;
   document.getElementById('cfgExamDuration').value = examSettings.duration;
   renderQuestionListAdmin();
   renderResultsTableAdmin();
+  renderUsersTableAdmin();
+  populateAdminProfileForm();
 }
 
 function saveExamSettings() {
@@ -220,7 +236,6 @@ function handleFileUpload() {
 
   const fileName = file.name.toLowerCase();
 
-  // A. Jika File JSON
   if (fileName.endsWith('.json')) {
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -233,92 +248,71 @@ function handleFileUpload() {
           alert(`Berhasil mengimpor ${importedQuestions.length} soal dari JSON!`);
           fileInput.value = '';
         } else {
-          alert("Format JSON tidak valid (harus berupa Array).");
+          alert("Format JSON tidak valid.");
         }
       } catch (err) {
         alert("Gagal membaca file JSON!");
       }
     };
     reader.readAsText(file);
-  } 
-  // B. Jika File Word (.docx)
-  else if (fileName.endsWith('.docx')) {
+  } else if (fileName.endsWith('.docx')) {
     const reader = new FileReader();
     reader.onload = function(e) {
-      const arrayBuffer = e.target.result;
-      mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+      mammoth.extractRawText({ arrayBuffer: e.target.result })
         .then(function(result) {
-          const text = result.value;
-          const parsedQuestions = parseWordTextToQuestions(text);
+          const parsedQuestions = parseWordTextToQuestions(result.value);
           if (parsedQuestions.length > 0) {
             questions = questions.concat(parsedQuestions);
             saveData();
             renderQuestionListAdmin();
-            alert(`Berhasil mengimpor ${parsedQuestions.length} soal dari file Word!`);
+            alert(`Berhasil mengimpor ${parsedQuestions.length} soal dari Word!`);
             fileInput.value = '';
           } else {
-            alert("Tidak ada soal yang berhasil dibaca. Pastikan format penulisan di Word sesuai petunjuk!");
+            alert("Tidak ada soal yang dibaca. Pastikan penulisan sesuai format!");
           }
         })
-        .catch(function(err) {
-          alert("Gagal memproses file Word.");
-          console.error(err);
-        });
+        .catch(() => alert("Gagal memproses file Word."));
     };
     reader.readAsArrayBuffer(file);
   } else {
-    alert("Format file tidak didukung. Harap unggah file .json atau .docx");
+    alert("Format file harus .json atau .docx");
   }
 }
 
-// Fungsi Parser Teks dari Word ke Array Soal
 function parseWordTextToQuestions(rawText) {
   const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const parsed = [];
   let currentQ = null;
 
   lines.forEach(line => {
-    // Deteksi nomor/teks soal (contoh: "1. Teks Soal")
     if (/^\d+[\.\)]/.test(line)) {
-      if (currentQ && currentQ.text && currentQ.correct) {
-        parsed.push(currentQ);
-      }
+      if (currentQ && currentQ.text && currentQ.correct) parsed.push(currentQ);
       currentQ = {
         id: Date.now() + Math.random(),
         text: line.replace(/^\d+[\.\)]\s*/, ''),
         options: {},
         correct: 'A'
       };
-    } 
-    // Deteksi pilihan A, B, C, D, E (contoh: "A. Opsi Jawaban")
-    else if (/^[A-E][\.\)]/i.test(line) && currentQ) {
+    } else if (/^[A-E][\.\)]/i.test(line) && currentQ) {
       const key = line.charAt(0).toUpperCase();
-      const val = line.replace(/^[A-E][\.\)]\s*/i, '');
-      currentQ.options[key] = val;
-    } 
-    // Deteksi Kunci Jawaban (contoh: "Kunci: B" atau "Jawaban: C")
-    else if (/^(Kunci|Jawaban)\s*:\s*([A-E])/i.test(line) && currentQ) {
+      currentQ.options[key] = line.replace(/^[A-E][\.\)]\s*/i, '');
+    } else if (/^(Kunci|Jawaban)\s*:\s*([A-E])/i.test(line) && currentQ) {
       const match = line.match(/^(Kunci|Jawaban)\s*:\s*([A-E])/i);
       if (match) currentQ.correct = match[2].toUpperCase();
     }
   });
 
-  if (currentQ && currentQ.text && currentQ.correct) {
-    parsed.push(currentQ);
-  }
-
+  if (currentQ && currentQ.text && currentQ.correct) parsed.push(currentQ);
   return parsed;
 }
 
 function downloadJSONTemplate() {
-  const template = [
-    {
-      "id": 1,
-      "text": "Berapakah hasil dari 10 + 15?",
-      "options": { "A": "20", "B": "22", "C": "25", "D": "30", "E": "35" },
-      "correct": "C"
-    }
-  ];
+  const template = [{
+    "id": 1,
+    "text": "Berapakah hasil dari 10 + 15?",
+    "options": { "A": "20", "B": "22", "C": "25", "D": "30", "E": "35" },
+    "correct": "C"
+  }];
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(template, null, 2));
   const dlAnchor = document.createElement('a');
   dlAnchor.setAttribute("href", dataStr);
@@ -361,6 +355,103 @@ function clearAllQuestions() {
     questions = [];
     saveData();
     renderQuestionListAdmin();
+  }
+}
+
+/* ==========================================================================
+   MANAJEMEN AKUN & ADMIN PROFILE
+   ========================================================================== */
+function handleAddUser(e) {
+  e.preventDefault();
+  const name = document.getElementById('newFullName').value.trim();
+  const role = document.getElementById('newRole').value;
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newPassword').value;
+
+  if (usersList.some(u => u.username === username)) {
+    alert("Username telah digunakan!");
+    return;
+  }
+
+  usersList.push({ id: Date.now(), name, role, username, password });
+  saveUsersData();
+  renderUsersTableAdmin();
+  document.getElementById('formAddUser').reset();
+  alert(`Akun ${role.toUpperCase()} "${name}" berhasil ditambahkan!`);
+}
+
+function renderUsersTableAdmin() {
+  const tbody = document.getElementById('userTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  usersList.forEach((u) => {
+    const roleBadge = u.role === 'admin' 
+      ? `<span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded font-bold">Admin/Guru</span>`
+      : `<span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded font-bold">Siswa</span>`;
+
+    const deleteBtn = (u.username === 'admin')
+      ? `<span class="text-xs text-slate-400 italic">Utama</span>`
+      : `<button onclick="deleteUser(${u.id})" class="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1"><i class="fa-solid fa-trash mr-1"></i>Hapus</button>`;
+
+    tbody.innerHTML += `
+      <tr class="hover:bg-slate-50">
+        <td class="p-2.5 font-semibold text-slate-800">${u.name}</td>
+        <td class="p-2.5 text-slate-600 font-mono text-xs">${u.username}</td>
+        <td class="p-2.5">${roleBadge}</td>
+        <td class="p-2.5 text-center">${deleteBtn}</td>
+      </tr>
+    `;
+  });
+}
+
+function deleteUser(userId) {
+  if (confirm("Apakah Anda yakin ingin menghapus akun ini?")) {
+    usersList = usersList.filter(u => u.id !== userId);
+    saveUsersData();
+    renderUsersTableAdmin();
+  }
+}
+
+function populateAdminProfileForm() {
+  if (currentUser && currentUser.role === 'admin') {
+    document.getElementById('adminNewUsername').value = currentUser.username;
+    document.getElementById('adminNewPassword').value = '';
+    document.getElementById('adminConfirmPassword').value = '';
+  }
+}
+
+function handleUpdateAdminProfile(e) {
+  e.preventDefault();
+  const newUsername = document.getElementById('adminNewUsername').value.trim();
+  const newPassword = document.getElementById('adminNewPassword').value;
+  const confirmPassword = document.getElementById('adminConfirmPassword').value;
+
+  if (newPassword !== confirmPassword) {
+    alert("Konfirmasi password tidak cocok!");
+    return;
+  }
+
+  loadUsersData();
+  const isUsernameTaken = usersList.some(u => u.username === newUsername && u.username !== currentUser.username);
+  if (isUsernameTaken) {
+    alert("Username tersebut sudah digunakan oleh akun lain!");
+    return;
+  }
+
+  const adminIndex = usersList.findIndex(u => u.username === currentUser.username && u.role === 'admin');
+  if (adminIndex !== -1) {
+    usersList[adminIndex].username = newUsername;
+    usersList[adminIndex].password = newPassword;
+    currentUser.username = newUsername;
+
+    saveUsersData();
+    document.getElementById('userBadge').innerText = `${currentUser.name} (${currentUser.role.toUpperCase()})`;
+    renderUsersTableAdmin();
+
+    alert("Kredensial Admin berhasil diperbarui!");
+    document.getElementById('adminNewPassword').value = '';
+    document.getElementById('adminConfirmPassword').value = '';
   }
 }
 
@@ -415,7 +506,7 @@ async function exportToCSV() {
 }
 
 /* ==========================================================================
-   SISWA - EXAM LOGIC & INTERFACE
+   SISWA - EXAM LOGIC
    ========================================================================== */
 function setupStudentInstruction() {
   document.getElementById('instructionExamTitle').innerText = examSettings.title;
@@ -429,17 +520,15 @@ function startExam() {
     return;
   }
 
-  // Request Fullscreen
   requestFullScreen();
 
-  // Reset State
   studentAnswers = {};
   currentQuestionIndex = 0;
   cheatingViolations = 0;
   isExamActive = true;
   examTimeSeconds = examSettings.duration * 60;
 
-  document.getElementById('examStudentName').innerText = currentUser.username;
+  document.getElementById('examStudentName').innerText = currentUser.name;
   
   showView('viewExamInterface');
   renderCurrentQuestion();
@@ -499,7 +588,6 @@ function renderCurrentQuestion() {
     `;
   });
 
-  // Toggle prev/next
   document.getElementById('btnPrev').disabled = currentQuestionIndex === 0;
 }
 
@@ -544,7 +632,7 @@ function renderNumberGrid() {
 
   questions.forEach((q, idx) => {
     const ans = studentAnswers[q.id];
-    let btnClass = "bg-slate-100 border-slate-300 text-slate-700"; // default
+    let btnClass = "bg-slate-100 border-slate-300 text-slate-700";
 
     if (ans && ans.answer) {
       btnClass = ans.doubtful ? "bg-amber-400 text-white border-amber-500" : "bg-blue-600 text-white border-blue-600";
@@ -573,7 +661,6 @@ function confirmSubmitExam() {
 async function submitExam() {
   stopExam();
 
-  // Hitung Nilai
   let correctCount = 0;
   questions.forEach(q => {
     const userAns = studentAnswers[q.id]?.answer;
@@ -584,7 +671,7 @@ async function submitExam() {
   const finalScore = Math.round((correctCount / questions.length) * 100);
 
   const resultPayload = {
-    student: currentUser.username,
+    student: currentUser.name,
     score: finalScore,
     correct: correctCount,
     wrong: wrongCount,
@@ -594,7 +681,6 @@ async function submitExam() {
 
   await saveResultToDB(resultPayload);
 
-  // Display Hasil
   document.getElementById('resScore').innerText = finalScore;
   document.getElementById('resCorrectWrong').innerText = `${correctCount} / ${wrongCount}`;
   showView('viewStudentResult');
@@ -609,19 +695,16 @@ function stopExam() {
 }
 
 /* ==========================================================================
-   FITUR ANTI-KECURANGAN (ANTI-CHEATING SYSTEM)
+   FITUR ANTI-KECURANGAN
    ========================================================================== */
 function setupAntiCheatingEvents() {
-  // 1. Block Context Menu (Klik Kanan)
   document.addEventListener('contextmenu', e => {
     if (isExamActive) e.preventDefault();
   });
 
-  // 2. Block Keyboard Shortcuts (Copy, Paste, DevTools)
   document.addEventListener('keydown', e => {
     if (!isExamActive) return;
 
-    // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+C, Ctrl+V
     if (
       e.key === 'F12' ||
       (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
@@ -632,14 +715,12 @@ function setupAntiCheatingEvents() {
     }
   });
 
-  // 3. Tab Switching / Window Blur Detection
   window.addEventListener('blur', () => {
     if (isExamActive) {
       handleViolation("Anda terdeteksi meninggalkan tab/jendela ujian!");
     }
   });
 
-  // 4. Fullscreen Exit Detection
   document.addEventListener('fullscreenchange', () => {
     if (isExamActive && !document.fullscreenElement) {
       handleViolation("Anda terdeteksi keluar dari mode Layar Penuh (Fullscreen)!");
