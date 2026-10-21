@@ -258,6 +258,66 @@ function getActiveAdminSubject() {
   return subjectsData.find(s => s.id === selectedAdminSubjectId);
 }
 
+function openEditSubjectModal() {
+  const activeSub = getActiveAdminSubject();
+  if (!activeSub) {
+    alert("Tidak ada mata pelajaran yang dipilih!");
+    return;
+  }
+
+  document.getElementById('editSubjectTitle').value = activeSub.title;
+  document.getElementById('editSubjectDuration').value = activeSub.duration;
+  document.getElementById('modalEditSubject').classList.remove('hidden');
+}
+
+function closeEditSubjectModal() {
+  document.getElementById('modalEditSubject').classList.add('hidden');
+}
+
+function handleSaveEditedSubject() {
+  const activeSub = getActiveAdminSubject();
+  if (!activeSub) return;
+
+  const newTitle = document.getElementById('editSubjectTitle').value.trim();
+  const newDuration = parseInt(document.getElementById('editSubjectDuration').value) || 30;
+
+  if (!newTitle) {
+    alert("Nama Mata Pelajaran tidak boleh kosong!");
+    return;
+  }
+
+  activeSub.title = newTitle;
+  activeSub.duration = newDuration;
+
+  saveData();
+  renderSubjectDropdowns();
+  closeEditSubjectModal();
+
+  alert(`Mata pelajaran berhasil diperbarui menjadi "${newTitle}" (${newDuration} Menit)!`);
+}
+
+function handleDeleteSubject() {
+  const activeSub = getActiveAdminSubject();
+  if (!activeSub) return;
+
+  if (confirm(`Apakah Anda yakin ingin menghapus mata pelajaran "${activeSub.title}" beserta seluruh soal di dalamnya?`)) {
+    subjectsData = subjectsData.filter(s => s.id !== activeSub.id);
+
+    if (subjectsData.length > 0) {
+      selectedAdminSubjectId = subjectsData[0].id;
+      selectedStudentSubjectId = subjectsData[0].id;
+    } else {
+      selectedAdminSubjectId = "";
+      selectedStudentSubjectId = "";
+    }
+
+    saveData();
+    renderSubjectDropdowns();
+    renderQuestionListAdmin();
+    alert("Mata pelajaran berhasil dihapus!");
+  }
+}
+
 function switchAdminTab(type) {
   if (type === 'manual') {
     document.getElementById('formQuestionManual').classList.remove('hidden');
@@ -489,11 +549,36 @@ function renderUsersTableAdmin() {
       <tr class="hover:bg-slate-50">
         <td class="p-2.5 font-semibold text-slate-800">${u.name}</td>
         <td class="p-2.5 text-slate-600 font-mono text-xs">${u.username}</td>
+        
+        <td class="p-2.5">
+          <div class="flex items-center space-x-2">
+            <span id="passText_${u.id}" class="font-mono text-xs text-slate-600">••••••••</span>
+            <button onclick="toggleShowPassword(${u.id}, '${u.password}')" title="Lihat/Sembunyikan Sandi" class="text-slate-400 hover:text-blue-600 text-xs p-1 focus:outline-none">
+              <i id="passIcon_${u.id}" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </td>
+
         <td class="p-2.5">${roleBadge}</td>
         <td class="p-2.5 text-center">${deleteBtn}</td>
       </tr>
     `;
   });
+}
+
+function toggleShowPassword(userId, actualPassword) {
+  const textEl = document.getElementById(`passText_${userId}`);
+  const iconEl = document.getElementById(`passIcon_${userId}`);
+
+  if (textEl.innerText === '••••••••') {
+    textEl.innerText = actualPassword;
+    textEl.classList.add('font-bold', 'text-blue-700');
+    iconEl.className = 'fa-solid fa-eye-slash text-blue-600';
+  } else {
+    textEl.innerText = '••••••••';
+    textEl.classList.remove('font-bold', 'text-blue-700');
+    iconEl.className = 'fa-solid fa-eye';
+  }
 }
 
 function deleteUser(userId) {
@@ -585,7 +670,7 @@ async function exportToCSV() {
 
   let csvContent = "data:text/csv;charset=utf-8,Siswa,Mata Pelajaran,Waktu,Benar,Salah,Skor,Pelanggaran\n";
   results.forEach(r => {
-    csvContent += `"${r.student}","${r.subject || '-'}"\,"${r.timestamp}",${r.correct},${r.wrong},${r.score},${r.violations}\n`;
+    csvContent += `"${r.student}","${r.subject || '-'}", "${r.timestamp}",${r.correct},${r.wrong},${r.score},${r.violations}\n`;
   });
 
   const encodedUri = encodeURI(csvContent);
