@@ -125,7 +125,7 @@ function showView(viewId) {
   if (targetView) {
     targetView.classList.remove('hidden');
   } else {
-    console.error(`Elemen tampilan dengan ID '${viewId}' tidak ditemukan di index.html!`);
+    console.error(`Elemen tampilan '${viewId}' tidak ditemukan!`);
   }
 }
 
@@ -147,13 +147,13 @@ function handleLogin(e) {
   if (foundUser) {
     currentUser = { ...foundUser };
     
-    // Tampilkan Informasi User di Header
+    // Header Info
     const userHeader = document.getElementById('userInfoHeader');
     const userBadge = document.getElementById('userBadge');
     if (userHeader) userHeader.classList.remove('hidden');
     if (userBadge) userBadge.innerText = `${foundUser.name} (${foundUser.role.toUpperCase()})`;
 
-    // Pindah ke Dashboard sesuai Peran
+    // Navigasi Dashboard Berdasarkan Peran
     if (foundUser.role.toLowerCase() === 'admin') {
       setupAdminDashboard();
       showView('viewAdmin');
@@ -290,7 +290,35 @@ function handleTeacherSubjectChange() {
   }
 }
 
-/* Render Question List untuk Admin/Guru */
+function handleAddQuestionManual(e) {
+  e.preventDefault();
+  const subjectId = currentUser.role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
+  const activeSub = subjectsData.find(s => s.id === subjectId);
+
+  if (!activeSub) return alert("Pilih mata pelajaran terlebih dahulu!");
+
+  const qText = document.getElementById('qText').value.trim();
+  const qOptA = document.getElementById('qOptA').value.trim();
+  const qOptB = document.getElementById('qOptB').value.trim();
+  const qOptC = document.getElementById('qOptC').value.trim();
+  const qOptD = document.getElementById('qOptD').value.trim();
+  const qOptE = document.getElementById('qOptE').value.trim();
+  const qCorrect = document.getElementById('qCorrect').value;
+
+  const newQ = {
+    id: Date.now(),
+    text: qText,
+    options: { A: qOptA, B: qOptB, C: qOptC, D: qOptD, E: qOptE },
+    correct: qCorrect
+  };
+
+  activeSub.questions.push(newQ);
+  saveData();
+  renderQuestionListAdmin(currentUser.role);
+  document.getElementById('formQuestionManualGuru').reset();
+  alert("Soal berhasil ditambahkan!");
+}
+
 function renderQuestionListAdmin(role) {
   const containerId = role === 'admin' ? 'questionsListContainer' : 'teacherQuestionsContainer';
   const subjectId = role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
@@ -298,7 +326,10 @@ function renderQuestionListAdmin(role) {
   if (!container) return;
   
   const activeSub = subjectsData.find(s => s.id === subjectId);
-  if (!activeSub) { container.innerHTML = '<p class="text-xs text-slate-400">Belum ada soal.</p>'; return; }
+  if (!activeSub || activeSub.questions.length === 0) { 
+    container.innerHTML = '<p class="text-xs text-slate-400">Belum ada soal dalam mapel ini.</p>'; 
+    return; 
+  }
 
   container.innerHTML = '';
   activeSub.questions.forEach((q, idx) => {
