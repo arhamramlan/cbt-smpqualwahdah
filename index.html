@@ -65,7 +65,7 @@
           </div>
           <div>
             <label class="block text-sm font-semibold mb-1 text-slate-700">Username</label>
-            <input type="text" id="loginUsername" required placeholder="Contoh: siswa1 / admin" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+            <input type="text" id="loginUsername" required placeholder="Username Anda" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
           </div>
           <div>
             <label class="block text-sm font-semibold mb-1 text-slate-700">Password</label>
@@ -75,23 +75,19 @@
             Masuk
           </button>
         </form>
-
-        <div class="mt-6 p-3 bg-slate-50 rounded-lg border text-xs text-slate-600 space-y-1">
-          <p class="font-bold text-slate-700">Kredensial Bawaan:</p>
-          <p>• <strong>Guru:</strong> Username: <code class="text-blue-600">admin</code> | Pass: <code class="text-blue-600">adminpassword</code></p>
-          <p>• <strong>Siswa:</strong> Username: <code class="text-blue-600">siswa1</code> | Pass: <code class="text-blue-600">siswapassword</code></p>
-        </div>
       </div>
     </section>
 
     <!-- 2. DASHBOARD ADMIN / GURU -->
     <section id="viewAdmin" class="hidden space-y-6">
+      
       <!-- Manajemen Mata Pelajaran -->
       <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <div class="flex justify-between items-center border-b pb-3 mb-4">
           <h2 class="text-xl font-bold text-slate-800"><i class="fa-solid fa-book-bookmark mr-2 text-blue-600"></i>Manajemen Mata Pelajaran</h2>
         </div>
         
+        <!-- Form Tambah Mapel Baru -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Mata Pelajaran</label>
@@ -108,11 +104,23 @@
           </div>
         </div>
 
-        <div class="mt-4 pt-4 border-t flex items-center space-x-3">
-          <span class="text-sm font-bold text-slate-700">Pilih Mapel yang Dikelola:</span>
-          <select id="adminSubjectSelect" onchange="handleAdminSubjectChange()" class="border p-2 text-sm rounded-lg bg-slate-50 font-semibold text-blue-700 focus:ring-2 focus:ring-blue-500">
-            <!-- Pilihan Mapel via JS -->
-          </select>
+        <!-- Pilihan Mapel Aktif & Tombol Edit/Hapus -->
+        <div class="mt-4 pt-4 border-t flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center space-x-3">
+            <span class="text-sm font-bold text-slate-700">Mapel Aktif:</span>
+            <select id="adminSubjectSelect" onchange="handleAdminSubjectChange()" class="border p-2 text-sm rounded-lg bg-slate-50 font-semibold text-blue-700 focus:ring-2 focus:ring-blue-500">
+              <!-- Pilihan Mapel via JS -->
+            </select>
+          </div>
+
+          <div class="flex space-x-2">
+            <button onclick="openEditSubjectModal()" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-lg shadow transition flex items-center">
+              <i class="fa-solid fa-pen-to-square mr-1.5"></i>Edit Mapel Ini
+            </button>
+            <button onclick="handleDeleteSubject()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow transition flex items-center">
+              <i class="fa-solid fa-trash mr-1.5"></i>Hapus Mapel
+            </button>
+          </div>
         </div>
       </div>
 
@@ -217,6 +225,7 @@
                 <tr class="bg-slate-100 text-slate-700 border-b">
                   <th class="p-2.5">Nama Lengkap</th>
                   <th class="p-2.5">Username</th>
+                  <th class="p-2.5">Password / Sandi</th>
                   <th class="p-2.5">Peran</th>
                   <th class="p-2.5 text-center">Aksi</th>
                 </tr>
@@ -397,6 +406,30 @@
     </section>
 
   </main>
+
+  <!-- MODAL EDIT MAPEL -->
+  <div id="modalEditSubject" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl shadow-xl border p-6 w-full max-w-md space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-pen-to-square text-amber-500 mr-2"></i>Edit Mata Pelajaran</h3>
+        <button onclick="closeEditSubjectModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Mata Pelajaran</label>
+        <input type="text" id="editSubjectTitle" class="w-full border p-2 text-sm rounded-lg focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Durasi Ujian (Menit)</label>
+        <input type="number" id="editSubjectDuration" class="w-full border p-2 text-sm rounded-lg focus:ring-2 focus:ring-blue-500">
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t">
+        <button onclick="closeEditSubjectModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg">Batal</button>
+        <button onclick="handleSaveEditedSubject()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow">Simpan Perubahan</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
