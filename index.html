@@ -166,7 +166,7 @@
             <!-- Dynamic Options -->
           </select>
         </div>
-        <div id="questionsListContainer" class="mt-4 space-y-2"></div>
+        <div id="questionsListContainer" class="mt-4 space-y-2 max-h-[300px] overflow-y-auto"></div>
       </div>
 
       <!-- Tabel Seluruh Rekap Nilai Admin -->
@@ -290,4 +290,107 @@
         </div>
 
         <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 space-y-2 text-sm text-blue-900">
-          <p class="font-bold border-b border-blue-200 pb-1 text-blue-800"><i class="fa-solid fa-circle-info
+          <p class="font-bold border-b border-blue-200 pb-1 text-blue-800"><i class="fa-solid fa-circle-info mr-2"></i>Informasi Ujian:</p>
+          <div class="grid grid-cols-2 gap-2 pt-1 text-xs md:text-sm">
+            <p>• Kelas Siswa: <strong id="infoStudentClass" class="text-blue-700">-</strong></p>
+            <p>• Guru Pengampu: <strong id="infoTeacherName" class="text-blue-700">-</strong></p>
+            <p>• Durasi Waktu: <strong id="instructionDuration" class="text-blue-700">0</strong> Menit</p>
+            <p>• Jumlah Soal: <strong id="instructionQuestionCount" class="text-blue-700">0</strong> Soal</p>
+          </div>
+        </div>
+
+        <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded text-amber-900 text-sm mb-6 space-y-2">
+          <p class="font-bold"><i class="fa-solid fa-shield-cat mr-2"></i>Aturan Ujian & Anti-Kecurangan:</p>
+          <ul class="list-disc list-inside space-y-1 text-xs">
+            <li>Mode Layar Penuh (Fullscreen) Wajib.</li>
+            <li>Dilarang berpindah tab browser (Maksimal 3x peringatan).</li>
+            <li>Blokir Klik Kanan, Copy-Paste, dan F12 Aktif.</li>
+          </ul>
+        </div>
+
+        <button onclick="startExam()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg transition transform active:scale-95 text-lg">
+          <i class="fa-solid fa-play mr-2"></i>Mulai Ujian Sekarang
+        </button>
+      </div>
+    </section>
+
+    <!-- 5. TAMPILAN UJIAN CBT SISWA -->
+    <section id="viewExamInterface" class="hidden space-y-6">
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-3">
+        <div class="space-y-0.5">
+          <div class="text-xs text-slate-500 font-medium">
+            Siswa: <span id="examStudentName" class="font-bold text-slate-800">Siswa</span> 
+            (<span id="examStudentClassBadge" class="text-blue-600 font-bold">Kelas</span>)
+          </div>
+          <div class="text-xs text-slate-600">
+            Mapel: <span id="examSubjectName" class="font-bold text-blue-700">Mapel</span> | 
+            Guru: <span id="examTeacherName" class="font-semibold text-slate-700">Ustadz</span>
+          </div>
+        </div>
+        <div class="bg-slate-900 text-green-400 font-mono text-xl px-4 py-2 rounded-lg border border-slate-700 flex items-center space-x-2">
+          <i class="fa-regular fa-clock"></i>
+          <span id="examTimer">00:00:00</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-3 space-y-6">
+          <div class="flex justify-between items-center border-b pb-3">
+            <h3 class="font-bold text-slate-700 text-lg">Soal No. <span id="currentQuestionNum">1</span></h3>
+          </div>
+
+          <div id="examQuestionText" class="text-slate-800 text-base leading-relaxed"></div>
+          <div id="examOptionsContainer" class="space-y-3"></div>
+
+          <div class="flex justify-between pt-4 border-t">
+            <button id="btnPrev" onclick="navigateQuestion(-1)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg text-sm">
+              <i class="fa-solid fa-arrow-left mr-2"></i>Sebelumnya
+            </button>
+            <button id="btnNext" onclick="navigateQuestion(1)" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">
+              Selanjutnya<i class="fa-solid fa-arrow-right ml-2"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-1 space-y-4">
+          <h4 class="font-bold text-slate-700 text-sm border-b pb-2">Navigasi Soal</h4>
+          <div id="numberGrid" class="grid grid-cols-5 gap-2"></div>
+          
+          <button onclick="confirmSubmitExam()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg shadow text-sm transition mt-4">
+            <i class="fa-solid fa-check-circle mr-2"></i>Selesai & Kirim
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. HASIL UJIAN SISWA -->
+    <section id="viewStudentResult" class="hidden max-w-lg mx-auto mt-8">
+      <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200 text-center space-y-6">
+        <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-3xl">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-slate-800">Ujian Telah Selesai!</h2>
+        <p class="text-slate-500 text-sm">Jawaban Anda telah tersimpan secara aman.</p>
+
+        <div class="bg-slate-50 p-4 rounded-xl border grid grid-cols-2 gap-4 text-center">
+          <div>
+            <span class="text-xs text-slate-500 block">Total Nilai / Skor</span>
+            <span id="resScore" class="text-3xl font-extrabold text-blue-600">0</span>
+          </div>
+          <div>
+            <span class="text-xs text-slate-500 block">Benar / Salah</span>
+            <span id="resCorrectWrong" class="text-base font-bold text-slate-700">0 / 0</span>
+          </div>
+        </div>
+
+        <button onclick="logout()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 rounded-lg shadow">
+          Keluar
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
