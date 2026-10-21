@@ -327,7 +327,7 @@ function renderQuestionListAdmin(role) {
   
   const activeSub = subjectsData.find(s => s.id === subjectId);
   if (!activeSub || activeSub.questions.length === 0) { 
-    container.innerHTML = '<p class="text-xs text-slate-400">Belum ada soal dalam mapel ini.</p>'; 
+    container.innerHTML = '<p class="text-xs text-slate-400 p-2">Belum ada soal dalam mapel ini.</p>'; 
     return; 
   }
 
@@ -553,7 +553,7 @@ function renderUsersTableAdmin() {
         <td class="p-2.5 font-mono text-xs">${u.username}</td>
         <td class="p-2.5 font-mono text-xs">${u.password}</td>
         <td class="p-2.5"><span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded font-bold">${u.role.toUpperCase()}</span></td>
-        <td class="p-2.5 text-center"><button onclick="deleteUser(${u.id})" class="text-red-500 text-xs">Hapus</button></td>
+        <td class="p-2.5 text-center"><button onclick="deleteUser(${u.id})" class="text-red-500 text-xs font-bold hover:underline">Hapus</button></td>
       </tr>
     `;
   });
@@ -575,6 +575,11 @@ async function renderResultsTableAdmin(role) {
   if (role === 'teacher') filtered = results.filter(r => r.teacherUsername === currentUser.username);
 
   tbody.innerHTML = '';
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-xs text-slate-400">Belum ada data rekap nilai.</td></tr>`;
+    return;
+  }
+
   filtered.forEach(r => {
     tbody.innerHTML += `
       <tr class="hover:bg-slate-50">
