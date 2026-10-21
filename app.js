@@ -11,6 +11,13 @@ let subjectsData = [
     teacherUsername: "guru1",
     teacherName: "Ustadz Ahmad, S.Pd.",
     duration: 30,
+    schedule: {
+      status: "active",
+      startDate: "2026-01-01",
+      startTime: "07:00",
+      endDate: "2026-12-31",
+      endTime: "23:59"
+    },
     questions: [
       { id: 101, text: "Berapakah hasil dari 12 x 12?", options: { A: "124", B: "144", C: "164", D: "184", E: "200" }, correct: "B" }
     ]
@@ -22,6 +29,13 @@ let subjectsData = [
     teacherUsername: "guru2",
     teacherName: "Ustadz Mahmud, Lc.",
     duration: 45,
+    schedule: {
+      status: "active",
+      startDate: "2026-01-01",
+      startTime: "07:00",
+      endDate: "2026-12-31",
+      endTime: "23:59"
+    },
     questions: [
       { id: 201, text: "Surah pertama yang diturunkan adalah...", options: { A: "Al-Fatihah", B: "Al-Ikhlas", C: "Al-'Alaq 1-5", D: "Al-Baqarah", E: "An-Nas" }, correct: "C" }
     ]
@@ -40,6 +54,7 @@ let usersList = [];
 let selectedAdminSubjectId = "";
 let selectedTeacherSubjectId = "";
 let selectedStudentSubjectId = "";
+let currentScheduleEditingRole = "";
 
 let currentActiveExamQuestions = [];
 let currentExamDuration = 30;
@@ -179,7 +194,7 @@ function logout() {
 }
 
 /* ==========================================================================
-   1. DASHBOARD ADMIN LOGIC (PROFIL & MANAJEMEN AKUN)
+   1. DASHBOARD ADMIN LOGIC
    ========================================================================== */
 function setupAdminDashboard() {
   if (currentUser) {
@@ -213,7 +228,7 @@ function handleUpdateAdminCredentials(e) {
 
     saveUsersData();
     renderUsersTableAdmin();
-    alert("Profil Admin berhasil diperbarui! Silakan gunakan kredensial baru Anda saat login berikutnya.");
+    alert("Profil Admin berhasil diperbarui!");
   }
 }
 
@@ -232,35 +247,8 @@ function renderAdminSubjectDropdown() {
   }
 }
 
-function handleAdminAddSubject() {
-  const titleInput = document.getElementById('adminNewSubjectTitle');
-  const classInput = document.getElementById('adminNewSubjectClass');
-  const durationInput = document.getElementById('adminNewSubjectDuration');
-
-  const title = titleInput ? titleInput.value.trim() : '';
-  const targetClass = classInput ? classInput.value.trim() || "Kelas 7A" : "Kelas 7A";
-  const duration = durationInput ? parseInt(durationInput.value) || 30 : 30;
-
-  if (!title) return alert("Nama Mapel Wajib diisi!");
-
-  const newSub = {
-    id: "mapel_" + Date.now(),
-    title, targetClass, duration,
-    teacherUsername: "admin", teacherName: "Admin",
-    questions: []
-  };
-
-  subjectsData.push(newSub);
-  saveData();
-  renderAdminSubjectDropdown();
-
-  if (titleInput) titleInput.value = '';
-  if (classInput) classInput.value = '';
-  alert("Mapel berhasil ditambahkan oleh Admin!");
-}
-
 /* ==========================================================================
-   2. DASHBOARD GURU LOGIC (EDIT & HAPUS MAPEL INCLUDED)
+   2. DASHBOARD GURU LOGIC & JADWAL UJIAN
    ========================================================================== */
 function setupTeacherDashboard() {
   renderTeacherSubjectDropdown();
@@ -300,6 +288,13 @@ function handleTeacherAddSubject() {
     title, targetClass, duration,
     teacherUsername: currentUser.username,
     teacherName: currentUser.name,
+    schedule: {
+      status: "active",
+      startDate: new Date().toISOString().split('T')[0],
+      startTime: "07:00",
+      endDate: new Date().toISOString().split('T')[0],
+      endTime: "23:59"
+    },
     questions: []
   };
 
@@ -319,6 +314,55 @@ function handleTeacherSubjectChange() {
     selectedTeacherSubjectId = select.value;
     renderQuestionListAdmin('teacher');
   }
+}
+
+/* Modal Jadwal Ujian */
+function openScheduleModal(role) {
+  currentScheduleEditingRole = role;
+  const subjectId = role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
+  const activeSub = subjectsData.find(s => s.id === subjectId);
+
+  if (!activeSub) return alert("Pilih mata pelajaran terlebih dahulu!");
+
+  const sched = activeSub.schedule || {
+    status: "active",
+    startDate: new Date().toISOString().split('T')[0],
+    startTime: "07:00",
+    endDate: new Date().toISOString().split('T')[0],
+    endTime: "23:59"
+  };
+
+  document.getElementById('schedStatus').value = sched.status;
+  document.getElementById('schedStartDate').value = sched.startDate;
+  document.getElementById('schedStartTime').value = sched.startTime;
+  document.getElementById('schedEndDate').value = sched.endDate;
+  document.getElementById('schedEndTime').value = sched.endTime;
+
+  document.getElementById('modalScheduleExam').classList.remove('hidden');
+}
+
+function closeScheduleModal() {
+  document.getElementById('modalScheduleExam').classList.add('hidden');
+}
+
+function handleSaveSchedule(e) {
+  if (e) e.preventDefault();
+  const subjectId = currentScheduleEditingRole === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
+  const activeSub = subjectsData.find(s => s.id === subjectId);
+
+  if (!activeSub) return;
+
+  activeSub.schedule = {
+    status: document.getElementById('schedStatus').value,
+    startDate: document.getElementById('schedStartDate').value,
+    startTime: document.getElementById('schedStartTime').value,
+    endDate: document.getElementById('schedEndDate').value,
+    endTime: document.getElementById('schedEndTime').value
+  };
+
+  saveData();
+  closeScheduleModal();
+  alert("Jadwal pelaksanaan ujian berhasil diperbarui!");
 }
 
 /* Modal & Logika EDIT Mapel Guru */
@@ -359,7 +403,6 @@ function handleSaveEditedTeacherSubject(e) {
   alert("Informasi mata pelajaran berhasil diperbarui!");
 }
 
-/* Logika HAPUS Mapel Guru */
 function handleDeleteTeacherSubject() {
   if (!selectedTeacherSubjectId) return alert("Pilih mata pelajaran yang ingin dihapus!");
   const activeSub = subjectsData.find(s => s.id === selectedTeacherSubjectId);
@@ -532,7 +575,7 @@ function renderQuestionListAdmin(role) {
 }
 
 /* ==========================================================================
-   3. DASHBOARD SISWA & UJIAN
+   3. DASHBOARD SISWA & UJIAN (VALiDASI JADWAL)
    ========================================================================== */
 function setupStudentInstruction() {
   const select = document.getElementById('studentSubjectSelect');
@@ -553,6 +596,22 @@ function setupStudentInstruction() {
   }
 }
 
+function checkScheduleValidity(sched) {
+  if (!sched || sched.status === 'inactive') return { isOpen: false, reason: "Ujian Dinonaktifkan oleh Guru/Admin" };
+
+  const now = new Date();
+  const start = new Date(`${sched.startDate}T${sched.startTime}`);
+  const end = new Date(`${sched.endDate}T${sched.endTime}`);
+
+  if (now < start) {
+    return { isOpen: false, reason: `Ujian Belum Dimulai (Jadwal: ${sched.startDate} Jam ${sched.startTime})` };
+  } else if (now > end) {
+    return { isOpen: false, reason: `Ujian Sudah Berakhir (Selesai: ${sched.endDate} Jam ${sched.endTime})` };
+  }
+
+  return { isOpen: true, reason: `Ujian Sedang Berlangsung (s.d. ${sched.endDate} ${sched.endTime})` };
+}
+
 function handleStudentSubjectChange() {
   const select = document.getElementById('studentSubjectSelect');
   if (!select) return;
@@ -564,17 +623,42 @@ function handleStudentSubjectChange() {
     const elTeacher = document.getElementById('infoTeacherName');
     const elDuration = document.getElementById('instructionDuration');
     const elCount = document.getElementById('instructionQuestionCount');
+    const elSchedStatus = document.getElementById('infoExamScheduleStatus');
+    const btnStart = document.getElementById('btnStartExam');
 
     if (elClass) elClass.innerText = currentUser.studentClass || "Kelas 7A";
     if (elTeacher) elTeacher.innerText = activeSub.teacherName || "-";
     if (elDuration) elDuration.innerText = activeSub.duration;
     if (elCount) elCount.innerText = activeSub.questions.length;
+
+    const schedCheck = checkScheduleValidity(activeSub.schedule);
+    if (elSchedStatus) {
+      elSchedStatus.innerText = schedCheck.reason;
+      elSchedStatus.className = schedCheck.isOpen ? "font-bold text-emerald-600" : "font-bold text-red-600";
+    }
+
+    if (btnStart) {
+      if (schedCheck.isOpen) {
+        btnStart.disabled = false;
+        btnStart.classList.remove('bg-slate-400', 'cursor-not-allowed');
+        btnStart.classList.add('bg-blue-600', 'hover:bg-blue-700');
+      } else {
+        btnStart.disabled = true;
+        btnStart.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        btnStart.classList.add('bg-slate-400', 'cursor-not-allowed');
+      }
+    }
   }
 }
 
 function startExam() {
   const activeSub = subjectsData.find(s => s.id === selectedStudentSubjectId);
   if (!activeSub || activeSub.questions.length === 0) return alert("Soal belum tersedia!");
+
+  const schedCheck = checkScheduleValidity(activeSub.schedule);
+  if (!schedCheck.isOpen) {
+    return alert(`Tidak dapat memulai ujian: ${schedCheck.reason}`);
+  }
 
   currentActiveExamQuestions = activeSub.questions;
   currentExamDuration = activeSub.duration;
