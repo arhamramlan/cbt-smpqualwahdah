@@ -214,28 +214,100 @@ function handleFileUpload() {
   const file = fileInput.files[0];
 
   if (!file) {
-    alert("Silakan pilih file JSON terlebih dahulu.");
+    alert("Silakan pilih file (.json atau .docx) terlebih dahulu.");
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const importedQuestions = JSON.parse(e.target.result);
-      if (Array.isArray(importedQuestions)) {
-        questions = questions.concat(importedQuestions);
-        saveData();
-        renderQuestionListAdmin();
-        alert(`Berhasil mengimpor ${importedQuestions.length} soal!`);
-        fileInput.value = '';
-      } else {
-        alert("Format JSON tidak valid (harus berupa Array of Objects).");
+  const fileName = file.name.toLowerCase();
+
+  // A. Jika File JSON
+  if (fileName.endsWith('.json')) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const importedQuestions = JSON.parse(e.target.result);
+        if (Array.isArray(importedQuestions)) {
+          questions = questions.concat(importedQuestions);
+          saveData();
+          renderQuestionListAdmin();
+          alert(`Berhasil mengimpor ${importedQuestions.length} soal dari JSON!`);
+          fileInput.value = '';
+        } else {
+          alert("Format JSON tidak valid (harus berupa Array).");
+        }
+      } catch (err) {
+        alert("Gagal membaca file JSON!");
       }
-    } catch (err) {
-      alert("Gagal membaca file JSON. Pastikan format valid!");
+    };
+    reader.readAsText(file);
+  } 
+  // B. Jika File Word (.docx)
+  else if (fileName.endsWith('.docx')) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const arrayBuffer = e.target.result;
+      mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+        .then(function(result) {
+          const text = result.value;
+          const parsedQuestions = parseWordTextToQuestions(text);
+          if (parsedQuestions.length > 0) {
+            questions = questions.concat(parsedQuestions);
+            saveData();
+            renderQuestionListAdmin();
+            alert(`Berhasil mengimpor ${parsedQuestions.length} soal dari file Word!`);
+            fileInput.value = '';
+          } else {
+            alert("Tidak ada soal yang berhasil dibaca. Pastikan format penulisan di Word sesuai petunjuk!");
+          }
+        })
+        .catch(function(err) {
+          alert("Gagal memproses file Word.");
+          console.error(err);
+        });
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    alert("Format file tidak didukung. Harap unggah file .json atau .docx");
+  }
+}
+
+// Fungsi Parser Teks dari Word ke Array Soal
+function parseWordTextToQuestions(rawText) {
+  const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const parsed = [];
+  let currentQ = null;
+
+  lines.forEach(line => {
+    // Deteksi nomor/teks soal (contoh: "1. Teks Soal")
+    if (/^\d+[\.\)]/.test(line)) {
+      if (currentQ && currentQ.text && currentQ.correct) {
+        parsed.push(currentQ);
+      }
+      currentQ = {
+        id: Date.now() + Math.random(),
+        text: line.replace(/^\d+[\.\)]\s*/, ''),
+        options: {},
+        correct: 'A'
+      };
+    } 
+    // Deteksi pilihan A, B, C, D, E (contoh: "A. Opsi Jawaban")
+    else if (/^[A-E][\.\)]/i.test(line) && currentQ) {
+      const key = line.charAt(0).toUpperCase();
+      const val = line.replace(/^[A-E][\.\)]\s*/i, '');
+      currentQ.options[key] = val;
+    } 
+    // Deteksi Kunci Jawaban (contoh: "Kunci: B" atau "Jawaban: C")
+    else if (/^(Kunci|Jawaban)\s*:\s*([A-E])/i.test(line) && currentQ) {
+      const match = line.match(/^(Kunci|Jawaban)\s*:\s*([A-E])/i);
+      if (match) currentQ.correct = match[2].toUpperCase();
     }
-  };
-  reader.readAsText(file);
+  });
+
+  if (currentQ && currentQ.text && currentQ.correct) {
+    parsed.push(currentQ);
+  }
+
+  return parsed;
 }
 
 function downloadJSONTemplate() {
