@@ -318,7 +318,14 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-1 space-y-6">
           <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 space-y-3">
-            <!-- Di dalam index.html -> Dashboard Guru -> Bagian Unggah Soal -->
+            <h4 class="font-bold text-sm text-blue-900"><i class="fa-solid fa-file-arrow-up mr-2 text-blue-600"></i>Unggah Soal (.docx / .pdf)</h4>
+            <p class="text-xs text-slate-600">File Word/PDF berisi daftar soal pilihan ganda sesuai format standar.</p>
+            <input type="file" id="qFileInputGuru" accept=".docx, .pdf" class="w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
+            <button onclick="handleUploadQuestionFile('teacher')" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 rounded-lg text-xs shadow transition">
+              <i class="fa-solid fa-upload mr-1"></i>Proses & Impor Soal
+            </button>
+
+             <!-- Di dalam index.html -> Dashboard Guru -> Bagian Unggah Soal -->
             <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 space-y-3">
               <div class="flex justify-between items-center">
                    
@@ -329,12 +336,6 @@
               </div>
               <p class="text-xs text-slate-600">File Word/PDF berisi daftar soal pilihan ganda sesuai format standar.</p>
             </div>
-            <h4 class="font-bold text-sm text-blue-900"><i class="fa-solid fa-file-arrow-up mr-2 text-blue-600"></i>Unggah Soal (.docx / .pdf)</h4>
-            <p class="text-xs text-slate-600">File Word/PDF berisi daftar soal pilihan ganda sesuai format standar.</p>
-            <input type="file" id="qFileInputGuru" accept=".docx, .pdf" class="w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
-            <button onclick="handleUploadQuestionFile('teacher')" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 rounded-lg text-xs shadow transition">
-              <i class="fa-solid fa-upload mr-1"></i>Proses & Impor Soal
-            </button>
           </div>
 
           <hr class="border-slate-200">
