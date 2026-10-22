@@ -976,6 +976,50 @@ function handleDeleteTeacherSubject() {
   }
 }
 
+// download template soal
+
+function downloadExcelQuestionTemplate() {
+  const templateData = [
+    {
+      "Nomor": 1,
+      "Tipe Soal (pg/majemuk/bs)": "pg",
+      "Pertanyaan": "Berapa hasil dari 5 + 5?",
+      "Opsi A": "8",
+      "Opsi B": "10",
+      "Opsi C": "12",
+      "Opsi D": "14",
+      "Opsi E": "16",
+      "Kunci Jawaban": "B"
+    }
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(templateData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Template Soal");
+  XLSX.writeFile(workbook, "Template_Impor_Soal_CBT.xlsx");
+}
+
+function downloadWordQuestionTemplate() {
+  const templateText = 
+`FORMAT STANDAR IMPOR SOAL WORD (.DOCX)
+======================================
+1. Apa nama ibu kota Negara Indonesia?
+A. Bandung
+B. Surabaya
+C. Jakarta
+D. Medan
+E. Makassar
+Kunci: C`;
+
+  const blob = new Blob([templateText], { type: "text/plain;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "Template_Soal_CBT.txt";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 /* Import File Word/PDF untuk Guru */
 async function handleUploadQuestionFile(role) {
   const fileInput = document.getElementById('qFileInputGuru');
