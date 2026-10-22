@@ -3,6 +3,10 @@
    ========================================================================== */
 let currentUser = null; 
 
+// Master Data Terpusat (Admin)
+let masterClasses = ["Kelas 7A", "Kelas 7B", "Kelas 8A", "Kelas 8B", "Kelas 9A", "Kelas 9B"];
+let masterSubjects = ["Matematika", "PAI / Al-Qur'an Hadits", "Bahasa Indonesia", "Bahasa Inggris", "IPA", "IPS"];
+
 let subjectsData = [
   {
     id: "mapel_1",
@@ -79,6 +83,20 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function loadData() {
+  const savedMasterClasses = localStorage.getItem("cbt_master_classes");
+  if (savedMasterClasses) {
+    try { masterClasses = JSON.parse(savedMasterClasses); } catch(e) {}
+  } else {
+    localStorage.setItem("cbt_master_classes", JSON.stringify(masterClasses));
+  }
+
+  const savedMasterSubjects = localStorage.getItem("cbt_master_subjects");
+  if (savedMasterSubjects) {
+    try { masterSubjects = JSON.parse(savedMasterSubjects); } catch(e) {}
+  } else {
+    localStorage.setItem("cbt_master_subjects", JSON.stringify(masterSubjects));
+  }
+
   const savedSubjects = localStorage.getItem("cbt_subjects_data");
   if (savedSubjects) {
     try { subjectsData = JSON.parse(savedSubjects); } catch(e) { saveData(); }
@@ -91,6 +109,11 @@ function loadData() {
 
 function saveData() {
   localStorage.setItem("cbt_subjects_data", JSON.stringify(subjectsData));
+}
+
+function saveMasterData() {
+  localStorage.setItem("cbt_master_classes", JSON.stringify(masterClasses));
+  localStorage.setItem("cbt_master_subjects", JSON.stringify(masterSubjects));
 }
 
 function loadUsersData() {
@@ -123,25 +146,23 @@ async function getResultsFromDB() {
   return JSON.parse(localStorage.getItem("cbt_results") || "[]");
 }
 
+function saveResultsToDB(resultsArray) {
+  localStorage.setItem("cbt_results", JSON.stringify(resultsArray));
+}
+
 /* ==========================================================================
-   AUTHENTICATION & NAVIGATION (SWITCHING DASHBOARD)
+   AUTHENTICATION & NAVIGATION
    ========================================================================== */
 function showView(viewId) {
   const views = ['viewLogin', 'viewAdmin', 'viewTeacher', 'viewStudentInstruction', 'viewExamInterface', 'viewStudentResult'];
   
   views.forEach(v => {
     const el = document.getElementById(v);
-    if (el) {
-      el.classList.add('hidden');
-    }
+    if (el) el.classList.add('hidden');
   });
 
   const targetView = document.getElementById(viewId);
-  if (targetView) {
-    targetView.classList.remove('hidden');
-  } else {
-    console.error(`Elemen halaman '${viewId}' tidak ditemukan!`);
-  }
+  if (targetView) targetView.classList.remove('hidden');
 }
 
 function handleLogin(e) {
@@ -162,13 +183,11 @@ function handleLogin(e) {
   if (foundUser) {
     currentUser = { ...foundUser };
     
-    // Header Info User
     const userHeader = document.getElementById('userInfoHeader');
     const userBadge = document.getElementById('userBadge');
     if (userHeader) userHeader.classList.remove('hidden');
     if (userBadge) userBadge.innerText = `${foundUser.name} (${foundUser.role.toUpperCase()})`;
 
-    // Navigasi Tampilan
     if (foundUser.role.toLowerCase() === 'admin') {
       setupAdminDashboard();
       showView('viewAdmin');
@@ -194,7 +213,7 @@ function logout() {
 }
 
 /* ==========================================================================
-   1. DASHBOARD ADMIN LOGIC
+   1. DASHBOARD ADMIN LOGIC (MASTER DATA KELAS & MAPEL)
    ========================================================================== */
 function setupAdminDashboard() {
   if (currentUser) {
@@ -204,9 +223,116 @@ function setupAdminDashboard() {
     if (adminPassEl) adminPassEl.value = currentUser.password;
   }
 
+  renderMasterDataAdmin();
+  populateDropdownsFromMaster();
   renderAdminSubjectDropdown();
   renderUsersTableAdmin();
   renderResultsTableAdmin('admin');
+}
+
+function renderMasterDataAdmin() {
+  const classContainer = document.getElementById('masterClassBadgeContainer');
+  const subjectContainer = document.getElementById('masterSubjectBadgeContainer');
+
+  if (classContainer) {
+    classContainer.innerHTML = '';
+    masterClasses.forEach((cls, idx) => {
+      classContainer.innerHTML += `
+        <span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center space-x-2">
+          <span>${cls}</span>
+          <button onclick="deleteMasterClass(${idx})" class="text-indigo-400 hover:text-red-600"><i class="fa-solid fa-xmark"></i></button>
+        </span>
+      `;
+    });
+  }
+
+  if (subjectContainer) {
+    subjectContainer.innerHTML = '';
+    masterSubjects.forEach((sub, idx) => {
+      subjectContainer.innerHTML += `
+        <span class="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center space-x-2">
+          <span>${sub}</span>
+          <button onclick="deleteMasterSubject(${idx})" class="text-blue-400 hover:text-red-600"><i class="fa-solid fa-xmark"></i></button>
+        </span>
+      `;
+    });
+  }
+}
+
+function handleAddMasterClass(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById('adminNewClassInput');
+  const val = input ? input.value.trim() : '';
+
+  if (val && !masterClasses.includes(val)) {
+    masterClasses.push(val);
+    saveMasterData();
+    renderMasterDataAdmin();
+    populateDropdownsFromMaster();
+    if (input) input.value = '';
+  }
+}
+
+function deleteMasterClass(idx) {
+  if (confirm(`Hapus "${masterClasses[idx]}" dari master kelas?`)) {
+    masterClasses.splice(idx, 1);
+    saveMasterData();
+    renderMasterDataAdmin();
+    populateDropdownsFromMaster();
+  }
+}
+
+function handleAddMasterSubject(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById('adminNewSubjectInput');
+  const val = input ? input.value.trim() : '';
+
+  if (val && !masterSubjects.includes(val)) {
+    masterSubjects.push(val);
+    saveMasterData();
+    renderMasterDataAdmin();
+    populateDropdownsFromMaster();
+    if (input) input.value = '';
+  }
+}
+
+function deleteMasterSubject(idx) {
+  if (confirm(`Hapus "${masterSubjects[idx]}" dari master mapel?`)) {
+    masterSubjects.splice(idx, 1);
+    saveMasterData();
+    renderMasterDataAdmin();
+    populateDropdownsFromMaster();
+  }
+}
+
+/* Mengisi seluruh dropdown berdasarkan Master Data Admin */
+function populateDropdownsFromMaster() {
+  const teacherSubjectSelect = document.getElementById('teacherNewSubjectTitleSelect');
+  const teacherClassSelect = document.getElementById('teacherNewSubjectClassSelect');
+  const editTeacherSubjectSelect = document.getElementById('editTeacherSubjectTitleSelect');
+  const editTeacherClassSelect = document.getElementById('editTeacherSubjectClassSelect');
+  const newStudentClassSelect = document.getElementById('newStudentClassSelect');
+  const newTeacherAssignedSelect = document.getElementById('newTeacherAssignedSelect');
+
+  if (teacherSubjectSelect) {
+    teacherSubjectSelect.innerHTML = masterSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
+  }
+  if (editTeacherSubjectSelect) {
+    editTeacherSubjectSelect.innerHTML = masterSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
+  }
+  if (newTeacherAssignedSelect) {
+    newTeacherAssignedSelect.innerHTML = masterSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
+  }
+
+  if (teacherClassSelect) {
+    teacherClassSelect.innerHTML = masterClasses.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+  if (editTeacherClassSelect) {
+    editTeacherClassSelect.innerHTML = masterClasses.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+  if (newStudentClassSelect) {
+    newStudentClassSelect.innerHTML = masterClasses.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
 }
 
 function handleUpdateAdminCredentials(e) {
@@ -214,10 +340,7 @@ function handleUpdateAdminCredentials(e) {
   const newUsername = document.getElementById('adminNewUsername').value.trim();
   const newPassword = document.getElementById('adminNewPassword').value.trim();
 
-  if (!newUsername || !newPassword) {
-    alert("Username dan Password Admin tidak boleh kosong!");
-    return;
-  }
+  if (!newUsername || !newPassword) return alert("Username dan Password Admin tidak boleh kosong!");
 
   const adminAcc = usersList.find(u => u.id === currentUser.id || u.role === 'admin');
   if (adminAcc) {
@@ -248,9 +371,10 @@ function renderAdminSubjectDropdown() {
 }
 
 /* ==========================================================================
-   2. DASHBOARD GURU LOGIC & JADWAL UJIAN
+   2. DASHBOARD GURU LOGIC (MEMILIH DARI MASTER DATA)
    ========================================================================== */
 function setupTeacherDashboard() {
+  populateDropdownsFromMaster();
   renderTeacherSubjectDropdown();
   renderResultsTableAdmin('teacher');
 }
@@ -277,11 +401,11 @@ function renderTeacherSubjectDropdown() {
 }
 
 function handleTeacherAddSubject() {
-  const title = document.getElementById('teacherNewSubjectTitle').value.trim();
-  const targetClass = document.getElementById('teacherNewSubjectClass').value.trim() || "Kelas 7A";
+  const title = document.getElementById('teacherNewSubjectTitleSelect').value;
+  const targetClass = document.getElementById('teacherNewSubjectClassSelect').value;
   const duration = parseInt(document.getElementById('teacherNewSubjectDuration').value) || 30;
 
-  if (!title) return alert("Nama Mapel wajib diisi!");
+  if (!title || !targetClass) return alert("Pilih Mapel dan Target Kelas dari dropdown!");
 
   const newSub = {
     id: "mapel_" + Date.now(),
@@ -302,9 +426,6 @@ function handleTeacherAddSubject() {
   selectedTeacherSubjectId = newSub.id;
   saveData();
   renderTeacherSubjectDropdown();
-
-  document.getElementById('teacherNewSubjectTitle').value = '';
-  document.getElementById('teacherNewSubjectClass').value = '';
   alert(`Mapel "${title}" (${targetClass}) berhasil ditambahkan!`);
 }
 
@@ -313,6 +434,184 @@ function handleTeacherSubjectChange() {
   if (select) {
     selectedTeacherSubjectId = select.value;
     renderQuestionListAdmin('teacher');
+  }
+}
+
+/* Modal Edit & Hapus Soal Individu */
+function renderQuestionListAdmin(role) {
+  const containerId = role === 'admin' ? 'questionsListContainer' : 'teacherQuestionsContainer';
+  const subjectId = role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  
+  const activeSub = subjectsData.find(s => s.id === subjectId);
+  if (!activeSub || activeSub.questions.length === 0) { 
+    container.innerHTML = '<p class="text-xs text-slate-400 p-2">Belum ada soal dalam mapel ini.</p>'; 
+    return; 
+  }
+
+  container.innerHTML = '';
+  activeSub.questions.forEach((q, idx) => {
+    container.innerHTML += `
+      <div class="p-3 border rounded-lg bg-slate-50 flex justify-between items-start text-sm">
+        <div class="pr-3">
+          <p class="font-semibold text-slate-800">${idx + 1}. ${q.text}</p>
+          <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600 mt-2">
+            <p>A: ${q.options.A}</p><p>B: ${q.options.B}</p>
+            <p>C: ${q.options.C}</p><p>D: ${q.options.D}</p>
+            <p class="col-span-2">E: ${q.options.E}</p>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Kunci: <strong class="text-green-600">${q.correct}</strong></p>
+        </div>
+        <div class="flex flex-col space-y-1">
+          <button onclick="openEditQuestionModal('${activeSub.id}', ${q.id})" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded">Edit</button>
+          <button onclick="handleDeleteQuestion('${activeSub.id}', ${q.id})" class="text-xs bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded">Hapus</button>
+        </div>
+      </div>
+    `;
+  });
+}
+
+function openEditQuestionModal(subjectId, questionId) {
+  const activeSub = subjectsData.find(s => s.id === subjectId);
+  if (!activeSub) return;
+  const q = activeSub.questions.find(item => item.id === questionId);
+  if (!q) return;
+
+  document.getElementById('editQId').value = q.id;
+  document.getElementById('editQText').value = q.text;
+  document.getElementById('editQOptA').value = q.options.A || "";
+  document.getElementById('editQOptB').value = q.options.B || "";
+  document.getElementById('editQOptC').value = q.options.C || "";
+  document.getElementById('editQOptD').value = q.options.D || "";
+  document.getElementById('editQOptE').value = q.options.E || "";
+  document.getElementById('editQCorrect').value = q.correct || "A";
+
+  document.getElementById('modalEditQuestion').classList.remove('hidden');
+}
+
+function closeEditQuestionModal() {
+  document.getElementById('modalEditQuestion').classList.add('hidden');
+}
+
+function handleSaveEditedQuestion(e) {
+  if (e) e.preventDefault();
+  const qId = parseFloat(document.getElementById('editQId').value);
+  const subjectId = currentUser.role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
+  const activeSub = subjectsData.find(s => s.id === subjectId);
+
+  if (!activeSub) return;
+  const q = activeSub.questions.find(item => item.id === qId);
+  if (!q) return;
+
+  q.text = document.getElementById('editQText').value.trim();
+  q.options.A = document.getElementById('editQOptA').value.trim();
+  q.options.B = document.getElementById('editQOptB').value.trim();
+  q.options.C = document.getElementById('editQOptC').value.trim();
+  q.options.D = document.getElementById('editQOptD').value.trim();
+  q.options.E = document.getElementById('editQOptE').value.trim();
+  q.correct = document.getElementById('editQCorrect').value;
+
+  saveData();
+  renderQuestionListAdmin(currentUser.role);
+  closeEditQuestionModal();
+  alert("Pertanyaan dan opsi jawaban berhasil diperbarui!");
+}
+
+function handleDeleteQuestion(subjectId, questionId) {
+  const activeSub = subjectsData.find(s => s.id === subjectId);
+  if (!activeSub) return;
+
+  if (confirm("Hapus soal ini secara permanen dari bank soal?")) {
+    activeSub.questions = activeSub.questions.filter(q => q.id !== questionId);
+    saveData();
+    renderQuestionListAdmin(currentUser.role);
+  }
+}
+
+/* Edit & Hapus Hasil Rekap Nilai Submitted */
+async function renderResultsTableAdmin(role) {
+  const tbodyId = role === 'admin' ? 'adminResultsTableBody' : 'teacherResultsTableBody';
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  
+  const results = await getResultsFromDB();
+
+  tbody.innerHTML = '';
+  if (results.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-xs text-slate-400">Belum ada data rekap nilai.</td></tr>`;
+    return;
+  }
+
+  results.forEach((r, originalIndex) => {
+    if (role === 'teacher' && r.teacherUsername !== currentUser.username) return;
+
+    tbody.innerHTML += `
+      <tr class="hover:bg-slate-50">
+        <td class="p-2.5 font-semibold">${r.student}</td>
+        <td class="p-2.5">${r.studentClass}</td>
+        <td class="p-2.5 font-bold text-blue-600">${r.subject}</td>
+        <td class="p-2.5 font-medium text-slate-600">${r.teacherName || '-'}</td>
+        <td class="p-2.5">${r.timestamp}</td>
+        <td class="p-2.5">${r.correct}/${r.wrong}</td>
+        <td class="p-2.5 font-bold text-emerald-600">${r.score}</td>
+        <td class="p-2.5 text-xs font-bold text-red-600">${r.violations}x Melanggar</td>
+        <td class="p-2.5 text-center">
+          <div class="flex justify-center space-x-1">
+            <button onclick="openEditResultModal(${originalIndex})" class="bg-amber-500 hover:bg-amber-600 text-white text-xs px-2 py-1 rounded">Edit Nilai</button>
+            <button onclick="handleDeleteResult(${originalIndex})" class="bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded">Hapus</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+async function openEditResultModal(index) {
+  const results = await getResultsFromDB();
+  const targetResult = results[index];
+  if (!targetResult) return;
+
+  document.getElementById('editResultIndex').value = index;
+  document.getElementById('editResultStudent').value = `${targetResult.student} (${targetResult.subject})`;
+  document.getElementById('editResultCorrect').value = targetResult.correct;
+  document.getElementById('editResultWrong').value = targetResult.wrong;
+  document.getElementById('editResultScore').value = targetResult.score;
+  document.getElementById('editResultViolations').value = targetResult.violations;
+
+  document.getElementById('modalEditResult').classList.remove('hidden');
+}
+
+function closeEditResultModal() {
+  document.getElementById('modalEditResult').classList.add('hidden');
+}
+
+async function handleSaveEditedResult(e) {
+  if (e) e.preventDefault();
+  const idx = parseInt(document.getElementById('editResultIndex').value);
+  const results = await getResultsFromDB();
+
+  if (results[idx]) {
+    results[idx].correct = parseInt(document.getElementById('editResultCorrect').value) || 0;
+    results[idx].wrong = parseInt(document.getElementById('editResultWrong').value) || 0;
+    results[idx].score = parseInt(document.getElementById('editResultScore').value) || 0;
+    results[idx].violations = parseInt(document.getElementById('editResultViolations').value) || 0;
+
+    saveResultsToDB(results);
+    renderResultsTableAdmin(currentUser.role);
+    closeEditResultModal();
+    alert("Koreksi nilai siswa berhasil disimpan!");
+  }
+}
+
+async function handleDeleteResult(index) {
+  const results = await getResultsFromDB();
+  if (!results[index]) return;
+
+  if (confirm(`Hapus hasil ujian milik "${results[index].student}"? Siswa dapat diizinkan mengambil ujian ulang setelahnya.`)) {
+    results.splice(index, 1);
+    saveResultsToDB(results);
+    renderResultsTableAdmin(currentUser.role);
   }
 }
 
@@ -371,8 +670,9 @@ function openEditTeacherSubjectModal() {
   const activeSub = subjectsData.find(s => s.id === selectedTeacherSubjectId);
   if (!activeSub) return;
 
-  document.getElementById('editTeacherSubjectTitle').value = activeSub.title;
-  document.getElementById('editTeacherSubjectClass').value = activeSub.targetClass;
+  populateDropdownsFromMaster();
+  document.getElementById('editTeacherSubjectTitleSelect').value = activeSub.title;
+  document.getElementById('editTeacherSubjectClassSelect').value = activeSub.targetClass;
   document.getElementById('editTeacherSubjectDuration').value = activeSub.duration;
 
   document.getElementById('modalEditTeacherSubject').classList.remove('hidden');
@@ -387,11 +687,9 @@ function handleSaveEditedTeacherSubject(e) {
   const activeSub = subjectsData.find(s => s.id === selectedTeacherSubjectId);
   if (!activeSub) return;
 
-  const newTitle = document.getElementById('editTeacherSubjectTitle').value.trim();
-  const newClass = document.getElementById('editTeacherSubjectClass').value.trim();
+  const newTitle = document.getElementById('editTeacherSubjectTitleSelect').value;
+  const newClass = document.getElementById('editTeacherSubjectClassSelect').value;
   const newDuration = parseInt(document.getElementById('editTeacherSubjectDuration').value) || 30;
-
-  if (!newTitle || !newClass) return alert("Nama Mapel dan Target Kelas wajib diisi!");
 
   activeSub.title = newTitle;
   activeSub.targetClass = newClass;
@@ -549,33 +847,8 @@ function handleAddQuestionManual(e) {
   alert("Soal berhasil ditambahkan!");
 }
 
-function renderQuestionListAdmin(role) {
-  const containerId = role === 'admin' ? 'questionsListContainer' : 'teacherQuestionsContainer';
-  const subjectId = role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  
-  const activeSub = subjectsData.find(s => s.id === subjectId);
-  if (!activeSub || activeSub.questions.length === 0) { 
-    container.innerHTML = '<p class="text-xs text-slate-400 p-2">Belum ada soal dalam mapel ini.</p>'; 
-    return; 
-  }
-
-  container.innerHTML = '';
-  activeSub.questions.forEach((q, idx) => {
-    container.innerHTML += `
-      <div class="p-3 border rounded-lg bg-slate-50 flex justify-between items-start text-sm">
-        <div>
-          <p class="font-semibold text-slate-800">${idx + 1}. ${q.text}</p>
-          <p class="text-xs text-slate-500 mt-1">Kunci: <strong class="text-green-600">${q.correct}</strong></p>
-        </div>
-      </div>
-    `;
-  });
-}
-
 /* ==========================================================================
-   3. DASHBOARD SISWA & UJIAN (VALiDASI JADWAL)
+   3. DASHBOARD SISWA & UJIAN
    ========================================================================== */
 function setupStudentInstruction() {
   const select = document.getElementById('studentSubjectSelect');
@@ -656,9 +929,7 @@ function startExam() {
   if (!activeSub || activeSub.questions.length === 0) return alert("Soal belum tersedia!");
 
   const schedCheck = checkScheduleValidity(activeSub.schedule);
-  if (!schedCheck.isOpen) {
-    return alert(`Tidak dapat memulai ujian: ${schedCheck.reason}`);
-  }
+  if (!schedCheck.isOpen) return alert(`Tidak dapat memulai ujian: ${schedCheck.reason}`);
 
   currentActiveExamQuestions = activeSub.questions;
   currentExamDuration = activeSub.duration;
@@ -802,8 +1073,8 @@ function handleAddUser(e) {
   const password = document.getElementById('newPassword').value;
 
   const newUser = { id: Date.now(), name, role, username, password };
-  if (role === 'guru') newUser.assignedInfo = document.getElementById('newTeacherAssigned').value.trim();
-  if (role === 'siswa') newUser.studentClass = document.getElementById('newStudentClass').value.trim();
+  if (role === 'guru') newUser.assignedInfo = document.getElementById('newTeacherAssignedSelect').value;
+  if (role === 'siswa') newUser.studentClass = document.getElementById('newStudentClassSelect').value;
 
   usersList.push(newUser);
   saveUsersData();
@@ -857,35 +1128,4 @@ function deleteUser(id) {
     saveUsersData();
     renderUsersTableAdmin();
   }
-}
-
-async function renderResultsTableAdmin(role) {
-  const tbodyId = role === 'admin' ? 'adminResultsTableBody' : 'teacherResultsTableBody';
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody) return;
-  
-  const results = await getResultsFromDB();
-  let filtered = results;
-  if (role === 'teacher') filtered = results.filter(r => r.teacherUsername === currentUser.username);
-
-  tbody.innerHTML = '';
-  if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-xs text-slate-400">Belum ada data rekap nilai.</td></tr>`;
-    return;
-  }
-
-  filtered.forEach(r => {
-    tbody.innerHTML += `
-      <tr class="hover:bg-slate-50">
-        <td class="p-2.5 font-semibold">${r.student}</td>
-        <td class="p-2.5">${r.studentClass}</td>
-        <td class="p-2.5 font-bold text-blue-600">${r.subject}</td>
-        <td class="p-2.5 font-medium text-slate-600">${r.teacherName || '-'}</td>
-        <td class="p-2.5">${r.timestamp}</td>
-        <td class="p-2.5">${r.correct}/${r.wrong}</td>
-        <td class="p-2.5 font-bold text-emerald-600">${r.score}</td>
-        <td class="p-2.5 text-xs font-bold text-red-600">${r.violations}x Melanggar</td>
-      </tr>
-    `;
-  });
 }
