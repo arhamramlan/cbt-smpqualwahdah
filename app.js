@@ -978,43 +978,47 @@ function handleDeleteTeacherSubject() {
 
 // download template soal
 
-function downloadExcelQuestionTemplate() {
-  const templateData = [
-    {
-      "Nomor": 1,
-      "Tipe Soal (pg/majemuk/bs)": "pg",
-      "Pertanyaan": "Berapa hasil dari 5 + 5?",
-      "Opsi A": "8",
-      "Opsi B": "10",
-      "Opsi C": "12",
-      "Opsi D": "14",
-      "Opsi E": "16",
-      "Kunci Jawaban": "B"
-    }
-  ];
-
-  const worksheet = XLSX.utils.json_to_sheet(templateData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Template Soal");
-  XLSX.writeFile(workbook, "Template_Impor_Soal_CBT.xlsx");
-}
-
 function downloadWordQuestionTemplate() {
   const templateText = 
-`FORMAT STANDAR IMPOR SOAL WORD (.DOCX)
-======================================
+`FORMAT STANDAR IMPOR SOAL WORD (3 JENIS SOAL)
+=================================================
+PETUNJUK PENGISIAN:
+1. Tulis nomor soal diikuti titik (contoh: 1. atau 2.).
+2. Untuk Pilihan Ganda & Majemuk, tulis opsi A-E di baris baru.
+3. Untuk Benar/Salah, opsi otomatis A (Benar) & B (Salah).
+4. Tulis kunci jawaban di baris terakhir setiap nomor.
+=================================================
+
+--- 1. CONTOH SOAL PILIHAN GANDA (1 JAWABAN BENAR) ---
 1. Apa nama ibu kota Negara Indonesia?
 A. Bandung
 B. Surabaya
 C. Jakarta
 D. Medan
 E. Makassar
-Kunci: C`;
+Kunci: C
 
-  const blob = new Blob([templateText], { type: "text/plain;charset=utf-8" });
+--- 2. CONTOH SOAL PILIHAN MAJEMUK (JAWABAN > 1) ---
+2. Pilih angka-angka di bawah ini yang merupakan bilangan genap!
+A. 2
+B. 3
+C. 4
+D. 5
+E. 6
+Kunci: A, C, E
+
+--- 3. CONTOH SOAL BENAR / SALAH ---
+3. Matahari terbit dari arah barat dan tenggelam di arah timur.
+A. Benar
+B. Salah
+Kunci: B
+`;
+
+  // Membuat file dan mengunduh otomatis sebagai .doc
+  const blob = new Blob([templateText], { type: "application/msword;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "Template_Soal_CBT.txt";
+  link.download = "Template_Soal_3_Jenis_CBT.doc";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
