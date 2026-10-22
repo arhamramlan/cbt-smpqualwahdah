@@ -336,21 +336,76 @@
 
           <hr class="border-slate-200">
 
+          <!-- FORM TAMBAH SOAL MANUAL (3 JENIS SOAL + GAMBAR) -->
           <form id="formQuestionManualGuru" onsubmit="handleAddQuestionManual(event)" class="space-y-3">
             <h4 class="font-bold text-sm text-slate-800"><i class="fa-solid fa-pen-to-square mr-2 text-blue-600"></i>Tambah Soal Manual</h4>
+            
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis / Tipe Soal</label>
+              <select id="qType" onchange="toggleQuestionTypeFields('manual')" class="w-full border p-2 text-sm rounded-lg bg-amber-50 font-semibold text-slate-800 border-amber-300">
+                <option value="pg">Pilihan Ganda (1 Jawaban Benar)</option>
+                <option value="majemuk">Jawaban Lebih Dari Satu (Pilihan Majemuk)</option>
+                <option value="bs">Benar / Salah</option>
+              </select>
+            </div>
+
             <textarea id="qText" required rows="3" class="w-full border p-2 text-sm rounded-lg" placeholder="Tuliskan pertanyaan..."></textarea>
-            <input type="text" id="qOptA" required placeholder="Opsi A" class="w-full border p-2 text-sm rounded-lg">
-            <input type="text" id="qOptB" required placeholder="Opsi B" class="w-full border p-2 text-sm rounded-lg">
-            <input type="text" id="qOptC" required placeholder="Opsi C" class="w-full border p-2 text-sm rounded-lg">
-            <input type="text" id="qOptD" required placeholder="Opsi D" class="w-full border p-2 text-sm rounded-lg">
-            <input type="text" id="qOptE" required placeholder="Opsi E" class="w-full border p-2 text-sm rounded-lg">
-            <select id="qCorrect" class="w-full border p-2 text-sm rounded-lg">
-              <option value="A">Kunci Jawaban: A</option>
-              <option value="B">Kunci Jawaban: B</option>
-              <option value="C">Kunci Jawaban: C</option>
-              <option value="D">Kunci Jawaban: D</option>
-              <option value="E">Kunci Jawaban: E</option>
-            </select>
+            
+            <!-- Input & Preview Gambar Soal Baru -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1"><i class="fa-regular fa-image mr-1"></i>Gambar Soal (Opsional)</label>
+              <input type="file" id="qImageInput" accept="image/*" onchange="previewManualQuestionImage(event)" class="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 cursor-pointer">
+              <div id="qImagePreviewContainer" class="hidden mt-2 relative inline-block">
+                <img id="qImagePreview" src="" alt="Preview Gambar" class="max-h-36 rounded-lg border shadow-sm">
+                <button type="button" onclick="clearManualQuestionImage()" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow hover:bg-red-700"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+
+            <!-- OPSI PG & MAJEMUK -->
+            <div id="optionsContainerManual" class="space-y-2">
+              <input type="text" id="qOptA" placeholder="Opsi A" class="w-full border p-2 text-sm rounded-lg">
+              <input type="text" id="qOptB" placeholder="Opsi B" class="w-full border p-2 text-sm rounded-lg">
+              <input type="text" id="qOptC" placeholder="Opsi C" class="w-full border p-2 text-sm rounded-lg">
+              <input type="text" id="qOptD" placeholder="Opsi D" class="w-full border p-2 text-sm rounded-lg">
+              <input type="text" id="qOptE" placeholder="Opsi E" class="w-full border p-2 text-sm rounded-lg">
+            </div>
+
+            <!-- KUNCI JAWABAN SESUAI TIPE -->
+            <div>
+              <!-- Kunci PG Single -->
+              <div id="correctSingleContainerManual">
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Kunci Jawaban</label>
+                <select id="qCorrectSingle" class="w-full border p-2 text-sm rounded-lg">
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="D">D</option>
+                  <option value="E">E</option>
+                </select>
+              </div>
+
+              <!-- Kunci PG Majemuk / Multi Checkbox -->
+              <div id="correctMultiContainerManual" class="hidden bg-slate-50 p-3 rounded-lg border">
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Seluruh Jawaban Benar:</label>
+                <div class="flex flex-wrap gap-3 text-sm">
+                  <label class="flex items-center space-x-1"><input type="checkbox" name="qCorrectMulti" value="A"> <span>A</span></label>
+                  <label class="flex items-center space-x-1"><input type="checkbox" name="qCorrectMulti" value="B"> <span>B</span></label>
+                  <label class="flex items-center space-x-1"><input type="checkbox" name="qCorrectMulti" value="C"> <span>C</span></label>
+                  <label class="flex items-center space-x-1"><input type="checkbox" name="qCorrectMulti" value="D"> <span>D</span></label>
+                  <label class="flex items-center space-x-1"><input type="checkbox" name="qCorrectMulti" value="E"> <span>E</span></label>
+                </div>
+              </div>
+
+              <!-- Kunci Benar / Salah -->
+              <div id="correctBSContainerManual" class="hidden">
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Kunci Jawaban Benar/Salah</label>
+                <select id="qCorrectBS" class="w-full border p-2 text-sm rounded-lg font-bold">
+                  <option value="A">Benar</option>
+                  <option value="B">Salah</option>
+                </select>
+              </div>
+            </div>
+
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-sm">Simpan Soal</button>
           </form>
         </div>
@@ -444,10 +499,18 @@
       <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-3 space-y-6">
           <div class="flex justify-between items-center border-b pb-3">
-            <h3 class="font-bold text-slate-700 text-lg">Soal No. <span id="currentQuestionNum">1</span></h3>
+            <h3 class="font-bold text-slate-700 text-lg">
+              Soal No. <span id="currentQuestionNum">1</span>
+              <span id="examQuestionTypeBadge" class="ml-2 text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-semibold"></span>
+            </h3>
           </div>
 
+          <!-- Teks Pertanyaan & Gambar Soal Siswa -->
           <div id="examQuestionText" class="text-slate-800 text-base leading-relaxed"></div>
+          <div id="examQuestionImageContainer" class="hidden my-3">
+            <img id="examQuestionImage" src="" alt="Gambar Soal" class="max-h-72 rounded-lg border shadow-sm mx-auto object-contain">
+          </div>
+
           <div id="examOptionsContainer" class="space-y-3"></div>
 
           <div class="flex justify-between pt-4 border-t">
@@ -570,51 +633,100 @@
     </div>
   </div>
 
-  <!-- MODAL EDIT SOAL INDIVIDU -->
+  <!-- MODAL EDIT SOAL INDIVIDU (DENGAN SUPPORT 3 JENIS SOAL & GAMBAR) -->
   <div id="modalEditQuestion" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl p-6 space-y-4">
+    <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b pb-3">
-        <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-pen-to-square mr-2 text-blue-600"></i>Edit Teks Pertanyaan & Jawaban</h3>
+        <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-pen-to-square mr-2 text-blue-600"></i>Edit Soal Ujian</h3>
         <button onclick="closeEditQuestionModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
       </div>
       <form onsubmit="handleSaveEditedQuestion(event)" class="space-y-3">
         <input type="hidden" id="editQId">
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis / Tipe Soal</label>
+          <select id="editQType" onchange="toggleQuestionTypeFields('edit')" class="w-full border p-2 text-sm rounded-lg bg-amber-50 font-semibold text-slate-800 border-amber-300">
+            <option value="pg">Pilihan Ganda (1 Jawaban Benar)</option>
+            <option value="majemuk">Jawaban Lebih Dari Satu (Pilihan Majemuk)</option>
+            <option value="bs">Benar / Salah</option>
+          </select>
+        </div>
+
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Pertanyaan Soal</label>
           <textarea id="editQText" required rows="3" class="w-full border p-2 text-sm rounded-lg"></textarea>
         </div>
-        <div class="grid grid-cols-2 gap-2">
+
+        <!-- Edit/Tambah Gambar Soal -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1"><i class="fa-regular fa-image mr-1"></i>Gambar Soal (Ubah / Tambah)</label>
+          <input type="file" id="editQImageInput" accept="image/*" onchange="previewEditQuestionImage(event)" class="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 cursor-pointer">
+          <div id="editQImagePreviewContainer" class="hidden mt-2 relative inline-block">
+            <img id="editQImagePreview" src="" alt="Preview Gambar" class="max-h-36 rounded-lg border shadow-sm">
+            <button type="button" onclick="clearEditQuestionImage()" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow hover:bg-red-700"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+
+        <!-- OPSI EDIT -->
+        <div id="optionsContainerEdit" class="grid grid-cols-2 gap-2">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Opsi A</label>
-            <input type="text" id="editQOptA" required class="w-full border p-2 text-sm rounded-lg">
+            <input type="text" id="editQOptA" class="w-full border p-2 text-sm rounded-lg">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Opsi B</label>
-            <input type="text" id="editQOptB" required class="w-full border p-2 text-sm rounded-lg">
+            <input type="text" id="editQOptB" class="w-full border p-2 text-sm rounded-lg">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Opsi C</label>
-            <input type="text" id="editQOptC" required class="w-full border p-2 text-sm rounded-lg">
+            <input type="text" id="editQOptC" class="w-full border p-2 text-sm rounded-lg">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Opsi D</label>
-            <input type="text" id="editQOptD" required class="w-full border p-2 text-sm rounded-lg">
+            <input type="text" id="editQOptD" class="w-full border p-2 text-sm rounded-lg">
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Opsi E</label>
+            <input type="text" id="editQOptE" class="w-full border p-2 text-sm rounded-lg">
           </div>
         </div>
+
+        <!-- KUNCI EDIT -->
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Opsi E</label>
-          <input type="text" id="editQOptE" required class="w-full border p-2 text-sm rounded-lg">
+          <!-- Kunci PG Single -->
+          <div id="correctSingleContainerEdit">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Kunci Jawaban</label>
+            <select id="editQCorrectSingle" class="w-full border p-2 text-sm rounded-lg">
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+              <option value="E">E</option>
+            </select>
+          </div>
+
+          <!-- Kunci Majemuk -->
+          <div id="correctMultiContainerEdit" class="hidden bg-slate-50 p-3 rounded-lg border">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Seluruh Jawaban Benar:</label>
+            <div class="flex flex-wrap gap-3 text-sm">
+              <label class="flex items-center space-x-1"><input type="checkbox" name="editQCorrectMulti" value="A"> <span>A</span></label>
+              <label class="flex items-center space-x-1"><input type="checkbox" name="editQCorrectMulti" value="B"> <span>B</span></label>
+              <label class="flex items-center space-x-1"><input type="checkbox" name="editQCorrectMulti" value="C"> <span>C</span></label>
+              <label class="flex items-center space-x-1"><input type="checkbox" name="editQCorrectMulti" value="D"> <span>D</span></label>
+              <label class="flex items-center space-x-1"><input type="checkbox" name="editQCorrectMulti" value="E"> <span>E</span></label>
+            </div>
+          </div>
+
+          <!-- Kunci Benar/Salah -->
+          <div id="correctBSContainerEdit" class="hidden">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Kunci Jawaban Benar/Salah</label>
+            <select id="editQCorrectBS" class="w-full border p-2 text-sm rounded-lg font-bold">
+              <option value="A">Benar</option>
+              <option value="B">Salah</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Kunci Jawaban</label>
-          <select id="editQCorrect" class="w-full border p-2 text-sm rounded-lg">
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="C">C</option>
-            <option value="D">D</option>
-            <option value="E">E</option>
-          </select>
-        </div>
+
         <div class="flex justify-end space-x-2 pt-2 border-t">
           <button type="button" onclick="closeEditQuestionModal()" class="px-4 py-2 bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-300">Batal</button>
           <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">Simpan Perubahan Soal</button>
