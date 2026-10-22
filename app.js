@@ -23,7 +23,9 @@ let subjectsData = [
       endTime: "23:59"
     },
     questions: [
-      { id: 101, text: "Berapakah hasil dari 12 x 12?", options: { A: "124", B: "144", C: "164", D: "184", E: "200" }, correct: "B" }
+      { id: 101, type: "pg", text: "Berapakah hasil dari 12 x 12?", image: "", options: { A: "124", B: "144", C: "164", D: "184", E: "200" }, correct: "B" },
+      { id: 102, type: "majemuk", text: "Manakah di bawah ini yang merupakan bilangan genap?", image: "", options: { A: "2", B: "3", C: "4", D: "5", E: "6" }, correct: ["A", "C", "E"] },
+      { id: 103, type: "bs", text: "Apakah 15 merupakan bilangan prima?", image: "", options: { A: "Benar", B: "Salah" }, correct: "B" }
     ]
   },
   {
@@ -41,7 +43,7 @@ let subjectsData = [
       endTime: "23:59"
     },
     questions: [
-      { id: 201, text: "Surah pertama yang diturunkan adalah...", options: { A: "Al-Fatihah", B: "Al-Ikhlas", C: "Al-'Alaq 1-5", D: "Al-Baqarah", E: "An-Nas" }, correct: "C" }
+      { id: 201, type: "pg", text: "Surah pertama yang diturunkan adalah...", image: "", options: { A: "Al-Fatihah", B: "Al-Ikhlas", C: "Al-'Alaq 1-5", D: "Al-Baqarah", E: "An-Nas" }, correct: "C" }
     ]
   }
 ];
@@ -59,6 +61,10 @@ let selectedAdminSubjectId = "";
 let selectedTeacherSubjectId = "";
 let selectedStudentSubjectId = "";
 let currentScheduleEditingRole = "";
+
+// Variable temporary Base64 Image Soal
+let manualQuestionImageBase64 = "";
+let editQuestionImageBase64 = "";
 
 let currentActiveExamQuestions = [];
 let currentExamDuration = 30;
@@ -230,7 +236,6 @@ function setupAdminDashboard() {
   renderResultsTableAdmin('admin');
 }
 
-/* FITUR IMPOR EXCEL PENGGUNA MASSAL */
 async function handleUploadUsersExcel() {
   const fileInput = document.getElementById('excelFileInput');
   if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
@@ -245,7 +250,6 @@ async function handleUploadUsersExcel() {
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
     
-    // Convert worksheet ke JSON
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
     if (jsonData.length === 0) {
@@ -255,7 +259,6 @@ async function handleUploadUsersExcel() {
     let importedCount = 0;
 
     jsonData.forEach((row) => {
-      // Pembacaan kunci kolom serbaguna
       const name = String(row['Nama Lengkap'] || row['Nama'] || row['NAMA'] || '').trim();
       const roleRaw = String(row['Role'] || row['Peran'] || row['ROLE'] || 'siswa').trim().toLowerCase();
       const username = String(row['Username'] || row['USERNAME'] || '').trim();
@@ -266,7 +269,6 @@ async function handleUploadUsersExcel() {
       const role = (roleRaw === 'admin' || roleRaw === 'guru') ? roleRaw : 'siswa';
 
       if (name && username) {
-        // Mencegah duplikasi username
         const exists = usersList.some(u => u.username.toLowerCase() === username.toLowerCase());
         if (!exists) {
           const newUser = {
@@ -297,7 +299,6 @@ async function handleUploadUsersExcel() {
   }
 }
 
-/* Unduh Template Contoh File Excel Akun */
 function downloadExcelAccountTemplate() {
   const templateData = [
     {
@@ -464,12 +465,13 @@ function renderAdminSubjectDropdown() {
 }
 
 /* ==========================================================================
-   2. DASHBOARD GURU LOGIC
+   2. DASHBOARD GURU LOGIC (3 JENIS SOAL & GAMBAR)
    ========================================================================== */
 function setupTeacherDashboard() {
   populateDropdownsFromMaster();
   renderTeacherSubjectDropdown();
   renderResultsTableAdmin('teacher');
+  toggleQuestionTypeFields('manual');
 }
 
 function renderTeacherSubjectDropdown() {
@@ -530,6 +532,89 @@ function handleTeacherSubjectChange() {
   }
 }
 
+/* LOGIKA TOGGLE TIPE SOAL (MANUAL & EDIT) */
+function toggleQuestionTypeFields(mode) {
+  const typeSelectId = mode === 'manual' ? 'qType' : 'editQType';
+  const optsContainerId = mode === 'manual' ? 'optionsContainerManual' : 'optionsContainerEdit';
+  const singleContainerId = mode === 'manual' ? 'correctSingleContainerManual' : 'correctSingleContainerEdit';
+  const multiContainerId = mode === 'manual' ? 'correctMultiContainerManual' : 'correctMultiContainerEdit';
+  const bsContainerId = mode === 'manual' ? 'correctBSContainerManual' : 'correctBSContainerEdit';
+
+  const type = document.getElementById(typeSelectId).value;
+  const optsContainer = document.getElementById(optsContainerId);
+  const singleContainer = document.getElementById(singleContainerId);
+  const multiContainer = document.getElementById(multiContainerId);
+  const bsContainer = document.getElementById(bsContainerId);
+
+  if (type === 'bs') {
+    if (optsContainer) optsContainer.classList.add('hidden');
+    if (singleContainer) singleContainer.classList.add('hidden');
+    if (multiContainer) multiContainer.classList.add('hidden');
+    if (bsContainer) bsContainer.classList.remove('hidden');
+  } else if (type === 'majemuk') {
+    if (optsContainer) optsContainer.classList.remove('hidden');
+    if (singleContainer) singleContainer.classList.add('hidden');
+    if (multiContainer) multiContainer.classList.remove('hidden');
+    if (bsContainer) bsContainer.classList.add('hidden');
+  } else { // 'pg'
+    if (optsContainer) optsContainer.classList.remove('hidden');
+    if (singleContainer) singleContainer.classList.remove('hidden');
+    if (multiContainer) multiContainer.classList.add('hidden');
+    if (bsContainer) bsContainer.classList.add('hidden');
+  }
+}
+
+/* PREVIEW & BASE64 GAMBAR */
+function previewManualQuestionImage(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    manualQuestionImageBase64 = e.target.result;
+    const imgPreview = document.getElementById('qImagePreview');
+    const container = document.getElementById('qImagePreviewContainer');
+    if (imgPreview && container) {
+      imgPreview.src = manualQuestionImageBase64;
+      container.classList.remove('hidden');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearManualQuestionImage() {
+  manualQuestionImageBase64 = "";
+  const input = document.getElementById('qImageInput');
+  const container = document.getElementById('qImagePreviewContainer');
+  if (input) input.value = "";
+  if (container) container.classList.add('hidden');
+}
+
+function previewEditQuestionImage(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    editQuestionImageBase64 = e.target.result;
+    const imgPreview = document.getElementById('editQImagePreview');
+    const container = document.getElementById('editQImagePreviewContainer');
+    if (imgPreview && container) {
+      imgPreview.src = editQuestionImageBase64;
+      container.classList.remove('hidden');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearEditQuestionImage() {
+  editQuestionImageBase64 = "";
+  const input = document.getElementById('editQImageInput');
+  const container = document.getElementById('editQImagePreviewContainer');
+  if (input) input.value = "";
+  if (container) container.classList.add('hidden');
+}
+
 function renderQuestionListAdmin(role) {
   const containerId = role === 'admin' ? 'questionsListContainer' : 'teacherQuestionsContainer';
   const subjectId = role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
@@ -544,16 +629,49 @@ function renderQuestionListAdmin(role) {
 
   container.innerHTML = '';
   activeSub.questions.forEach((q, idx) => {
+    let imageHTML = q.image ? `<div class="mt-2 mb-1"><img src="${q.image}" alt="Gambar Soal" class="max-h-32 rounded border shadow-sm object-contain"></div>` : '';
+
+    let typeBadge = '';
+    let correctText = '';
+    let optionsHTML = '';
+
+    if (q.type === 'majemuk') {
+      typeBadge = `<span class="bg-purple-100 text-purple-800 text-[10px] px-2 py-0.5 rounded font-bold">Jawaban Lebih Dari 1</span>`;
+      correctText = Array.isArray(q.correct) ? q.correct.join(', ') : q.correct;
+      optionsHTML = `
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600 mt-2">
+          <p>A: ${q.options.A}</p><p>B: ${q.options.B}</p>
+          <p>C: ${q.options.C}</p><p>D: ${q.options.D}</p>
+          <p class="col-span-2">E: ${q.options.E}</p>
+        </div>`;
+    } else if (q.type === 'bs') {
+      typeBadge = `<span class="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded font-bold">Benar / Salah</span>`;
+      correctText = q.correct === 'A' ? 'Benar' : 'Salah';
+      optionsHTML = `
+        <div class="flex space-x-4 text-xs text-slate-600 mt-2">
+          <p>A: Benar</p><p>B: Salah</p>
+        </div>`;
+    } else { // pg
+      typeBadge = `<span class="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded font-bold">Pilihan Ganda</span>`;
+      correctText = q.correct;
+      optionsHTML = `
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600 mt-2">
+          <p>A: ${q.options.A}</p><p>B: ${q.options.B}</p>
+          <p>C: ${q.options.C}</p><p>D: ${q.options.D}</p>
+          <p class="col-span-2">E: ${q.options.E}</p>
+        </div>`;
+    }
+
     container.innerHTML += `
       <div class="p-3 border rounded-lg bg-slate-50 flex justify-between items-start text-sm">
         <div class="pr-3">
-          <p class="font-semibold text-slate-800">${idx + 1}. ${q.text}</p>
-          <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600 mt-2">
-            <p>A: ${q.options.A}</p><p>B: ${q.options.B}</p>
-            <p>C: ${q.options.C}</p><p>D: ${q.options.D}</p>
-            <p class="col-span-2">E: ${q.options.E}</p>
+          <div class="flex items-center space-x-2">
+            <p class="font-semibold text-slate-800">${idx + 1}. ${q.text}</p>
+            ${typeBadge}
           </div>
-          <p class="text-xs text-slate-500 mt-1">Kunci: <strong class="text-green-600">${q.correct}</strong></p>
+          ${imageHTML}
+          ${optionsHTML}
+          <p class="text-xs text-slate-500 mt-1">Kunci: <strong class="text-green-600">${correctText}</strong></p>
         </div>
         <div class="flex flex-col space-y-1">
           <button onclick="openEditQuestionModal('${activeSub.id}', ${q.id})" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded">Edit</button>
@@ -570,14 +688,45 @@ function openEditQuestionModal(subjectId, questionId) {
   const q = activeSub.questions.find(item => item.id === questionId);
   if (!q) return;
 
+  const type = q.type || 'pg';
   document.getElementById('editQId').value = q.id;
+  document.getElementById('editQType').value = type;
   document.getElementById('editQText').value = q.text;
-  document.getElementById('editQOptA').value = q.options.A || "";
-  document.getElementById('editQOptB').value = q.options.B || "";
-  document.getElementById('editQOptC').value = q.options.C || "";
-  document.getElementById('editQOptD').value = q.options.D || "";
-  document.getElementById('editQOptE').value = q.options.E || "";
-  document.getElementById('editQCorrect').value = q.correct || "A";
+
+  toggleQuestionTypeFields('edit');
+
+  if (type === 'bs') {
+    document.getElementById('editQCorrectBS').value = q.correct || 'A';
+  } else if (type === 'majemuk') {
+    document.getElementById('editQOptA').value = q.options?.A || "";
+    document.getElementById('editQOptB').value = q.options?.B || "";
+    document.getElementById('editQOptC').value = q.options?.C || "";
+    document.getElementById('editQOptD').value = q.options?.D || "";
+    document.getElementById('editQOptE').value = q.options?.E || "";
+
+    const correctArr = Array.isArray(q.correct) ? q.correct : [q.correct];
+    document.querySelectorAll('input[name="editQCorrectMulti"]').forEach(cb => {
+      cb.checked = correctArr.includes(cb.value);
+    });
+  } else {
+    document.getElementById('editQOptA').value = q.options?.A || "";
+    document.getElementById('editQOptB').value = q.options?.B || "";
+    document.getElementById('editQOptC').value = q.options?.C || "";
+    document.getElementById('editQOptD').value = q.options?.D || "";
+    document.getElementById('editQOptE').value = q.options?.E || "";
+    document.getElementById('editQCorrectSingle').value = q.correct || "A";
+  }
+
+  editQuestionImageBase64 = q.image || "";
+  const imgPreview = document.getElementById('editQImagePreview');
+  const container = document.getElementById('editQImagePreviewContainer');
+  
+  if (editQuestionImageBase64) {
+    if (imgPreview) imgPreview.src = editQuestionImageBase64;
+    if (container) container.classList.remove('hidden');
+  } else {
+    if (container) container.classList.add('hidden');
+  }
 
   document.getElementById('modalEditQuestion').classList.remove('hidden');
 }
@@ -596,18 +745,40 @@ function handleSaveEditedQuestion(e) {
   const q = activeSub.questions.find(item => item.id === qId);
   if (!q) return;
 
+  const type = document.getElementById('editQType').value;
+  q.type = type;
   q.text = document.getElementById('editQText').value.trim();
-  q.options.A = document.getElementById('editQOptA').value.trim();
-  q.options.B = document.getElementById('editQOptB').value.trim();
-  q.options.C = document.getElementById('editQOptC').value.trim();
-  q.options.D = document.getElementById('editQOptD').value.trim();
-  q.options.E = document.getElementById('editQOptE').value.trim();
-  q.correct = document.getElementById('editQCorrect').value;
+  q.image = editQuestionImageBase64;
+
+  if (type === 'bs') {
+    q.options = { A: "Benar", B: "Salah" };
+    q.correct = document.getElementById('editQCorrectBS').value;
+  } else if (type === 'majemuk') {
+    q.options = {
+      A: document.getElementById('editQOptA').value.trim(),
+      B: document.getElementById('editQOptB').value.trim(),
+      C: document.getElementById('editQOptC').value.trim(),
+      D: document.getElementById('editQOptD').value.trim(),
+      E: document.getElementById('editQOptE').value.trim()
+    };
+    const multiChecked = Array.from(document.querySelectorAll('input[name="editQCorrectMulti"]:checked')).map(cb => cb.value);
+    if (multiChecked.length === 0) return alert("Pilih minimal satu kunci jawaban benar!");
+    q.correct = multiChecked;
+  } else {
+    q.options = {
+      A: document.getElementById('editQOptA').value.trim(),
+      B: document.getElementById('editQOptB').value.trim(),
+      C: document.getElementById('editQOptC').value.trim(),
+      D: document.getElementById('editQOptD').value.trim(),
+      E: document.getElementById('editQOptE').value.trim()
+    };
+    q.correct = document.getElementById('editQCorrectSingle').value;
+  }
 
   saveData();
   renderQuestionListAdmin(currentUser.role);
   closeEditQuestionModal();
-  alert("Pertanyaan dan opsi jawaban berhasil diperbarui!");
+  alert("Soal berhasil diperbarui!");
 }
 
 function handleDeleteQuestion(subjectId, questionId) {
@@ -878,7 +1049,9 @@ function parseRawTextToQuestions(rawText) {
       if (currentQuestion && currentQuestion.text) questions.push(currentQuestion);
       currentQuestion = {
         id: Date.now() + Math.random(),
+        type: "pg",
         text: qMatch[2],
+        image: "",
         options: { A: "", B: "", C: "", D: "", E: "" },
         correct: "A"
       };
@@ -916,25 +1089,54 @@ function handleAddQuestionManual(e) {
 
   if (!activeSub) return alert("Pilih mata pelajaran terlebih dahulu!");
 
+  const qType = document.getElementById('qType').value;
   const qText = document.getElementById('qText').value.trim();
-  const qOptA = document.getElementById('qOptA').value.trim();
-  const qOptB = document.getElementById('qOptB').value.trim();
-  const qOptC = document.getElementById('qOptC').value.trim();
-  const qOptD = document.getElementById('qOptD').value.trim();
-  const qOptE = document.getElementById('qOptE').value.trim();
-  const qCorrect = document.getElementById('qCorrect').value;
+
+  let options = {};
+  let correct = "A";
+
+  if (qType === 'bs') {
+    options = { A: "Benar", B: "Salah" };
+    correct = document.getElementById('qCorrectBS').value;
+  } else if (qType === 'majemuk') {
+    options = {
+      A: document.getElementById('qOptA').value.trim(),
+      B: document.getElementById('qOptB').value.trim(),
+      C: document.getElementById('qOptC').value.trim(),
+      D: document.getElementById('qOptD').value.trim(),
+      E: document.getElementById('qOptE').value.trim()
+    };
+    const selectedCheckboxes = Array.from(document.querySelectorAll('input[name="qCorrectMulti"]:checked')).map(cb => cb.value);
+    if (selectedCheckboxes.length === 0) return alert("Pilih minimal satu kunci jawaban benar untuk Pilihan Majemuk!");
+    correct = selectedCheckboxes;
+  } else { // 'pg'
+    options = {
+      A: document.getElementById('qOptA').value.trim(),
+      B: document.getElementById('qOptB').value.trim(),
+      C: document.getElementById('qOptC').value.trim(),
+      D: document.getElementById('qOptD').value.trim(),
+      E: document.getElementById('qOptE').value.trim()
+    };
+    correct = document.getElementById('qCorrectSingle').value;
+  }
 
   const newQ = {
     id: Date.now(),
+    type: qType,
     text: qText,
-    options: { A: qOptA, B: qOptB, C: qOptC, D: qOptD, E: qOptE },
-    correct: qCorrect
+    image: manualQuestionImageBase64,
+    options: options,
+    correct: correct
   };
 
   activeSub.questions.push(newQ);
   saveData();
   renderQuestionListAdmin(currentUser.role);
+  
+  // Reset Form Manual
   document.getElementById('formQuestionManualGuru').reset();
+  clearManualQuestionImage();
+  toggleQuestionTypeFields('manual');
   alert("Soal berhasil ditambahkan!");
 }
 
@@ -1065,26 +1267,100 @@ function startTimer() {
 
 function renderCurrentQuestion() {
   const q = currentActiveExamQuestions[currentQuestionIndex];
+  const qType = q.type || 'pg';
+
   document.getElementById('currentQuestionNum').innerText = currentQuestionIndex + 1;
   document.getElementById('examQuestionText').innerText = q.text;
 
-  const activeAns = studentAnswers[q.id] || { answer: null, doubtful: false };
+  // Render Badge Tipe Soal
+  const badgeEl = document.getElementById('examQuestionTypeBadge');
+  if (badgeEl) {
+    if (qType === 'majemuk') {
+      badgeEl.innerText = "Pilihan Majemuk (Pilih > 1)";
+      badgeEl.className = "ml-2 text-xs px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 font-semibold";
+    } else if (qType === 'bs') {
+      badgeEl.innerText = "Benar / Salah";
+      badgeEl.className = "ml-2 text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold";
+    } else {
+      badgeEl.innerText = "Pilihan Ganda (1 Jawaban)";
+      badgeEl.className = "ml-2 text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-semibold";
+    }
+  }
+
+  // Render Gambar Soal Siswa
+  const imgContainer = document.getElementById('examQuestionImageContainer');
+  const imgEl = document.getElementById('examQuestionImage');
+  if (q.image) {
+    if (imgEl) imgEl.src = q.image;
+    if (imgContainer) imgContainer.classList.remove('hidden');
+  } else {
+    if (imgContainer) imgContainer.classList.add('hidden');
+  }
+
   const container = document.getElementById('examOptionsContainer');
   container.innerHTML = '';
 
-  Object.keys(q.options).forEach(optKey => {
-    const isSelected = activeAns.answer === optKey;
-    container.innerHTML += `
-      <div onclick="selectAnswer('${optKey}')" class="p-3 border rounded-lg cursor-pointer ${isSelected ? 'border-blue-600 bg-blue-50 font-bold' : 'border-slate-200'}">
-        <strong>${optKey}.</strong> ${q.options[optKey]}
-      </div>
-    `;
-  });
+  const activeAns = studentAnswers[q.id]?.answer;
+
+  if (qType === 'majemuk') {
+    const selectedArray = Array.isArray(activeAns) ? activeAns : [];
+
+    Object.keys(q.options).forEach(optKey => {
+      if (!q.options[optKey]) return; // Lewati opsi kosong
+      const isChecked = selectedArray.includes(optKey);
+      container.innerHTML += `
+        <div onclick="toggleMultiAnswer('${optKey}')" class="p-3 border rounded-lg cursor-pointer flex items-center space-x-3 ${isChecked ? 'border-purple-600 bg-purple-50 font-bold' : 'border-slate-200'}">
+          <input type="checkbox" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-purple-600 pointer-events-none">
+          <span><strong>${optKey}.</strong> ${q.options[optKey]}</span>
+        </div>
+      `;
+    });
+
+  } else if (qType === 'bs') {
+    const optionsBS = { A: "Benar", B: "Salah" };
+    Object.keys(optionsBS).forEach(optKey => {
+      const isSelected = activeAns === optKey;
+      container.innerHTML += `
+        <div onclick="selectSingleAnswer('${optKey}')" class="p-3 border rounded-lg cursor-pointer flex items-center space-x-3 ${isSelected ? 'border-amber-600 bg-amber-50 font-bold' : 'border-slate-200'}">
+          <input type="radio" ${isSelected ? 'checked' : ''} class="w-4 h-4 text-amber-600 pointer-events-none">
+          <span><strong>${optionsBS[optKey]}</strong></span>
+        </div>
+      `;
+    });
+
+  } else { // 'pg'
+    Object.keys(q.options).forEach(optKey => {
+      if (!q.options[optKey]) return;
+      const isSelected = activeAns === optKey;
+      container.innerHTML += `
+        <div onclick="selectSingleAnswer('${optKey}')" class="p-3 border rounded-lg cursor-pointer flex items-center space-x-3 ${isSelected ? 'border-blue-600 bg-blue-50 font-bold' : 'border-slate-200'}">
+          <input type="radio" ${isSelected ? 'checked' : ''} class="w-4 h-4 text-blue-600 pointer-events-none">
+          <span><strong>${optKey}.</strong> ${q.options[optKey]}</span>
+        </div>
+      `;
+    });
+  }
 }
 
-function selectAnswer(optKey) {
+function selectSingleAnswer(optKey) {
   const q = currentActiveExamQuestions[currentQuestionIndex];
-  studentAnswers[q.id] = { answer: optKey, doubtful: false };
+  studentAnswers[q.id] = { answer: optKey };
+  renderCurrentQuestion();
+  renderNumberGrid();
+}
+
+function toggleMultiAnswer(optKey) {
+  const q = currentActiveExamQuestions[currentQuestionIndex];
+  let currentAns = studentAnswers[q.id]?.answer;
+  if (!Array.isArray(currentAns)) currentAns = [];
+
+  if (currentAns.includes(optKey)) {
+    currentAns = currentAns.filter(item => item !== optKey);
+  } else {
+    currentAns.push(optKey);
+  }
+
+  studentAnswers[q.id] = { answer: currentAns };
   renderCurrentQuestion();
   renderNumberGrid();
 }
@@ -1094,8 +1370,16 @@ function renderNumberGrid() {
   if (!grid) return;
   grid.innerHTML = '';
   currentActiveExamQuestions.forEach((q, idx) => {
-    const ans = studentAnswers[q.id];
-    let btnClass = ans && ans.answer ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700";
+    const ans = studentAnswers[q.id]?.answer;
+    let hasAnswered = false;
+
+    if (Array.isArray(ans)) {
+      hasAnswered = ans.length > 0;
+    } else {
+      hasAnswered = !!ans;
+    }
+
+    let btnClass = hasAnswered ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700";
     grid.innerHTML += `<button onclick="jumpToQuestion(${idx})" class="h-8 border rounded text-xs ${btnClass}">${idx + 1}</button>`;
   });
 }
@@ -1113,7 +1397,24 @@ function confirmSubmitExam() { if (confirm("Kirim jawaban sekarang?")) submitExa
 async function submitExam() {
   stopExam();
   let correctCount = 0;
-  currentActiveExamQuestions.forEach(q => { if (studentAnswers[q.id]?.answer === q.correct) correctCount++; });
+
+  currentActiveExamQuestions.forEach(q => {
+    const userAns = studentAnswers[q.id]?.answer;
+    const qType = q.type || 'pg';
+
+    if (qType === 'majemuk') {
+      const correctArr = Array.isArray(q.correct) ? q.correct : [q.correct];
+      const userArr = Array.isArray(userAns) ? userAns : [];
+
+      if (correctArr.length === userArr.length && correctArr.every(val => userArr.includes(val))) {
+        correctCount++;
+      }
+    } else { // PG & Benar Salah
+      if (userAns === q.correct) {
+        correctCount++;
+      }
+    }
+  });
 
   const finalScore = Math.round((correctCount / currentActiveExamQuestions.length) * 100);
   const resultPayload = {
