@@ -213,7 +213,7 @@ function logout() {
 }
 
 /* ==========================================================================
-   1. DASHBOARD ADMIN LOGIC (MASTER DATA KELAS & MAPEL)
+   1. DASHBOARD ADMIN LOGIC (IMPOR EXCEL AKUN + MASTER DATA)
    ========================================================================== */
 function setupAdminDashboard() {
   if (currentUser) {
@@ -228,6 +228,100 @@ function setupAdminDashboard() {
   renderAdminSubjectDropdown();
   renderUsersTableAdmin();
   renderResultsTableAdmin('admin');
+}
+
+/* FITUR IMPOR EXCEL PENGGUNA MASSAL */
+async function handleUploadUsersExcel() {
+  const fileInput = document.getElementById('excelFileInput');
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    return alert("Silakan pilih file Excel (.xlsx / .xls / .csv) terlebih dahulu!");
+  }
+
+  const file = fileInput.files[0];
+
+  try {
+    const dataBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(dataBuffer, { type: 'array' });
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    
+    // Convert worksheet ke JSON
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+    if (jsonData.length === 0) {
+      return alert("File Excel kosong atau format baris data tidak terdeteksi!");
+    }
+
+    let importedCount = 0;
+
+    jsonData.forEach((row) => {
+      // Pembacaan kunci kolom serbaguna
+      const name = String(row['Nama Lengkap'] || row['Nama'] || row['NAMA'] || '').trim();
+      const roleRaw = String(row['Role'] || row['Peran'] || row['ROLE'] || 'siswa').trim().toLowerCase();
+      const username = String(row['Username'] || row['USERNAME'] || '').trim();
+      const password = String(row['Password'] || row['PASSWORD'] || '123456').trim();
+      const studentClass = String(row['Kelas Siswa'] || row['Kelas'] || row['KELAS'] || 'Kelas 7A').trim();
+      const assignedInfo = String(row['Mapel / Info Guru'] || row['Mapel'] || row['MAPEL'] || '').trim();
+
+      const role = (roleRaw === 'admin' || roleRaw === 'guru') ? roleRaw : 'siswa';
+
+      if (name && username) {
+        // Mencegah duplikasi username
+        const exists = usersList.some(u => u.username.toLowerCase() === username.toLowerCase());
+        if (!exists) {
+          const newUser = {
+            id: Date.now() + Math.random(),
+            name, role, username, password
+          };
+          if (role === 'guru') newUser.assignedInfo = assignedInfo || 'Matematika';
+          if (role === 'siswa') newUser.studentClass = studentClass || 'Kelas 7A';
+
+          usersList.push(newUser);
+          importedCount++;
+        }
+      }
+    });
+
+    if (importedCount > 0) {
+      saveUsersData();
+      renderUsersTableAdmin();
+      fileInput.value = '';
+      alert(`Berhasil mengimpor ${importedCount} akun pengguna dari file Excel "${file.name}"!`);
+    } else {
+      alert("Tidak ada akun baru yang ditambahkan. Pastikan kolom 'Nama Lengkap' dan 'Username' terisi dan belum pernah terdaftar.");
+    }
+
+  } catch (err) {
+    console.error("Error reading Excel file:", err);
+    alert("Terjadi kesalahan saat membaca file Excel. Pastikan file dalam format .xlsx atau .csv yang valid.");
+  }
+}
+
+/* Unduh Template Contoh File Excel Akun */
+function downloadExcelAccountTemplate() {
+  const templateData = [
+    {
+      "Nama Lengkap": "Ustadz Abdullah, S.Pd.",
+      "Role": "guru",
+      "Mapel / Info Guru": "Bahasa Arab",
+      "Kelas Siswa": "",
+      "Username": "abdullah123",
+      "Password": "gurupass123"
+    },
+    {
+      "Nama Lengkap": "Siti Sarah",
+      "Role": "siswa",
+      "Mapel / Info Guru": "",
+      "Kelas Siswa": "Kelas 7A",
+      "Username": "sarah7a",
+      "Password": "siswapass123"
+    }
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(templateData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Format Akun CBT");
+  XLSX.writeFile(workbook, "Template_Impor_Akun_CBT.xlsx");
 }
 
 function renderMasterDataAdmin() {
@@ -305,7 +399,6 @@ function deleteMasterSubject(idx) {
   }
 }
 
-/* Mengisi seluruh dropdown berdasarkan Master Data Admin */
 function populateDropdownsFromMaster() {
   const teacherSubjectSelect = document.getElementById('teacherNewSubjectTitleSelect');
   const teacherClassSelect = document.getElementById('teacherNewSubjectClassSelect');
@@ -371,7 +464,7 @@ function renderAdminSubjectDropdown() {
 }
 
 /* ==========================================================================
-   2. DASHBOARD GURU LOGIC (MEMILIH DARI MASTER DATA)
+   2. DASHBOARD GURU LOGIC
    ========================================================================== */
 function setupTeacherDashboard() {
   populateDropdownsFromMaster();
@@ -437,7 +530,6 @@ function handleTeacherSubjectChange() {
   }
 }
 
-/* Modal Edit & Hapus Soal Individu */
 function renderQuestionListAdmin(role) {
   const containerId = role === 'admin' ? 'questionsListContainer' : 'teacherQuestionsContainer';
   const subjectId = role === 'admin' ? selectedAdminSubjectId : selectedTeacherSubjectId;
@@ -529,7 +621,6 @@ function handleDeleteQuestion(subjectId, questionId) {
   }
 }
 
-/* Edit & Hapus Hasil Rekap Nilai Submitted */
 async function renderResultsTableAdmin(role) {
   const tbodyId = role === 'admin' ? 'adminResultsTableBody' : 'teacherResultsTableBody';
   const tbody = document.getElementById(tbodyId);
