@@ -2,8 +2,8 @@
    CONFIG & INITIALIZATION (SUPABASE INTEGRATION)
    ========================================================================== */
 // Ganti dengan URL dan ANON KEY dari Dashboard Supabase Anda
-const SUPABASE_URL = "https://YOUR_SUPABASE_PROJECT_ID.supabase.co";
-const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
+const SUPABASE_URL = "https://CBT-smpqualwahdah.supabase.co";
+const SUPABASE_KEY = "wwizvphxjieoorngoszd";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null; 
