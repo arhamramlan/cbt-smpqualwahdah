@@ -1,17 +1,49 @@
 /* ==========================================================================
-   CONFIG & INITIALIZATION (SUPABASE INTEGRATION)
+   CONFIG & INITIALIZATION (SUPABASE INTEGRATION + LOCALSTORAGE FALLBACK)
    ========================================================================== */
-// Ganti dengan URL dan ANON KEY dari Dashboard Supabase Anda// ✅ BENAR
-const SUPABASE_URL = "https://wwizvphxjieoorngoszd.supabase.co"; // Ganti dengan URL Supabase Anda
-const SUPABASE_KEY = "sb_publishable_i6fQkGiYivOH65lWNqMbvw_tlW08UE_";  // Ganti dengan ANON KEY Supabase Anda
+const SUPABASE_URL = "https://wwizvphxjieoorngoszd.supabase.co";
+const SUPABASE_KEY = "sb_publishable_i6fQkGiYivOH65lWNqMbvw_tlW08UE_";
 
-let supabaseClient = null; // Gunakan nama variabel yang berbeda agar tidak bentrok
+let supabaseClient = null;
 
-if (typeof window.supabase !== 'undefined' && SUPABASE_URL.includes("supabase.co")) {
-  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Inisialisasi Supabase secara aman
+try {
+  if (typeof window.supabase !== 'undefined' && SUPABASE_URL.includes("supabase.co") && !SUPABASE_KEY.startsWith("sb_publishable_")) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+} catch (e) {
+  console.warn("Inisialisasi Supabase gagal, menggunakan mode LocalStorage fallback.", e);
 }
 
 let currentUser = null; 
+let masterClasses = ["Kelas 7A", "Kelas 7B", "Kelas 8A", "Kelas 8B", "Kelas 9A", "Kelas 9B"];
+let masterSubjects = ["Matematika", "PAI / Al-Qur'an Hadits", "Bahasa Indonesia", "Bahasa Inggris", "IPA", "IPS"];
+
+let subjectsData = [
+  {
+    id: "mapel_1",
+    title: "Matematika",
+    targetClass: "Kelas 7A",
+    teacherUsername: "guru1",
+    teacherName: "Ustadz Ahmad, S.Pd.",
+    duration: 30,
+    questions: [
+      { id: 101, type: "pg", text: "Berapakah hasil dari 12 x 12?", image: "", options: { A: "124", B: "144", C: "164", D: "184", E: "200" }, correct: "B" },
+      { id: 102, type: "majemuk", text: "Manakah di bawah ini yang merupakan bilangan genap?", image: "", options: { A: "2", B: "3", C: "4", D: "5", E: "6" }, correct: ["A", "C", "E"] },
+      { id: 103, type: "bs", text: "Apakah 15 merupakan bilangan prima?", image: "", options: { A: "Benar", B: "Salah" }, correct: "B" }
+    ]
+  }
+];
+
+let defaultUsers = [
+  { id: 1, name: "Administrator Utama", username: "admin", password: "adminpassword", role: "admin" },
+  { id: 2, name: "Ustadz Ahmad, S.Pd.", username: "guru1", password: "gurupassword", role: "guru", assignedInfo: "Matematika" },
+  { id: 3, name: "Muhammad Ali", username: "siswa1", password: "siswapassword", role: "siswa", studentClass: "Kelas 7A" }
+];
+
+let usersList = [...defaultUsers];
+
+let selectedTeacherSubjectId = "";
 let currentActiveExamQuestions = [];
 let currentExamDuration = 30;
 let currentExamTitle = "";
@@ -19,7 +51,7 @@ let currentExamTeacher = "";
 let currentExamClass = "";
 
 let studentAnswers = {}; 
-let doubtfulAnswers = {}; // Fitur baru: Penanda Ragu-ragu
+let doubtfulAnswers = {};
 let currentQuestionIndex = 0;
 let timerInterval = null;
 let examTimeSeconds = 0;
@@ -28,12 +60,37 @@ const MAX_VIOLATIONS = 3;
 let isExamActive = false;
 
 window.addEventListener('DOMContentLoaded', () => {
+  loadLocalData();
   setupAntiCheatingEvents();
 });
 
-/* Helper SweetAlert menggantikan alert & confirm bawaan */
+function loadLocalData() {
+  const savedUsers = localStorage.getItem("cbt_users");
+  if (savedUsers) {
+    try { usersList = JSON.parse(savedUsers); } catch(e) {}
+  } else {
+    localStorage.setItem("cbt_users", JSON.stringify(usersList));
+  }
+
+  const savedSubjects = localStorage.getItem("cbt_subjects_data");
+  if (savedSubjects) {
+    try { subjectsData = JSON.parse(savedSubjects); } catch(e) {}
+  } else {
+    localStorage.setItem("cbt_subjects_data", JSON.stringify(subjectsData));
+  }
+}
+
+function saveData() {
+  localStorage.setItem("cbt_subjects_data", JSON.stringify(subjectsData));
+  localStorage.setItem("cbt_users", JSON.stringify(usersList));
+}
+
 function notify(title, text, icon = 'info') {
-  Swal.fire({ title, text, icon, confirmColor: '#1d4ed8' });
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({ title, text, icon, confirmColor: '#1d4ed8' });
+  } else {
+    alert(`${title}: ${text}`);
+  }
 }
 
 /* ==========================================================================
@@ -48,22 +105,26 @@ async function handleLogin(e) {
 
   let foundUser = null;
 
-  // Jika Supabase terhubung, cek ke database cloud
+  // 1. Coba Authentikasi via Supabase Cloud jika terhubung
   if (supabaseClient) {
-    const { data, error } = await supabaseClient
-      .from('users')
-      .select('*')
-      .eq('username', username)
-      .eq('password', password)
-      .eq('role', role)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabaseClient
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .eq('password', password)
+        .eq('role', role)
+        .maybeSingle();
 
-    if (!error && data) {
-      foundUser = data;
+      if (!error && data) {
+        foundUser = data;
+      }
+    } catch (err) {
+      console.warn("Supabase login error, switching to LocalStorage fallback.", err);
     }
   }
 
-  // Fallback ke LocalStorage jika Supabase tidak digunakan / offline
+  // 2. Fallback ke LocalStorage jika Supabase gagal/offline
   if (!foundUser) {
     foundUser = usersList.find(u => 
       u.username.toLowerCase() === username && 
@@ -91,6 +152,7 @@ async function handleLogin(e) {
     showView('viewStudentInstruction');
   }
 }
+
 function logout() {
   if (isExamActive) {
     Swal.fire({
@@ -126,26 +188,34 @@ function showView(viewId) {
 }
 
 /* ==========================================================================
-   DASHBOARD SISWA & LOGIKA UJIAN TERACAK (RANDOMIZE)
+   DASHBOARD SISWA & LOGIKA UJIAN
    ========================================================================== */
 async function setupStudentInstruction() {
   const select = document.getElementById('studentSubjectSelect');
   if (!select) return;
   select.innerHTML = '';
 
-  const studentClass = currentUser.student_class || "Kelas 7A";
-  
-  const { data: exams } = await supabase
-    .from('exams')
-    .select('*')
-    .or(`target_class.eq.${studentClass},target_class.eq.Semua Kelas`);
+  const studentClass = currentUser.studentClass || currentUser.student_class || "Kelas 7A";
+  let mySubjects = [];
 
-  if (!exams || exams.length === 0) {
+  if (supabaseClient) {
+    try {
+      const { data } = await supabaseClient
+        .from('exams')
+        .select('*')
+        .or(`target_class.eq.${studentClass},target_class.eq.Semua Kelas`);
+      if (data && data.length > 0) mySubjects = data;
+    } catch(e) {}
+  }
+
+  if (mySubjects.length === 0) {
+    mySubjects = subjectsData.filter(s => s.targetClass === studentClass || s.targetClass === "Semua Kelas");
+  }
+
+  if (mySubjects.length === 0) {
     select.innerHTML = '<option value="">Tidak ada ujian untuk kelas Anda</option>';
   } else {
-    exams.forEach(sub => {
-      select.innerHTML += `<option value="${sub.id}">${sub.title} (Guru: ${sub.teacher_name})</option>`;
-    });
+    select.innerHTML = mySubjects.map(sub => `<option value="${sub.id}">${sub.title} (Guru: ${sub.teacherName || sub.teacher_name || '-'})</option>`).join('');
     handleStudentSubjectChange();
   }
 }
@@ -154,32 +224,39 @@ async function handleStudentSubjectChange() {
   const subjectId = document.getElementById('studentSubjectSelect').value;
   if (!subjectId) return;
 
-  const { data: exam } = await supabase.from('exams').select('*').eq('id', subjectId).single();
-  const { data: qData } = await supabase.from('questions').select('id').eq('exam_id', subjectId);
+  let activeSub = subjectsData.find(s => s.id === subjectId);
 
-  if (exam) {
-    document.getElementById('infoStudentClass').innerText = currentUser.student_class || "Kelas 7A";
-    document.getElementById('infoTeacherName').innerText = exam.teacher_name || "-";
-    document.getElementById('instructionDuration').innerText = exam.duration;
-    document.getElementById('instructionQuestionCount').innerText = qData ? qData.length : 0;
+  if (!activeSub && supabaseClient) {
+    const { data } = await supabaseClient.from('exams').select('*').eq('id', subjectId).single();
+    if (data) activeSub = data;
+  }
+
+  if (activeSub) {
+    document.getElementById('infoStudentClass').innerText = currentUser.studentClass || currentUser.student_class || "Kelas 7A";
+    document.getElementById('infoTeacherName').innerText = activeSub.teacherName || activeSub.teacher_name || "-";
+    document.getElementById('instructionDuration').innerText = activeSub.duration || 30;
+    document.getElementById('instructionQuestionCount').innerText = activeSub.questions ? activeSub.questions.length : 0;
   }
 }
 
 async function startExam() {
   const subjectId = document.getElementById('studentSubjectSelect').value;
-  const { data: exam } = await supabase.from('exams').select('*').eq('id', subjectId).single();
-  let { data: questions } = await supabase.from('questions').select('*').eq('exam_id', subjectId);
+  let activeSub = subjectsData.find(s => s.id === subjectId);
+  let questions = activeSub ? activeSub.questions : [];
 
-  if (!questions || questions.length === 0) return notify("Perhatian", "Soal belum tersedia!", "warning");
+  if (questions.length === 0 && supabaseClient) {
+    const { data } = await supabaseClient.from('questions').select('*').eq('exam_id', subjectId);
+    if (data) questions = data;
+  }
 
-  // AKSI PREMIUN: Acak Soal (Fisher-Yates Shuffle)
-  questions = questions.sort(() => Math.random() - 0.5);
+  if (!questions || questions.length === 0) return notify("Perhatian", "Soal belum tersedia untuk ujian ini!", "warning");
 
-  currentActiveExamQuestions = questions;
-  currentExamDuration = exam.duration;
-  currentExamTitle = exam.title;
-  currentExamTeacher = exam.teacher_name;
-  currentExamClass = currentUser.student_class || exam.target_class;
+  // Acak Urutan Soal (Shuffle)
+  currentActiveExamQuestions = [...questions].sort(() => Math.random() - 0.5);
+  currentExamDuration = activeSub ? activeSub.duration : 30;
+  currentExamTitle = activeSub ? activeSub.title : "Ujian";
+  currentExamTeacher = activeSub ? (activeSub.teacherName || activeSub.teacher_name) : "-";
+  currentExamClass = currentUser.studentClass || currentUser.student_class || "Kelas 7A";
 
   requestFullScreen();
   studentAnswers = {};
@@ -202,12 +279,12 @@ async function startExam() {
 
 function renderCurrentQuestion() {
   const q = currentActiveExamQuestions[currentQuestionIndex];
+  if (!q) return;
   const qType = q.type || 'pg';
 
   document.getElementById('currentQuestionNum').innerText = currentQuestionIndex + 1;
   document.getElementById('examQuestionText').innerText = q.text;
 
-  // Gambar Soal
   const imgContainer = document.getElementById('examQuestionImageContainer');
   const imgEl = document.getElementById('examQuestionImage');
   if (q.image) {
@@ -223,7 +300,7 @@ function renderCurrentQuestion() {
 
   if (qType === 'majemuk') {
     const selectedArray = Array.isArray(activeAns) ? activeAns : [];
-    Object.keys(q.options).forEach(optKey => {
+    Object.keys(q.options || {}).forEach(optKey => {
       if (!q.options[optKey]) return;
       const isChecked = selectedArray.includes(optKey);
       container.innerHTML += `
@@ -233,7 +310,7 @@ function renderCurrentQuestion() {
         </div>`;
     });
   } else {
-    Object.keys(q.options).forEach(optKey => {
+    Object.keys(q.options || {}).forEach(optKey => {
       if (!q.options[optKey]) return;
       const isSelected = activeAns === optKey;
       container.innerHTML += `
@@ -268,7 +345,6 @@ function toggleMultiAnswer(optKey) {
   renderNumberGrid();
 }
 
-// FITUR BARU: Tandai Ragu-Ragu
 function toggleDoubtAnswer() {
   const q = currentActiveExamQuestions[currentQuestionIndex];
   doubtfulAnswers[q.id] = !doubtfulAnswers[q.id];
@@ -287,9 +363,9 @@ function renderNumberGrid() {
 
     let btnClass = "bg-slate-100 text-slate-700";
     if (isDoubt) {
-      btnClass = "bg-amber-500 text-white font-bold"; // Warna Kuning jika Ragu
+      btnClass = "bg-amber-500 text-white font-bold";
     } else if (hasAnswered) {
-      btnClass = "bg-blue-600 text-white"; // Warna Biru jika Terjawab
+      btnClass = "bg-blue-600 text-white";
     }
 
     grid.innerHTML += `<button onclick="jumpToQuestion(${idx})" class="h-8 border rounded text-xs ${btnClass}">${idx + 1}</button>`;
@@ -334,31 +410,50 @@ async function submitExam() {
 
   const finalScore = Math.round((correctCount / currentActiveExamQuestions.length) * 100);
 
-  // Simpan ke Supabase Cloud
-  await supabase.from('exam_results').insert([{
-    student_name: currentUser.name,
-    student_class: currentExamClass,
+  // Simpan ke LocalStorage
+  let results = JSON.parse(localStorage.getItem("cbt_results") || "[]");
+  results.push({
+    student: currentUser.name,
+    studentClass: currentExamClass,
     subject: currentExamTitle,
-    teacher_name: currentExamTeacher,
+    teacherName: currentExamTeacher,
     score: finalScore,
-    correct_count: correctCount,
-    wrong_count: currentActiveExamQuestions.length - correctCount,
-    violations: cheatingViolations
-  }]);
+    correct: correctCount,
+    wrong: currentActiveExamQuestions.length - correctCount,
+    violations: cheatingViolations,
+    timestamp: new Date().toLocaleString("id-ID")
+  });
+  localStorage.setItem("cbt_results", JSON.stringify(results));
+
+  // Simpan ke Supabase jika terhubung
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from('exam_results').insert([{
+        student_name: currentUser.name,
+        student_class: currentExamClass,
+        subject: currentExamTitle,
+        teacher_name: currentExamTeacher,
+        score: finalScore,
+        correct_count: correctCount,
+        wrong_count: currentActiveExamQuestions.length - correctCount,
+        violations: cheatingViolations
+      }]);
+    } catch(e) {}
+  }
 
   document.getElementById('resScore').innerText = finalScore;
   document.getElementById('resCorrectWrong').innerText = `${correctCount} / ${currentActiveExamQuestions.length - correctCount}`;
   showView('viewStudentResult');
 }
 
-/* Timer & Proteksi Keamanan */
 function startTimer() {
   clearInterval(timerInterval);
   timerInterval = setInterval(() => {
     examTimeSeconds--;
     const mins = String(Math.floor(examTimeSeconds / 60)).padStart(2, '0');
     const secs = String(examTimeSeconds % 60).padStart(2, '0');
-    document.getElementById('examTimer').innerText = `${mins}:${secs}`;
+    const el = document.getElementById('examTimer');
+    if (el) el.innerText = `${mins}:${secs}`;
     if (examTimeSeconds <= 0) submitExam();
   }, 1000);
 }
@@ -388,4 +483,49 @@ function setupAntiCheatingEvents() {
       }
     }
   });
+}
+
+/* ADMIN & GURU DASHBOARD SETUP */
+function setupAdminDashboard() {
+  renderUsersTableAdmin();
+}
+
+function setupTeacherDashboard() {
+  const titleSelect = document.getElementById('teacherNewSubjectTitleSelect');
+  const classSelect = document.getElementById('teacherNewSubjectClassSelect');
+  if (titleSelect) titleSelect.innerHTML = masterSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
+  if (classSelect) classSelect.innerHTML = masterClasses.map(c => `<option value="${c}">${c}</option>`).join('');
+  renderTeacherSubjectDropdown();
+}
+
+function renderTeacherSubjectDropdown() {
+  const select = document.getElementById('teacherSubjectSelect');
+  if (!select) return;
+  const mySubjects = subjectsData.filter(s => s.teacherUsername === currentUser.username);
+  if (mySubjects.length === 0) {
+    select.innerHTML = '<option value="">Belum mengampu mata pelajaran</option>';
+  } else {
+    select.innerHTML = mySubjects.map(s => `<option value="${s.id}">${s.title} - ${s.targetClass}</option>`).join('');
+    selectedTeacherSubjectId = mySubjects[0].id;
+  }
+}
+
+function renderUsersTableAdmin() {
+  const tbody = document.getElementById('userTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = usersList.map(u => `
+    <tr class="hover:bg-slate-50">
+      <td class="p-2.5 font-semibold">${u.name}</td>
+      <td class="p-2.5 font-mono text-xs">${u.username}</td>
+      <td class="p-2.5 font-mono text-xs">••••••••</td>
+      <td class="p-2.5"><span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded font-bold">${u.role.toUpperCase()}</span></td>
+      <td class="p-2.5 text-center"><button onclick="deleteUser(${u.id})" class="text-red-500 text-xs font-bold hover:underline">Hapus</button></td>
+    </tr>
+  `).join('');
+}
+
+function deleteUser(id) {
+  usersList = usersList.filter(u => u.id !== id);
+  saveData();
+  renderUsersTableAdmin();
 }
