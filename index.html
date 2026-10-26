@@ -1,211 +1,135 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CBT Online - SMP Qur'an Al Wahdah</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Font Awesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
-  <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css">
-
-  <!-- SweetAlert2 (Modal Custom) -->
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  
-  <!-- Supabase Client JS (Must be loaded BEFORE app.js) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CBT Web Application - Supabase & GitHub Pages</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-slate-100 font-sans text-slate-800 antialiased select-none">
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col select-none">
 
-  <!-- NAVBAR UTAMA -->
-  <header class="bg-blue-700 text-white shadow-md">
-    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-      <div class="flex items-center space-x-3">
-        <i class="fa-solid fa-graduation-cap text-2xl"></i>
-        <div>
-          <h1 class="text-xl font-bold tracking-wide">CBT Online</h1>
-          <p class="text-xs text-blue-200">SMP Qur'an Al Wahdah</p>
+    <!-- Header Navbar -->
+    <header class="bg-indigo-700 text-white shadow-md py-3 px-6 flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-[#10b981] fa-graduation-cap text-2xl"></i>
+            <h1 class="text-xl font-bold tracking-wide">CBT Online Portal</h1>
         </div>
-      </div>
-      <div id="userInfoHeader" class="hidden flex items-center space-x-4">
-        <span id="userBadge" class="bg-blue-900 text-blue-100 text-xs px-3 py-1 rounded-full font-semibold"></span>
-        <button onclick="logout()" class="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded transition">
-          <i class="fa-solid fa-right-from-bracket mr-1"></i>Keluar
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <!-- CONTAINER UTAMA -->
-  <main class="container mx-auto px-4 py-6">
-
-    <!-- 1. HALAMAN LOGIN -->
-    <section id="viewLogin" class="max-w-md mx-auto mt-8">
-      <div class="bg-white rounded-xl shadow-lg p-8 border border-slate-200">
-        <div class="text-center mb-6">
-          <h2 class="text-2xl font-bold text-slate-800">Masuk Aplikasi CBT</h2>
-          <p class="text-sm text-slate-500 mt-1">SMP Qur'an Al Wahdah</p>
-        </div>
-
-        <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
-          <div>
-            <label class="block text-sm font-semibold mb-1 text-slate-700">Peran Akses</label>
-            <select id="loginRole" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium">
-              <option value="siswa">Siswa</option>
-              <option value="guru">Guru</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1 text-slate-700">Username</label>
-            <input type="text" id="loginUsername" required placeholder="Username Anda" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1 text-slate-700">Password</label>
-            <input type="password" id="loginPassword" required placeholder="••••••••" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-          </div>
-          
-          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg shadow transition">
-            Masuk
-          </button>
-        </form>
-      </div>
-    </section>
-
-    <!-- 2. DASHBOARD ADMIN -->
-    <section id="viewAdmin" class="hidden space-y-6">
-      <div class="bg-purple-900 text-white p-4 rounded-xl shadow-md">
-        <h2 class="text-lg font-bold"><i class="fa-solid fa-user-shield mr-2"></i>Panel Kontrol Administrator</h2>
-      </div>
-      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h3 class="text-base font-bold mb-3">Daftar Akun Pengguna</h3>
-        <table class="w-full text-left border-collapse text-sm">
-          <thead>
-            <tr class="bg-slate-100 text-slate-700 border-b">
-              <th class="p-2.5">Nama Lengkap</th>
-              <th class="p-2.5">Username</th>
-              <th class="p-2.5">Password</th>
-              <th class="p-2.5">Role</th>
-              <th class="p-2.5 text-center">Aksi</th>
-            </tr>
-          </thead>
-          <tbody id="userTableBody" class="divide-y"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- 3. DASHBOARD GURU -->
-    <section id="viewTeacher" class="hidden space-y-6">
-      <div class="bg-blue-900 text-white p-4 rounded-xl shadow-md">
-        <h2 class="text-lg font-bold"><i class="fa-solid fa-chalkboard-user mr-2"></i>Dashboard Guru</h2>
-      </div>
-      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h3 class="text-base font-bold mb-3">Mata Pelajaran Anda</h3>
-        <select id="teacherSubjectSelect" class="border p-2 text-sm rounded-lg bg-slate-50 font-semibold text-blue-700"></select>
-      </div>
-    </section>
-
-    <!-- 4. DASHBOARD SISWA -->
-    <section id="viewStudentInstruction" class="hidden max-w-2xl mx-auto space-y-6">
-      <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200">
-        <h2 class="text-2xl font-bold text-slate-800 border-b pb-3 mb-4">Pilih Ujian Sesuai Kelas Anda</h2>
-        
-        <div class="mb-6">
-          <label class="block text-sm font-semibold mb-2 text-slate-700">Mata Pelajaran yang Tersedia:</label>
-          <select id="studentSubjectSelect" onchange="handleStudentSubjectChange()" class="w-full p-3 border rounded-xl bg-slate-50 font-bold text-slate-800 text-base"></select>
-        </div>
-
-        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 space-y-2 text-sm text-blue-900">
-          <p>• Kelas: <strong id="infoStudentClass" class="text-blue-700">-</strong></p>
-          <p>• Guru: <strong id="infoTeacherName" class="text-blue-700">-</strong></p>
-          <p>• Durasi: <strong id="instructionDuration" class="text-blue-700">0</strong> Menit</p>
-          <p>• Jumlah Soal: <strong id="instructionQuestionCount" class="text-blue-700">0</strong> Soal</p>
-        </div>
-
-        <button id="btnStartExam" onclick="startExam()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg transition text-lg">
-          <i class="fa-solid fa-play mr-2"></i>Mulai Ujian Sekarang
-        </button>
-      </div>
-    </section>
-
-    <!-- 5. TAMPILAN UJIAN CBT SISWA -->
-    <section id="viewExamInterface" class="hidden space-y-6">
-      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center">
-        <div>
-          <span id="examStudentName" class="font-bold text-slate-800">Siswa</span> (<span id="examStudentClassBadge" class="text-blue-600 font-bold">Kelas</span>)
-          <div class="text-xs text-slate-600">Mapel: <span id="examSubjectName" class="font-bold text-blue-700">Mapel</span></div>
-        </div>
-        <div class="bg-slate-900 text-green-400 font-mono text-xl px-4 py-2 rounded-lg border border-slate-700 flex items-center space-x-2">
-          <i class="fa-regular fa-clock"></i>
-          <span id="examTimer">00:00:00</span>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-3 space-y-6">
-          <h3 class="font-bold text-slate-700 text-lg border-b pb-3">Soal No. <span id="currentQuestionNum">1</span></h3>
-
-          <div id="examQuestionText" class="text-slate-800 text-base leading-relaxed"></div>
-          <div id="examQuestionImageContainer" class="hidden my-3">
-            <img id="examQuestionImage" src="" alt="Gambar Soal" class="max-h-72 rounded-lg border shadow-sm mx-auto object-contain">
-          </div>
-
-          <div id="examOptionsContainer" class="space-y-3"></div>
-
-          <div class="flex justify-between items-center pt-4 border-t">
-            <button id="btnPrev" onclick="navigateQuestion(-1)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg text-sm">
-              <i class="fa-solid fa-arrow-left mr-1"></i>Sebelumnya
+        <div id="userInfo" class="hidden items-center space-x-4">
+            <span id="userBadge" class="text-sm bg-indigo-800 px-3 py-1 rounded-full border border-indigo-500"></span>
+            <button onclick="handleLogout()" class="bg-rose-600 hover:bg-rose-700 text-white text-sm px-3 py-1.5 rounded transition">
+                <i class="fa-solid fa-right-from-bracket mr-1"></i> Keluar
             </button>
-            <button id="btnDoubt" onclick="toggleDoubtAnswer()" class="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg text-sm">
-              <i class="fa-solid fa-flag mr-1"></i> Ragu-Ragu
-            </button>
-            <button id="btnNext" onclick="navigateQuestion(1)" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">
-              Selanjutnya<i class="fa-solid fa-arrow-right ml-1"></i>
-            </button>
-          </div>
         </div>
+    </header>
 
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-1 space-y-4">
-          <h4 class="font-bold text-slate-700 text-sm border-b pb-2">Navigasi Soal</h4>
-          <div id="numberGrid" class="grid grid-cols-5 gap-2"></div>
-          
-          <button onclick="confirmSubmitExam()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg shadow text-sm transition mt-4">
-            <i class="fa-solid fa-check-circle mr-2"></i>Selesai & Kirim
-          </button>
-        </div>
-      </div>
-    </section>
+    <!-- Main Container View Routing -->
+    <main class="flex-1 justify-center items-center p-4 flex">
 
-    <!-- 6. HASIL UJIAN SISWA -->
-    <section id="viewStudentResult" class="hidden max-w-lg mx-auto mt-8">
-      <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200 text-center space-y-6">
-        <h2 class="text-2xl font-bold text-slate-800">Ujian Telah Selesai!</h2>
+        <!-- VIEW 1: LOGIN -->
+        <section id="viewLogin" class="w-full max-w-md bg-white p-8 rounded-xl shadow-lg border border-slate-200">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Masuk Akun CBT</h2>
+            <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Email</label>
+                    <input type="email" id="loginEmail" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Kata Sandi</label>
+                    <input type="password" id="loginPassword" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition">
+                    Masuk
+                </button>
+            </form>
+        </section>
 
-        <div class="bg-slate-50 p-4 rounded-xl border grid grid-cols-2 gap-4 text-center">
-          <div>
-            <span class="text-xs text-slate-500 block">Total Nilai / Skor</span>
-            <span id="resScore" class="text-3xl font-extrabold text-blue-600">0</span>
-          </div>
-          <div>
-            <span class="text-xs text-slate-500 block">Benar / Salah</span>
-            <span id="resCorrectWrong" class="text-base font-bold text-slate-700">0 / 0</span>
-          </div>
-        </div>
+        <!-- VIEW 2: DASHBOARD ADMIN / GURU -->
+        <section id="viewDashboard" class="hidden w-full max-w-5xl bg-white p-6 rounded-xl shadow border border-slate-200">
+            <div class="flex justify-between items-center mb-6 border-b pb-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800">Panel Pengelola Ujian</h2>
+                    <p class="text-sm text-slate-500">Kelola soal, jadwal ujian, dan rekap nilai siswa.</p>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Daftar Ujian Aktif -->
+                <div class="bg-slate-50 p-4 rounded-lg border">
+                    <h3 class="font-bold text-lg mb-3 text-indigo-700"><i class="fa-solid fa-file-pen mr-2"></i>Daftar Ujian</h3>
+                    <div id="examListAdmin" class="space-y-2">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
 
-        <button onclick="logout()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 rounded-lg shadow">
-          Keluar
-        </button>
-      </div>
-    </section>
+                <!-- Rekap Nilai -->
+                <div class="bg-slate-50 p-4 rounded-lg border">
+                    <h3 class="font-bold text-lg mb-3 text-emerald-700"><i class="fa-solid fa-square-poll-vertical mr-2"></i>Hasil Ujian Siswa</h3>
+                    <div id="resultListAdmin" class="space-y-2 max-h-80 overflow-y-auto">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </section>
 
-  </main>
+        <!-- VIEW 3: INTRUKSI & DAFTAR UJIAN SISWA -->
+        <section id="viewStudentHome" class="hidden w-full max-w-3xl bg-white p-6 rounded-xl shadow border border-slate-200">
+            <h2 class="text-2xl font-bold mb-2">Selamat Datang di Portal Ujian</h2>
+            <p class="text-slate-600 mb-6">Pilih ujian yang tersedia untuk memulai.</p>
+            <div id="studentExamList" class="space-y-4">
+                <!-- Loaded dynamically -->
+            </div>
+        </section>
 
-  <!-- Script utama dipanggil paling bawah -->
-  <script src="app.js"></script>
+        <!-- VIEW 4: RUANG UJIAN (CBT ENGINE) -->
+        <section id="viewExamEngine" class="hidden w-full max-w-4xl bg-white rounded-xl shadow-xl border overflow-hidden">
+            <!-- Top bar -->
+            <div class="bg-slate-800 text-white px-6 py-3 flex justify-between items-center">
+                <span id="examTitle" class="font-bold text-lg">Ujian CBT</span>
+                <div class="bg-rose-600 px-4 py-1 rounded-full font-mono font-bold text-lg" id="timerDisplay">
+                    00:00:00
+                </div>
+            </div>
+
+            <div class="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Soal & Opsi -->
+                <div class="md:col-span-3 space-y-6">
+                    <div class="flex justify-between items-center border-b pb-2">
+                        <span class="font-bold text-indigo-600">Soal No. <span id="currentQuestionNum">1</span></span>
+                        <span class="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">Peringatan Kecurangan: <b id="violationCount">0</b>/3</span>
+                    </div>
+                    <div id="questionText" class="text-lg font-medium leading-relaxed">
+                        <!-- Tek Soal -->
+                    </div>
+                    <div id="optionsContainer" class="space-y-3">
+                        <!-- Pilihan Jawaban -->
+                    </div>
+                    <div class="flex justify-between pt-4 border-t">
+                        <button onclick="navigateQuestion(-1)" class="bg-slate-200 hover:bg-slate-300 px-4 py-2 rounded">Sebelumnya</button>
+                        <button onclick="navigateQuestion(1)" class="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded">Selanjutnya</button>
+                    </div>
+                </div>
+
+                <!-- Navigasi Soal Grid -->
+                <div class="border-l pl-4">
+                    <h4 class="font-bold text-sm mb-3">Navigasi Soal</h4>
+                    <div id="questionGrid" class="grid grid-cols-4 gap-2">
+                        <!-- Grid Tombol Nomor -->
+                    </div>
+                    <button onclick="confirmSubmitExam()" class="mt-6 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded">
+                        Selesaikan Ujian
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="app.js"></script>
 </body>
 </html>
