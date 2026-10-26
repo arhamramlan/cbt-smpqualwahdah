@@ -303,3 +303,182 @@ async function loadDashboardData() {
         </div>
     `).join('') || '<p class="text-xs text-slate-400">Belum ada data nilai.</p>';
 }
+
+// SWITCH TAB MANAGEMENT
+function switchAdminTab(tabName) {
+    const tabs = ['Accounts', 'Curriculum', 'Grades'];
+    tabs.forEach(t => {
+        const content = document.getElementById(`adminTab${t}`);
+        const btn = document.getElementById(`tabBtn${t}`);
+        if (content && btn) {
+            content.classList.add('hidden');
+            btn.className = "pb-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700";
+        }
+    });
+
+    const activeContent = document.getElementById(`adminTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+    const activeBtn = document.getElementById(`tabBtn${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+    if (activeContent && activeBtn) {
+        activeContent.classList.remove('hidden');
+        activeBtn.className = "pb-2 font-bold border-b-2 border-indigo-600 text-indigo-600";
+    }
+
+    if (tabName === 'accounts') loadUsersData();
+    if (tabName === 'curriculum') loadCurriculumData();
+    if (tabName === 'grades') loadGradesData();
+}
+
+// -------------------------------------------------------------
+// 1. MANAJEMEN AKUN
+// -------------------------------------------------------------
+async function loadUsersData() {
+    const { data: users } = await supabase.from('profiles').select('*, classes(name)');
+    const { data: classes } = await supabase.from('classes').select('*');
+
+    // Populate Select Class Option
+    const classSelect = document.getElementById('userClassSelect');
+    classSelect.innerHTML = '<option value="">-- Pilih Kelas --</option>' + 
+        classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    const tbody = document.getElementById('userTableBody');
+    tbody.innerHTML = users?.map(u => `
+        <tr class="border-b hover:bg-slate-50">
+            <td class="p-3 font-semibold">${u.full_name}</td>
+            <td class="p-3 text-slate-500">${u.id}</td>
+            <td class="p-3"><span class="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-bold">${u.role.toUpperCase()}</span></td>
+            <td class="p-3">${u.classes?.name || '-'}</td>
+            <td class="p-3 text-right">
+                <button onclick="deleteUser('${u.id}')" class="text-rose-600 hover:text-rose-800 text-xs font-bold"><i class="fa-solid fa-trash"></i> Hapus</button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="5" class="p-3 text-center text-slate-400">Belum ada pengguna.</td></tr>';
+}
+
+async function handleSaveUser(e) {
+    e.preventDefault();
+    const fullName = document.getElementById('userFullName').value;
+    const email = document.getElementById('userEmail').value;
+    const password = document.getElementById('userPassword').value;
+    const role = document.getElementById('userRole').value;
+    const classId = document.getElementById('userClassSelect').value || null;
+
+    // SignUp User via Auth Admin API / Standard SignUp
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return alert("Gagal membuat akun: " + error.message);
+
+    if (data.user) {
+        await supabase.from('profiles').insert({
+            id: data.user.id,
+            full_name: fullName,
+            role: role,
+            class_id: classId
+        });
+        alert("Akun berhasil dibuat!");
+        loadUsersData();
+    }
+}
+
+async function deleteUser(id) {
+    if (confirm("Hapus pengguna ini dari database?")) {
+        await supabase.from('profiles').delete().eq('id', id);
+        loadUsersData();
+    }
+}
+
+// -------------------------------------------------------------
+// 2. MANAJEMEN KELAS & MAPEL
+// -------------------------------------------------------------
+async function loadCurriculumData() {
+    const { data: classes } = await supabase.from('classes').select('*');
+    const { data: subjects } = await supabase.from('subjects').select('*, profiles(full_name)');
+    const { data: teachers } = await supabase.from('profiles').select('*').eq('role', 'guru');
+
+    // Populate Guru Option
+    const teacherSelect = document.getElementById('subjectTeacherSelect');
+    teacherSelect.innerHTML = '<option value="">-- Pengampu (Guru) --</option>' + 
+        teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('');
+
+    // Render Classes
+    document.getElementById('classList').innerHTML = classes?.map(c => `
+        <li class="p-2 bg-white border rounded flex justify-between items-center text-sm">
+            <b>Kelas ${c.name}</b>
+            <button onclick="deleteClass('${c.id}')" class="text-rose-600 text-xs"><i class="fa-solid fa-trash"></i></button>
+        </li>
+    `).join('') || '<p class="text-xs text-slate-400">Belum ada kelas.</p>';
+
+    // Render Subjects
+    document.getElementById('subjectList').innerHTML = subjects?.map(s => `
+        <li class="p-2 bg-white border rounded flex justify-between items-center text-sm">
+            <div>
+                <b>[${s.code}] ${s.title}</b><br>
+                <span class="text-xs text-slate-500">Guru: ${s.profiles?.full_name || 'Belum diatur'}</span>
+            </div>
+            <button onclick="deleteSubject('${s.id}')" class="text-rose-600 text-xs"><i class="fa-solid fa-trash"></i></button>
+        </li>
+    `).join('') || '<p class="text-xs text-slate-400">Belum ada mata pelajaran.</p>';
+}
+
+async function handleSaveClass(e) {
+    e.preventDefault();
+    const name = document.getElementById('classNameInput').value;
+    await supabase.from('classes').insert({ name });
+    document.getElementById('classNameInput').value = '';
+    loadCurriculumData();
+}
+
+async function handleSaveSubject(e) {
+    e.preventDefault();
+    const code = document.getElementById('subjectCodeInput').value;
+    const title = document.getElementById('subjectTitleInput').value;
+    const teacher_id = document.getElementById('subjectTeacherSelect').value || null;
+
+    await supabase.from('subjects').insert({ code, title, teacher_id });
+    loadCurriculumData();
+}
+
+// -------------------------------------------------------------
+// 3. MANAJEMEN NILAI & EKSPOR CSV
+// -------------------------------------------------------------
+async function loadGradesData() {
+    const { data: results } = await supabase.from('exam_results').select('*, profiles(full_name, classes(name)), exams(title)');
+    
+    const tbody = document.getElementById('gradesTableBody');
+    tbody.innerHTML = results?.map(r => `
+        <tr class="border-b hover:bg-slate-50">
+            <td class="p-3 font-semibold">${r.profiles?.full_name || 'Siswa'}</td>
+            <td class="p-3">${r.profiles?.classes?.name || '-'}</td>
+            <td class="p-3">${r.exams?.title || '-'}</td>
+            <td class="p-3 font-bold text-indigo-600">${r.score}</td>
+            <td class="p-3 text-amber-600 font-semibold">${r.violations_count}x</td>
+            <td class="p-3 text-xs text-slate-500">${new Date(r.submitted_at).toLocaleString('id-ID')}</td>
+            <td class="p-3 text-right">
+                <button onclick="deleteGrade('${r.id}')" class="text-rose-600 hover:text-rose-800 text-xs font-bold"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="7" class="p-3 text-center text-slate-400">Belum ada data nilai.</td></tr>';
+}
+
+function exportGradesToCSV() {
+    const table = document.getElementById('gradesTableBody');
+    let csv = [];
+    csv.push(["Siswa", "Kelas", "Ujian", "Skor", "Pelanggaran", "Tanggal"].join(","));
+
+    for (let row of table.rows) {
+        if (row.cells.length < 6) continue;
+        let cols = [
+            `"${row.cells[0].innerText}"`,
+            `"${row.cells[1].innerText}"`,
+            `"${row.cells[2].innerText}"`,
+            row.cells[3].innerText,
+            row.cells[4].innerText,
+            `"${row.cells[5].innerText}"`
+        ];
+        csv.push(cols.join(","));
+    }
+
+    const csvFile = new Blob([csv.join("\n")], { type: "text/csv" });
+    const downloadLink = document.createElement("a");
+    downloadLink.download = `Rekap_Nilai_CBT_${new Date().toISOString().slice(0,10)}.csv`;
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+    downloadLink.click();
+}
