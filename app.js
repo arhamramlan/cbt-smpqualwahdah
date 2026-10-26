@@ -1,10 +1,15 @@
 /* ==========================================================================
    CONFIG & INITIALIZATION (SUPABASE INTEGRATION)
    ========================================================================== */
-// Ganti dengan URL dan ANON KEY dari Dashboard Supabase Anda
-const SUPABASE_URL = "https://wwizvphxjieoorngoszd.supabase.co";
-const SUPABASE_KEY = "sb_publishable_i6fQkGiYivOH65lWNqMbvw_tlW08UE_";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Ganti dengan URL dan ANON KEY dari Dashboard Supabase Anda// ✅ BENAR
+const SUPABASE_URL = "https://wwizvphxjieoorngoszd.supabase.co"; // Ganti dengan URL Supabase Anda
+const SUPABASE_KEY = "sb_publishable_i6fQkGiYivOH65lWNqMbvw_tlW08UE_";  // Ganti dengan ANON KEY Supabase Anda
+
+let supabaseClient = null; // Gunakan nama variabel yang berbeda agar tidak bentrok
+
+if (typeof window.supabase !== 'undefined' && SUPABASE_URL.includes("supabase.co")) {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
 
 let currentUser = null; 
 let currentActiveExamQuestions = [];
@@ -38,32 +43,47 @@ async function handleLogin(e) {
   if (e) e.preventDefault();
   
   const role = document.getElementById('loginRole').value;
-  const username = document.getElementById('loginUsername').value.trim();
+  const username = document.getElementById('loginUsername').value.trim().toLowerCase();
   const password = document.getElementById('loginPassword').value.trim();
 
-  const { data: foundUser, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('username', username)
-    .eq('password', password)
-    .eq('role', role)
-    .single();
+  let foundUser = null;
 
-  if (error || !foundUser) {
-    return notify("Gagal Masuk", "Kredensial atau peran tidak cocok!", "error");
+  // Jika Supabase terhubung, cek ke database cloud
+  if (supabaseClient) {
+    const { data, error } = await supabaseClient
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .eq('password', password)
+      .eq('role', role)
+      .maybeSingle();
+
+    if (!error && data) {
+      foundUser = data;
+    }
+  }
+
+  // Fallback ke LocalStorage jika Supabase tidak digunakan / offline
+  if (!foundUser) {
+    foundUser = usersList.find(u => 
+      u.username.toLowerCase() === username && 
+      u.password === password && 
+      u.role.toLowerCase() === role
+    );
+  }
+
+  if (!foundUser) {
+    return notify("Gagal Masuk", "Username, Password, atau Peran tidak cocok!", "error");
   }
 
   currentUser = foundUser;
-  
-  const userHeader = document.getElementById('userInfoHeader');
-  const userBadge = document.getElementById('userBadge');
-  if (userHeader) userHeader.classList.remove('hidden');
-  if (userBadge) userBadge.innerText = `${foundUser.name} (${foundUser.role.toUpperCase()})`;
+  document.getElementById('userInfoHeader').classList.remove('hidden');
+  document.getElementById('userBadge').innerText = `${foundUser.name} (${foundUser.role.toUpperCase()})`;
 
-  if (foundUser.role === 'admin') {
+  if (role === 'admin') {
     setupAdminDashboard();
     showView('viewAdmin');
-  } else if (foundUser.role === 'guru') {
+  } else if (role === 'guru') {
     setupTeacherDashboard();
     showView('viewTeacher');
   } else {
@@ -71,7 +91,6 @@ async function handleLogin(e) {
     showView('viewStudentInstruction');
   }
 }
-
 function logout() {
   if (isExamActive) {
     Swal.fire({
