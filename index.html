@@ -19,6 +19,12 @@
   <!-- Mammoth.js untuk membaca file Word (.docx) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 
+  <!-- SweetAlert2 (Pengganti Alert & Confirm Native) -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <!-- PDF.js CDN untuk membaca file PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script>
@@ -520,6 +526,10 @@
             </button>
             <button id="btnNext" onclick="navigateQuestion(1)" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">
               Selanjutnya<i class="fa-solid fa-arrow-right ml-2"></i>
+            </button>
+            <!-- Tambahkan di samping tombol 'Selanjutnya' pada viewExamInterface -->
+            <button id="btnDoubt" onclick="toggleDoubtAnswer()" class="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg text-sm">
+              <i class="fa-solid fa-flag mr-1"></i> Ragu-Ragu
             </button>
           </div>
         </div>
