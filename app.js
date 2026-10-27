@@ -7,7 +7,7 @@
 // 1. SUPABASE CLIENT & MOCK DEMO STATE CONFIGURATION
 // =========================================================================
 let SUPABASE_URL = localStorage.getItem('https://wwizvphxjieoorngoszd.supabase.co') || "";
-let SUPABASE_KEY = localStorage.getItem('sb_publishable_i6fQkGiYivOH65lWNqMbvw_tlW08UE_') || "";
+let SUPABASE_KEY = localStorage.getItem('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3aXp2cGh4amllb29ybmdvc3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5NTI0NjYsImV4cCI6MjEwODUyODQ2Nn0.6xNA_7dU9z0tyvLvqwCpsieuegzu9a5le2aQ1CeSaTg') || "";
 let supabase = null;
 
 if (SUPABASE_URL && SUPABASE_KEY) {
