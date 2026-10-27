@@ -1,13 +1,13 @@
 /**
  * CBT System - SMP Qur'an Al Wahdah Engine
- * Frontend Single-Page Application JS (Fixed Demo Login)
+ * Frontend Single-Page Application JS
  */
 
 // =========================================================================
 // 1. SUPABASE CLIENT & MOCK DEMO STATE CONFIGURATION
 // =========================================================================
-let SUPABASE_URL = localStorage.getItem('cbt_sb_url') || "https://wwizvphxjieoorngoszd.supabase.co";
-let SUPABASE_KEY = localStorage.getItem('cbt_sb_key') || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3aXp2cGh4amllb29ybmdvc3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5NTI0NjYsImV4cCI6MjEwODUyODQ2Nn0.6xNA_7dU9z0tyvLvqwCpsieuegzu9a5le2aQ1CeSaTg";
+let SUPABASE_URL = localStorage.getItem('cbt_sb_url') || "";
+let SUPABASE_KEY = localStorage.getItem('cbt_sb_key') || "";
 let supabase = null;
 
 if (SUPABASE_URL && SUPABASE_KEY) {
@@ -72,7 +72,7 @@ function checkDatabaseConnectionStatus() {
         statusText.innerHTML = `<strong>Koneksi Supabase Aktif:</strong> Terhubung ke ${SUPABASE_URL}`;
     } else {
         banner.className = "mb-4 p-3 bg-amber-100 border border-amber-300 text-amber-800 rounded-lg text-xs flex justify-between items-center shadow-sm";
-        statusText.innerHTML = `<strong>Mode Standalone/Demo Active:</strong> Menggunakan penyimpanan memori lokal sementara. Klik untuk konfigurasi Supabase.`;
+        statusText.innerHTML = `<strong>Mode Standalone/Demo Active:</strong> Menggunakan penyimpanan lokal sementara. Klik untuk konfigurasi Supabase.`;
     }
 }
 
@@ -99,10 +99,10 @@ function showView(viewId) {
 }
 
 // =========================================================================
-// 3. AUTHENTICATION SYSTEM (BYPASS FORM RELOAD)
+// 3. AUTHENTICATION SYSTEM (DIRECT BYPASS DEMO)
 // =========================================================================
 
-// Fungsi Khusus Tombol Demo Instant
+// Tombol Demo Instant
 function loginDemoDirect(role) {
     let email = 'murid@alwahdah.sch.id';
     let name = 'Ahmad Faisal (Demo)';
@@ -115,7 +115,6 @@ function loginDemoDirect(role) {
         name = 'Admin Utama (Demo)';
     }
 
-    // Set User Langsung Tanpa Validasi Form
     currentUser = {
         id: 'demo_' + role + '_' + Date.now(),
         name: name,
@@ -128,7 +127,7 @@ function loginDemoDirect(role) {
     navigateDashboardByRole();
 }
 
-// Fungsi Submit Form
+// Submit Form Login
 async function handleLogin(e) {
     if (e) {
         e.preventDefault();
@@ -150,7 +149,6 @@ async function handleLogin(e) {
             currentUser = { id: 'sb_u1', name: email.split('@')[0] || 'User', role: role, class_name: '7A' };
         }
     } else {
-        // Mode Demo Standalone
         currentUser = {
             id: 'demo_' + Date.now(),
             name: email ? email.split('@')[0] : 'Siswa Demo',
@@ -409,10 +407,10 @@ function handleCheatingDetection() {
 
     if (document.hidden || !document.hasFocus()) {
         currentExam.violationsCount++;
-        alert(`PERINGATAN PELANGGARAN (${currentExam.violationsCount}/3)!\n\nTerdeteksi meninggalkan layar ujian. Batas maksimal adalah 3x.`);
+        alert(`PERINGATAN PELANGGARAN (${currentExam.violationsCount}/3)!\n\nTerdeteksi meninggalkan layar ujian. Batas maksimal melanggar adalah 3x.`);
 
         if (currentExam.violationsCount >= 3) {
-            alert('Anda telah melanggar aturan ujian sebanyak 3 kali! Sistem menghentikan ujian Anda.');
+            alert('Anda telah melanggar aturan ujian sebanyak 3 kali! Ujian dihentikan secara otomatis.');
             submitExam();
         }
     }
