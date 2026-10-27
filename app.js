@@ -99,64 +99,65 @@ function showView(viewId) {
 }
 
 // =========================================================================
-// 3. AUTHENTICATION SYSTEM (FIXED FOR DEMO & SUPABASE)
+// 3. AUTHENTICATION SYSTEM (BYPASS FORM RELOAD)
 // =========================================================================
-function fillDemoAcc(role, e) {
+
+// Fungsi Khusus Tombol Demo Instant
+function loginDemoDirect(role) {
+    let email = 'murid@alwahdah.sch.id';
+    let name = 'Ahmad Faisal (Demo)';
+
+    if (role === 'guru') {
+        email = 'guru@alwahdah.sch.id';
+        name = 'Ustadz Abdullah, S.Pd. (Demo)';
+    } else if (role === 'admin') {
+        email = 'admin@alwahdah.sch.id';
+        name = 'Admin Utama (Demo)';
+    }
+
+    // Set User Langsung Tanpa Validasi Form
+    currentUser = {
+        id: 'demo_' + role + '_' + Date.now(),
+        name: name,
+        role: role,
+        class_name: role === 'admin' ? '-' : '7A',
+        email: email
+    };
+
+    localStorage.setItem('cbt_session_user', JSON.stringify(currentUser));
+    navigateDashboardByRole();
+}
+
+// Fungsi Submit Form
+async function handleLogin(e) {
     if (e) {
         e.preventDefault();
         e.stopPropagation();
     }
-    
-    const emailInput = document.getElementById('login-email');
-    const roleInput = document.getElementById('login-role');
-    const passInput = document.getElementById('login-password');
 
-    if (role === 'murid') {
-        emailInput.value = 'murid@alwahdah.sch.id';
-        passInput.value = '123456';
-        roleInput.value = 'murid';
-    } else if (role === 'guru') {
-        emailInput.value = 'guru@alwahdah.sch.id';
-        passInput.value = '123456';
-        roleInput.value = 'guru';
-    } else if (role === 'admin') {
-        emailInput.value = 'admin@alwahdah.sch.id';
-        passInput.value = '123456';
-        roleInput.value = 'admin';
-    }
-
-    // Langsung jalankan login otomatis
-    executeLoginProcess(emailInput.value, roleInput.value);
-}
-
-async function handleLogin(e) {
-    if (e) e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     const role = document.getElementById('login-role').value;
-    
-    await executeLoginProcess(email, role);
-}
 
-async function executeLoginProcess(email, role) {
     if (supabase) {
         try {
-            const { data, error } = await supabase.from('profiles').select('*').eq('role', role).limit(1);
+            const { data } = await supabase.from('profiles').select('*').eq('role', role).limit(1);
             if (data && data.length > 0) {
                 currentUser = data[0];
             } else {
-                currentUser = { id: 'sb_u1', name: email ? email.split('@')[0] : 'User', role: role, class_name: '7A' };
+                currentUser = { id: 'sb_u1', name: email.split('@')[0] || 'User', role: role, class_name: '7A' };
             }
         } catch (err) {
-            currentUser = { id: 'sb_u1', name: email ? email.split('@')[0] : 'User', role: role, class_name: '7A' };
+            currentUser = { id: 'sb_u1', name: email.split('@')[0] || 'User', role: role, class_name: '7A' };
         }
     } else {
-        // MODE DEMO
-        const found = DEMO_STATE.users.find(u => u.role === role);
-        if (found) {
-            currentUser = { ...found, email: email || found.email };
-        } else {
-            currentUser = { id: 'demo_' + Date.now(), name: email ? email.split('@')[0] : 'Siswa Demo', role: role, class_name: '7A', email: email };
-        }
+        // Mode Demo Standalone
+        currentUser = {
+            id: 'demo_' + Date.now(),
+            name: email ? email.split('@')[0] : 'Siswa Demo',
+            role: role,
+            class_name: '7A',
+            email: email
+        };
     }
 
     localStorage.setItem('cbt_session_user', JSON.stringify(currentUser));
