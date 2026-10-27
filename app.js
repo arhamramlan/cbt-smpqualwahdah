@@ -1,6 +1,6 @@
 /**
  * CBT System - SMP Qur'an Al Wahdah Engine
- * Frontend Single-Page Application JS
+ * Frontend Single-Page Application JS (Fixed Demo Login)
  */
 
 // =========================================================================
@@ -18,7 +18,7 @@ if (SUPABASE_URL && SUPABASE_KEY) {
     }
 }
 
-// Mock Data State jika Supabase belum terhubung
+// Mock Data State
 const DEMO_STATE = {
     users: [
         { id: 'u1', name: 'Ahmad Faisal', role: 'murid', class_name: '7A', email: 'murid@alwahdah.sch.id' },
@@ -57,7 +57,7 @@ let currentExam = {
 // 2. INITIALIZATION & ROUTING
 // =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    lucide.createIcons();
+    if (window.lucide) lucide.createIcons();
     checkDatabaseConnectionStatus();
     checkSession();
     setupAntiCheatingGlobal();
@@ -79,9 +79,12 @@ function checkDatabaseConnectionStatus() {
 function showView(viewId) {
     const views = ['view-login', 'view-murid-dashboard', 'view-murid-cbt', 'view-guru-dashboard', 'view-admin-dashboard'];
     views.forEach(v => {
-        document.getElementById(v).classList.add('hidden');
+        const el = document.getElementById(v);
+        if (el) el.classList.add('hidden');
     });
-    document.getElementById(viewId).classList.remove('hidden');
+    
+    const targetEl = document.getElementById(viewId);
+    if (targetEl) targetEl.classList.remove('hidden');
 
     const userInfoBar = document.getElementById('user-info-bar');
     if (currentUser && viewId !== 'view-login') {
@@ -96,46 +99,63 @@ function showView(viewId) {
 }
 
 // =========================================================================
-// 3. AUTHENTICATION SYSTEM
+// 3. AUTHENTICATION SYSTEM (FIXED FOR DEMO & SUPABASE)
 // =========================================================================
-function fillDemoAcc(role) {
-    if (role === 'murid') {
-        document.getElementById('login-email').value = 'murid@alwahdah.sch.id';
-        document.getElementById('login-password').value = '123456';
-        document.getElementById('login-role').value = 'murid';
-    } else if (role === 'guru') {
-        document.getElementById('login-email').value = 'guru@alwahdah.sch.id';
-        document.getElementById('login-password').value = '123456';
-        document.getElementById('login-role').value = 'guru';
-    } else if (role === 'admin') {
-        document.getElementById('login-email').value = 'admin@alwahdah.sch.id';
-        document.getElementById('login-password').value = '123456';
-        document.getElementById('login-role').value = 'admin';
+function fillDemoAcc(role, e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
     }
+    
+    const emailInput = document.getElementById('login-email');
+    const roleInput = document.getElementById('login-role');
+    const passInput = document.getElementById('login-password');
+
+    if (role === 'murid') {
+        emailInput.value = 'murid@alwahdah.sch.id';
+        passInput.value = '123456';
+        roleInput.value = 'murid';
+    } else if (role === 'guru') {
+        emailInput.value = 'guru@alwahdah.sch.id';
+        passInput.value = '123456';
+        roleInput.value = 'guru';
+    } else if (role === 'admin') {
+        emailInput.value = 'admin@alwahdah.sch.id';
+        passInput.value = '123456';
+        roleInput.value = 'admin';
+    }
+
+    // Langsung jalankan login otomatis
+    executeLoginProcess(emailInput.value, roleInput.value);
 }
 
 async function handleLogin(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     const role = document.getElementById('login-role').value;
+    
+    await executeLoginProcess(email, role);
+}
 
+async function executeLoginProcess(email, role) {
     if (supabase) {
         try {
             const { data, error } = await supabase.from('profiles').select('*').eq('role', role).limit(1);
             if (data && data.length > 0) {
                 currentUser = data[0];
             } else {
-                currentUser = { id: 'sb_u1', name: email.split('@')[0], role: role, class_name: '7A' };
+                currentUser = { id: 'sb_u1', name: email ? email.split('@')[0] : 'User', role: role, class_name: '7A' };
             }
         } catch (err) {
-            currentUser = { id: 'sb_u1', name: email.split('@')[0], role: role, class_name: '7A' };
+            currentUser = { id: 'sb_u1', name: email ? email.split('@')[0] : 'User', role: role, class_name: '7A' };
         }
     } else {
+        // MODE DEMO
         const found = DEMO_STATE.users.find(u => u.role === role);
         if (found) {
-            currentUser = found;
+            currentUser = { ...found, email: email || found.email };
         } else {
-            currentUser = { id: 'demo_' + Date.now(), name: 'User Demo', role: role, class_name: '7A' };
+            currentUser = { id: 'demo_' + Date.now(), name: email ? email.split('@')[0] : 'Siswa Demo', role: role, class_name: '7A', email: email };
         }
     }
 
@@ -146,8 +166,12 @@ async function handleLogin(e) {
 function checkSession() {
     const session = localStorage.getItem('cbt_session_user');
     if (session) {
-        currentUser = JSON.parse(session);
-        navigateDashboardByRole();
+        try {
+            currentUser = JSON.parse(session);
+            navigateDashboardByRole();
+        } catch(e) {
+            showView('view-login');
+        }
     } else {
         showView('view-login');
     }
@@ -208,7 +232,7 @@ function initMuridDashboard() {
         `;
         container.appendChild(item);
     });
-    lucide.createIcons();
+    if (window.lucide) lucide.createIcons();
 }
 
 function startExam(scheduleId) {
@@ -354,9 +378,7 @@ function renderCBTGrid() {
     });
 }
 
-// SISTEM ANTI KECURANGAN GLOBAL
 function setupAntiCheatingGlobal() {
-    // Disable Klik Kanan
     document.addEventListener('contextmenu', (e) => {
         if (document.body.classList.contains('exam-mode')) {
             e.preventDefault();
@@ -364,7 +386,6 @@ function setupAntiCheatingGlobal() {
         }
     });
 
-    // Disable Shortcut DevTools & Copy-Paste
     document.addEventListener('keydown', (e) => {
         if (!document.body.classList.contains('exam-mode')) return;
 
@@ -374,11 +395,10 @@ function setupAntiCheatingGlobal() {
             (e.ctrlKey && (e.key === 'u' || e.key === 'c' || e.key === 'v' || e.key === 'a'))
         ) {
             e.preventDefault();
-            alert('Aksi tombol kombinasi / shortcut disekat oleh sistem anti-kecurangan!');
+            alert('Aksi tombol kombinasi disekat oleh sistem anti-kecurangan!');
         }
     });
 
-    // Deteksi Pindah Tab / Blur
     window.addEventListener('visibilitychange', handleCheatingDetection);
     window.addEventListener('blur', handleCheatingDetection);
 }
@@ -388,10 +408,10 @@ function handleCheatingDetection() {
 
     if (document.hidden || !document.hasFocus()) {
         currentExam.violationsCount++;
-        alert(`PERINGATAN PELANGGARAN (${currentExam.violationsCount}/3)!\n\nTerdeteksi meninggalkan layar ujian / berpindah tab. Harap tetap berada pada sistem! Batas maksimal melanggar adalah 3x.`);
+        alert(`PERINGATAN PELANGGARAN (${currentExam.violationsCount}/3)!\n\nTerdeteksi meninggalkan layar ujian. Batas maksimal adalah 3x.`);
 
         if (currentExam.violationsCount >= 3) {
-            alert('Anda telah melanggar aturan ujian sebanyak 3 kali! Sistem secara otomatis menghentikan dan menyerahkan ujian Anda.');
+            alert('Anda telah melanggar aturan ujian sebanyak 3 kali! Sistem menghentikan ujian Anda.');
             submitExam();
         }
     }
@@ -449,7 +469,7 @@ function submitExam() {
 }
 
 // =========================================================================
-// 5. GURU DASHBOARD & DOC BULK UPLOAD
+// 5. GURU DASHBOARD
 // =========================================================================
 function initGuruDashboard() {
     const subjectSelect = document.getElementById('guru-subject-select');
@@ -546,65 +566,6 @@ function saveQuestionForm(e) {
     alert('Soal berhasil ditambahkan!');
 }
 
-function triggerDocUpload() {
-    document.getElementById('guru-doc-file-input').click();
-}
-
-function handleBulkDocUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const subjectId = document.getElementById('guru-subject-select').value;
-    const reader = new FileReader();
-
-    reader.onload = function(e) {
-        const text = e.target.result;
-        const parsedQuestions = parseDocQuestionsText(text, subjectId);
-
-        if (parsedQuestions.length > 0) {
-            DEMO_STATE.questions.push(...parsedQuestions);
-            loadGuruQuestions();
-            alert(`Berhasil mengunggah ${parsedQuestions.length} soal secara bulk!`);
-        } else {
-            alert('Format dokumen/teks tidak sesuai template. Pastikan memuat Soal, A, B, C, D, dan Kunci.');
-        }
-    };
-
-    reader.readAsText(file);
-}
-
-// Parser sederhana format dokumen/soal teks
-function parseDocQuestionsText(text, subjectId) {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    const questions = [];
-    let currentQ = null;
-
-    lines.forEach(line => {
-        if (line.match(/^soal\s*\d*[:.]?/i) || line.match(/^\d+[:.]/)) {
-            if (currentQ && currentQ.question_text && currentQ.option_a && currentQ.correct_option) {
-                questions.push(currentQ);
-            }
-            currentQ = { id: 'q_' + Math.random().toString(36).substr(2, 9), subject_id: subjectId, question_text: line.replace(/^soal\s*\d*[:.]?/i, '').replace(/^\d+[:.]/, '').trim(), option_a: '', option_b: '', option_c: '', option_d: '', correct_option: 'A' };
-        } else if (line.match(/^A[:.]/i) && currentQ) {
-            currentQ.option_a = line.replace(/^A[:.]/i, '').trim();
-        } else if (line.match(/^B[:.]/i) && currentQ) {
-            currentQ.option_b = line.replace(/^B[:.]/i, '').trim();
-        } else if (line.match(/^C[:.]/i) && currentQ) {
-            currentQ.option_c = line.replace(/^C[:.]/i, '').trim();
-        } else if (line.match(/^D[:.]/i) && currentQ) {
-            currentQ.option_d = line.replace(/^D[:.]/i, '').trim();
-        } else if (line.match(/^kunci[:.]/i) && currentQ) {
-            currentQ.correct_option = line.replace(/^kunci[:.]/i, '').trim().toUpperCase();
-        }
-    });
-
-    if (currentQ && currentQ.question_text && currentQ.option_a && currentQ.correct_option) {
-        questions.push(currentQ);
-    }
-
-    return questions;
-}
-
 function loadGuruResults() {
     const tbody = document.getElementById('guru-results-tbody');
     tbody.innerHTML = '';
@@ -634,7 +595,7 @@ function loadGuruResults() {
 }
 
 // =========================================================================
-// 6. ADMIN DASHBOARD & CSV BULK UPLOAD
+// 6. ADMIN DASHBOARD
 // =========================================================================
 function initAdminDashboard() {
     loadAdminStats();
@@ -724,53 +685,6 @@ function saveUserForm(e) {
     loadAdminUsers();
     loadAdminStats();
     alert('User berhasil ditambahkan!');
-}
-
-function downloadAccountTemplate() {
-    const csvContent = "data:text/csv;charset=utf-8,nama,role,kelas,email\nSiswa Contoh,murid,7A,siswa1@alwahdah.sch.id\nGuru Contoh,guru,7A,guru1@alwahdah.sch.id";
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "template_akun_cbt.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-function triggerCsvUpload() {
-    document.getElementById('admin-csv-file-input').click();
-}
-
-function handleBulkCsvUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const lines = e.target.result.split('\n');
-        let addedCount = 0;
-
-        lines.forEach((line, idx) => {
-            if (idx === 0 || !line.trim()) return; // Skip header
-            const [name, role, class_name, email] = line.split(',').map(s => s.trim());
-            if (name && role) {
-                DEMO_STATE.users.push({
-                    id: 'u_csv_' + Math.random().toString(36).substr(2, 9),
-                    name: name,
-                    role: role.toLowerCase(),
-                    class_name: class_name || '-',
-                    email: email || `${name.toLowerCase().replace(/\s+/g, '')}@alwahdah.sch.id`
-                });
-                addedCount++;
-            }
-        });
-
-        loadAdminUsers();
-        loadAdminStats();
-        alert(`Berhasil mengimpor ${addedCount} akun dari CSV!`);
-    };
-
-    reader.readAsText(file);
 }
 
 function loadAdminSchedules() {
