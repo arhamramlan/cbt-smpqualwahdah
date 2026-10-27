@@ -1,484 +1,881 @@
-// CONFIGURATION SUPABASE
-const SUPABASE_URL = "HTTPS://YOUR_SUPABASE_URL.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/**
+ * CBT System - SMP Qur'an Al Wahdah Engine
+ * Frontend Single-Page Application JS
+ */
 
-// STATE MANAGEMENT
+// =========================================================================
+// 1. SUPABASE CLIENT & MOCK DEMO STATE CONFIGURATION
+// =========================================================================
+let SUPABASE_URL = localStorage.getItem('cbt_sb_url') || "";
+let SUPABASE_KEY = localStorage.getItem('cbt_sb_key') || "";
+let supabase = null;
+
+if (SUPABASE_URL && SUPABASE_KEY) {
+    try {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } catch (e) {
+        console.warn("Gagal menginisialisasi Supabase:", e);
+    }
+}
+
+// Mock Data State jika Supabase belum terhubung
+const DEMO_STATE = {
+    users: [
+        { id: 'u1', name: 'Ahmad Faisal', role: 'murid', class_name: '7A', email: 'murid@alwahdah.sch.id' },
+        { id: 'u2', name: 'Ustadz Abdullah, S.Pd.', role: 'guru', class_name: '7A', email: 'guru@alwahdah.sch.id' },
+        { id: 'u3', name: 'Admin Utama', role: 'admin', class_name: '-', email: 'admin@alwahdah.sch.id' }
+    ],
+    subjects: [
+        { id: 's1', name: 'Pendidikan Agama Islam (PAI)', class_name: '7A', teacher_id: 'u2' },
+        { id: 's2', name: 'Bahasa Arab', class_name: '7A', teacher_id: 'u2' }
+    ],
+    schedules: [
+        { id: 'sch1', subject_id: 's1', subject_name: 'Pendidikan Agama Islam (PAI)', class_name: '7A', start_time: '2026-01-01T07:00', end_time: '2026-12-31T18:00', duration_minutes: 60, is_active: true }
+    ],
+    questions: [
+        { id: 'q1', subject_id: 's1', question_text: 'Rukun Islam yang pertama adalah...', option_a: 'Mendirikan Shalat', option_b: 'Mengucapkan Dua Kalimat Syahadat', option_c: 'Menunaikan Zakat', option_d: 'Berpuasa Ramadhan', correct_option: 'B' },
+        { id: 'q2', subject_id: 's1', question_text: 'Surah al-Fatihah terdiri dari berapa ayat?', option_a: '5 Ayat', option_b: '6 Ayat', option_c: '7 Ayat', option_d: '8 Ayat', correct_option: 'C' },
+        { id: 'q3', subject_id: 's1', question_text: 'Kitab suci Al-Qur\'an diturunkan kepada Nabi...', option_a: 'Musa A.S.', option_b: 'Isa A.S.', option_c: 'Ibrahim A.S.', option_d: 'Muhammad S.A.W.', correct_option: 'D' }
+    ],
+    results: []
+};
+
+// Application Global State
 let currentUser = null;
-let currentExam = null;
-let currentQuestionIndex = 0;
-let userAnswers = {};
-let examTimer = null;
-let secondsRemaining = 0;
-let violationCounter = 0;
+let currentExam = {
+    schedule: null,
+    questions: [],
+    userAnswers: {},
+    doubtful: {},
+    currentIndex: 0,
+    timerInterval: null,
+    remainingSeconds: 0,
+    violationsCount: 0
+};
 
-// APP INITIALIZATION
-document.addEventListener("DOMContentLoaded", async () => {
-    setupAntiCheating();
+// =========================================================================
+// 2. INITIALIZATION & ROUTING
+// =========================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    lucide.createIcons();
+    checkDatabaseConnectionStatus();
     checkSession();
+    setupAntiCheatingGlobal();
 });
 
-// ROUTING / VIEW MANAGER
-function showView(viewId) {
-    const views = ["viewLogin", "viewDashboard", "viewStudentHome", "viewExamEngine"];
-    views.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add("hidden");
-    });
-    document.getElementById(viewId).classList.remove("hidden");
+function checkDatabaseConnectionStatus() {
+    const banner = document.getElementById('db-status-banner');
+    const statusText = document.getElementById('db-status-text');
+    
+    if (supabase) {
+        banner.className = "mb-4 p-3 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs flex justify-between items-center shadow-sm";
+        statusText.innerHTML = `<strong>Koneksi Supabase Aktif:</strong> Terhubung ke ${SUPABASE_URL}`;
+    } else {
+        banner.className = "mb-4 p-3 bg-amber-100 border border-amber-300 text-amber-800 rounded-lg text-xs flex justify-between items-center shadow-sm";
+        statusText.innerHTML = `<strong>Mode Standalone/Demo Active:</strong> Menggunakan penyimpanan memori lokal sementara. Klik untuk konfigurasi Supabase.`;
+    }
 }
 
-// AUTHENTICATION LOGIC
+function showView(viewId) {
+    const views = ['view-login', 'view-murid-dashboard', 'view-murid-cbt', 'view-guru-dashboard', 'view-admin-dashboard'];
+    views.forEach(v => {
+        document.getElementById(v).classList.add('hidden');
+    });
+    document.getElementById(viewId).classList.remove('hidden');
+
+    const userInfoBar = document.getElementById('user-info-bar');
+    if (currentUser && viewId !== 'view-login') {
+        userInfoBar.classList.remove('hidden');
+        userInfoBar.classList.add('flex');
+        document.getElementById('user-display-name').textContent = currentUser.name;
+        document.getElementById('user-display-role').textContent = `${currentUser.role} (${currentUser.class_name || '-'})`;
+    } else {
+        userInfoBar.classList.add('hidden');
+        userInfoBar.classList.remove('flex');
+    }
+}
+
+// =========================================================================
+// 3. AUTHENTICATION SYSTEM
+// =========================================================================
+function fillDemoAcc(role) {
+    if (role === 'murid') {
+        document.getElementById('login-email').value = 'murid@alwahdah.sch.id';
+        document.getElementById('login-password').value = '123456';
+        document.getElementById('login-role').value = 'murid';
+    } else if (role === 'guru') {
+        document.getElementById('login-email').value = 'guru@alwahdah.sch.id';
+        document.getElementById('login-password').value = '123456';
+        document.getElementById('login-role').value = 'guru';
+    } else if (role === 'admin') {
+        document.getElementById('login-email').value = 'admin@alwahdah.sch.id';
+        document.getElementById('login-password').value = '123456';
+        document.getElementById('login-role').value = 'admin';
+    }
+}
+
 async function handleLogin(e) {
     e.preventDefault();
-    const email = document.getElementById("loginEmail").value;
-    const password = document.getElementById("loginPassword").value;
+    const email = document.getElementById('login-email').value.trim();
+    const role = document.getElementById('login-role').value;
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-        alert("Gagal Login: " + error.message);
-        return;
-    }
-
-    checkSession();
-}
-
-async function checkSession() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-        currentUser = session.user;
-        
-        // Fetch Profile Role
-        const { data: profile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", currentUser.id)
-            .single();
-
-        currentUser.role = profile?.role || 'siswa';
-        currentUser.full_name = profile?.full_name || currentUser.email;
-
-        document.getElementById("userInfo").classList.remove("hidden");
-        document.getElementById("userInfo").classList.add("flex");
-        document.getElementById("userBadge").innerText = `${currentUser.full_name} (${currentUser.role.toUpperCase()})`;
-
-        if (currentUser.role === "admin" || currentUser.role === "guru") {
-            loadDashboardData();
-            showView("viewDashboard");
-        } else {
-            loadStudentExams();
-            showView("viewStudentHome");
+    if (supabase) {
+        try {
+            const { data, error } = await supabase.from('profiles').select('*').eq('role', role).limit(1);
+            if (data && data.length > 0) {
+                currentUser = data[0];
+            } else {
+                currentUser = { id: 'sb_u1', name: email.split('@')[0], role: role, class_name: '7A' };
+            }
+        } catch (err) {
+            currentUser = { id: 'sb_u1', name: email.split('@')[0], role: role, class_name: '7A' };
         }
     } else {
-        document.getElementById("userInfo").classList.add("hidden");
-        showView("viewLogin");
+        const found = DEMO_STATE.users.find(u => u.role === role);
+        if (found) {
+            currentUser = found;
+        } else {
+            currentUser = { id: 'demo_' + Date.now(), name: 'User Demo', role: role, class_name: '7A' };
+        }
+    }
+
+    localStorage.setItem('cbt_session_user', JSON.stringify(currentUser));
+    navigateDashboardByRole();
+}
+
+function checkSession() {
+    const session = localStorage.getItem('cbt_session_user');
+    if (session) {
+        currentUser = JSON.parse(session);
+        navigateDashboardByRole();
+    } else {
+        showView('view-login');
     }
 }
 
-async function handleLogout() {
-    await supabase.auth.signOut();
-    currentUser = null;
-    showView("viewLogin");
+function handleLogout() {
+    if (confirm('Apakah Anda yakin ingin keluar dari aplikasi?')) {
+        currentUser = null;
+        localStorage.removeItem('cbt_session_user');
+        showView('view-login');
+    }
 }
 
-// STUDENT EXAM LOGIC
-async function loadStudentExams() {
-    const { data: exams } = await supabase.from("exams").select("*").eq("is_active", true);
-    const container = document.getElementById("studentExamList");
-    container.innerHTML = "";
+function navigateDashboardByRole() {
+    if (!currentUser) return showView('view-login');
+    if (currentUser.role === 'murid') {
+        initMuridDashboard();
+        showView('view-murid-dashboard');
+    } else if (currentUser.role === 'guru') {
+        initGuruDashboard();
+        showView('view-guru-dashboard');
+    } else if (currentUser.role === 'admin') {
+        initAdminDashboard();
+        showView('view-admin-dashboard');
+    }
+}
 
-    if (!exams || exams.length === 0) {
-        container.innerHTML = `<p class="text-slate-500">Tidak ada ujian aktif saat ini.</p>`;
+// =========================================================================
+// 4. MURID & CBT ENGINE (ANTI-KECURANGAN)
+// =========================================================================
+function initMuridDashboard() {
+    document.getElementById('student-welcome-name').textContent = currentUser.name;
+    document.getElementById('student-welcome-class').textContent = currentUser.class_name || '7A';
+
+    const container = document.getElementById('student-schedules-list');
+    container.innerHTML = '';
+
+    const schedules = DEMO_STATE.schedules;
+    if (schedules.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-xs text-gray-500">Belum ada jadwal ujian aktif untuk kelas Anda.</div>`;
         return;
     }
 
-    exams.forEach(exam => {
-        container.innerHTML += `
-            <div class="border p-4 rounded-lg flex justify-between items-center bg-slate-50">
-                <div>
-                    <h3 class="font-bold text-lg">${exam.title}</h3>
-                    <p class="text-sm text-slate-500">Durasi: ${exam.duration_minutes} Menit</p>
+    schedules.forEach(sch => {
+        const item = document.createElement('div');
+        item.className = 'p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-gray-50';
+        item.innerHTML = `
+            <div>
+                <h4 class="font-bold text-gray-800 text-sm">${sch.subject_name}</h4>
+                <div class="text-xs text-gray-500 flex items-center gap-3 mt-1">
+                    <span>Durasi: <strong>${sch.duration_minutes} Menit</strong></span>
+                    <span>Kelas: <strong>${sch.class_name}</strong></span>
                 </div>
-                <button onclick="startExam('${exam.id}')" class="bg-indigo-600 text-white px-4 py-2 rounded font-semibold hover:bg-indigo-700">
-                    Mulai Ujian
-                </button>
             </div>
-        `;
-    });
-}
-
-async function startExam(examId) {
-    const { data: exam } = await supabase.from("exams").select("*").eq("id", examId).single();
-    if (!exam) return;
-
-    currentExam = exam;
-    currentQuestionIndex = 0;
-    userAnswers = {};
-    violationCounter = 0;
-    secondsRemaining = exam.duration_minutes * 60;
-
-    // Enter Fullscreen
-    if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
-    }
-
-    document.getElementById("examTitle").innerText = exam.title;
-    showView("viewExamEngine");
-    renderQuestion();
-    renderGrid();
-    startTimer();
-}
-
-function renderQuestion() {
-    const q = currentExam.questions[currentQuestionIndex];
-    document.getElementById("currentQuestionNum").innerText = currentQuestionIndex + 1;
-    document.getElementById("questionText").innerText = q.question;
-
-    const optionsContainer = document.getElementById("optionsContainer");
-    optionsContainer.innerHTML = "";
-
-    q.options.forEach((opt, idx) => {
-        const isSelected = userAnswers[currentQuestionIndex] === idx;
-        optionsContainer.innerHTML += `
-            <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 ${isSelected ? 'border-indigo-600 bg-indigo-50' : ''}">
-                <input type="radio" name="option" name="opt" onclick="selectAnswer(${idx})" ${isSelected ? 'checked' : ''} class="mr-3">
-                <span>${opt}</span>
-            </label>
-        `;
-    });
-
-    renderGrid();
-}
-
-function selectAnswer(optionIndex) {
-    userAnswers[currentQuestionIndex] = optionIndex;
-    renderQuestion();
-}
-
-function navigateQuestion(direction) {
-    const newIdx = currentQuestionIndex + direction;
-    if (newIdx >= 0 && newIdx < currentExam.questions.length) {
-        currentQuestionIndex = newIdx;
-        renderQuestion();
-    }
-}
-
-function renderGrid() {
-    const grid = document.getElementById("questionGrid");
-    grid.innerHTML = "";
-
-    currentExam.questions.forEach((_, idx) => {
-        const isAnswered = userAnswers[idx] !== undefined;
-        const isCurrent = idx === currentQuestionIndex;
-
-        let statusClass = "bg-slate-200 text-slate-700";
-        if (isAnswered) statusClass = "bg-emerald-600 text-white";
-        if (isCurrent) statusClass += " ring-2 ring-indigo-600 font-bold";
-
-        grid.innerHTML += `
-            <button onclick="jumpToQuestion(${idx})" class="py-2 rounded text-sm ${statusClass}">
-                ${idx + 1}
+            <button onclick="startExam('${sch.id}')" class="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg text-xs shadow flex items-center gap-1 transition">
+                <i data-lucide="play-circle" class="w-4 h-4"></i> Kerjakan Ujian
             </button>
         `;
+        container.appendChild(item);
     });
+    lucide.createIcons();
 }
 
-function jumpToQuestion(index) {
-    currentQuestionIndex = index;
-    renderQuestion();
+function startExam(scheduleId) {
+    const sch = DEMO_STATE.schedules.find(s => s.id === scheduleId) || DEMO_STATE.schedules[0];
+    const questions = DEMO_STATE.questions.filter(q => q.subject_id === sch.subject_id);
+
+    if (questions.length === 0) {
+        alert('Belum ada soal pada mata pelajaran ini!');
+        return;
+    }
+
+    currentExam = {
+        schedule: sch,
+        questions: questions,
+        userAnswers: {},
+        doubtful: {},
+        currentIndex: 0,
+        timerInterval: null,
+        remainingSeconds: sch.duration_minutes * 60,
+        violationsCount: 0
+    };
+
+    document.getElementById('cbt-title').textContent = sch.subject_name;
+    document.getElementById('cbt-student-info').textContent = `${currentUser.name} (${currentUser.class_name})`;
+
+    document.body.classList.add('exam-mode');
+
+    startTimer();
+    renderCBTQuestion();
+    renderCBTGrid();
+    showView('view-murid-cbt');
 }
 
-// TIMER ENGINE
 function startTimer() {
-    clearInterval(examTimer);
-    examTimer = setInterval(() => {
-        secondsRemaining--;
-        
-        const hours = Math.floor(secondsRemaining / 3600);
-        const minutes = Math.floor((secondsRemaining % 3600) / 60);
-        const seconds = secondsRemaining % 60;
+    clearInterval(currentExam.timerInterval);
+    currentExam.timerInterval = setInterval(() => {
+        currentExam.remainingSeconds--;
+        const hours = Math.floor(currentExam.remainingSeconds / 3600);
+        const minutes = Math.floor((currentExam.remainingSeconds % 3600) / 60);
+        const seconds = currentExam.remainingSeconds % 60;
 
-        document.getElementById("timerDisplay").innerText = 
+        document.getElementById('cbt-timer').textContent = 
             `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-        if (secondsRemaining <= 0) {
-            clearInterval(examTimer);
-            alert("Waktu ujian telah habis!");
+        if (currentExam.remainingSeconds <= 0) {
+            clearInterval(currentExam.timerInterval);
+            alert('Waktu ujian telah habis! Jawaban Anda akan terkirim secara otomatis.');
             submitExam();
         }
     }, 1000);
 }
 
-// SUBMIT & SCORE CALCULATION
-async function confirmSubmitExam() {
-    if (confirm("Apakah Anda yakin ingin menyelesaikan ujian ini?")) {
-        submitExam();
+function renderCBTQuestion() {
+    const q = currentExam.questions[currentExam.currentIndex];
+    document.getElementById('cbt-q-num').textContent = currentExam.currentIndex + 1;
+    document.getElementById('cbt-q-text').textContent = q.question_text;
+
+    document.getElementById('cbt-doubtful-check').checked = !!currentExam.doubtful[currentExam.currentIndex];
+
+    const optionsContainer = document.getElementById('cbt-options');
+    optionsContainer.innerHTML = '';
+
+    const opts = [
+        { key: 'A', text: q.option_a },
+        { key: 'B', text: q.option_b },
+        { key: 'C', text: q.option_c },
+        { key: 'D', text: q.option_d }
+    ];
+
+    opts.forEach(opt => {
+        const selected = currentExam.userAnswers[currentExam.currentIndex] === opt.key;
+        const optBtn = document.createElement('div');
+        optBtn.onclick = () => selectAnswer(opt.key);
+        optBtn.className = `p-3.5 rounded-lg border flex items-center gap-3 cursor-pointer transition ${
+            selected ? 'bg-brand-50 border-brand-600 text-brand-900 font-semibold shadow-sm' : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-700'
+        }`;
+        optBtn.innerHTML = `
+            <div class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
+                selected ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600'
+            }">${opt.key}</div>
+            <div class="text-sm">${opt.text}</div>
+        `;
+        optionsContainer.appendChild(optBtn);
+    });
+
+    document.getElementById('btn-prev-q').disabled = currentExam.currentIndex === 0;
+}
+
+function selectAnswer(optionKey) {
+    currentExam.userAnswers[currentExam.currentIndex] = optionKey;
+    renderCBTQuestion();
+    renderCBTGrid();
+}
+
+function toggleDoubtful() {
+    const isChecked = document.getElementById('cbt-doubtful-check').checked;
+    currentExam.doubtful[currentExam.currentIndex] = isChecked;
+    renderCBTGrid();
+}
+
+function prevQuestion() {
+    if (currentExam.currentIndex > 0) {
+        currentExam.currentIndex--;
+        renderCBTQuestion();
     }
 }
 
-async function submitExam() {
-    clearInterval(examTimer);
+function nextQuestion() {
+    if (currentExam.currentIndex < currentExam.questions.length - 1) {
+        currentExam.currentIndex++;
+        renderCBTQuestion();
+    }
+}
 
-    // Hitung Nilai Autograding
+function jumpToQuestion(idx) {
+    currentExam.currentIndex = idx;
+    renderCBTQuestion();
+}
+
+function renderCBTGrid() {
+    const grid = document.getElementById('cbt-grid-nav');
+    grid.innerHTML = '';
+
+    currentExam.questions.forEach((q, idx) => {
+        const isAnswered = currentExam.userAnswers[idx] !== undefined;
+        const isDoubt = currentExam.doubtful[idx];
+        const isCurrent = idx === currentExam.currentIndex;
+
+        let bgClass = 'bg-white text-gray-700 border-gray-300';
+        if (isDoubt) {
+            bgClass = 'bg-amber-400 text-white border-amber-500 font-bold';
+        } else if (isAnswered) {
+            bgClass = 'bg-brand-600 text-white border-brand-700 font-bold';
+        }
+
+        const activeRing = isCurrent ? 'ring-2 ring-brand-800 ring-offset-1' : '';
+
+        const btn = document.createElement('button');
+        btn.onclick = () => jumpToQuestion(idx);
+        btn.className = `h-9 w-full rounded border text-xs font-semibold flex items-center justify-center ${bgClass} ${activeRing}`;
+        btn.textContent = idx + 1;
+        grid.appendChild(btn);
+    });
+}
+
+// SISTEM ANTI KECURANGAN GLOBAL
+function setupAntiCheatingGlobal() {
+    // Disable Klik Kanan
+    document.addEventListener('contextmenu', (e) => {
+        if (document.body.classList.contains('exam-mode')) {
+            e.preventDefault();
+            alert('Fitur klik kanan dinonaktifkan selama ujian berlangsung!');
+        }
+    });
+
+    // Disable Shortcut DevTools & Copy-Paste
+    document.addEventListener('keydown', (e) => {
+        if (!document.body.classList.contains('exam-mode')) return;
+
+        if (
+            e.key === 'F12' ||
+            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
+            (e.ctrlKey && (e.key === 'u' || e.key === 'c' || e.key === 'v' || e.key === 'a'))
+        ) {
+            e.preventDefault();
+            alert('Aksi tombol kombinasi / shortcut disekat oleh sistem anti-kecurangan!');
+        }
+    });
+
+    // Deteksi Pindah Tab / Blur
+    window.addEventListener('visibilitychange', handleCheatingDetection);
+    window.addEventListener('blur', handleCheatingDetection);
+}
+
+function handleCheatingDetection() {
+    if (!document.body.classList.contains('exam-mode')) return;
+
+    if (document.hidden || !document.hasFocus()) {
+        currentExam.violationsCount++;
+        alert(`PERINGATAN PELANGGARAN (${currentExam.violationsCount}/3)!\n\nTerdeteksi meninggalkan layar ujian / berpindah tab. Harap tetap berada pada sistem! Batas maksimal melanggar adalah 3x.`);
+
+        if (currentExam.violationsCount >= 3) {
+            alert('Anda telah melanggar aturan ujian sebanyak 3 kali! Sistem secara otomatis menghentikan dan menyerahkan ujian Anda.');
+            submitExam();
+        }
+    }
+}
+
+function confirmSubmitExam() {
+    const totalQ = currentExam.questions.length;
+    const answeredQ = Object.keys(currentExam.userAnswers).length;
+
+    if (answeredQ < totalQ) {
+        if (!confirm(`Anda baru menjawab ${answeredQ} dari ${totalQ} soal. Yakin ingin menyelesaikan ujian?`)) {
+            return;
+        }
+    } else {
+        if (!confirm('Apakah Anda yakin ingin menyelesaikan ujian ini?')) {
+            return;
+        }
+    }
+
+    submitExam();
+}
+
+function submitExam() {
+    clearInterval(currentExam.timerInterval);
+    document.body.classList.remove('exam-mode');
+
     let correctCount = 0;
     currentExam.questions.forEach((q, idx) => {
-        if (userAnswers[idx] === q.correct_answer) {
+        if (currentExam.userAnswers[idx] === q.correct_option) {
             correctCount++;
         }
     });
 
-    const finalScore = (correctCount / currentExam.questions.length) * 100;
+    const totalQuestions = currentExam.questions.length;
+    const score = Math.round((correctCount / totalQuestions) * 100);
 
-    // Simpan ke Supabase
-    const { error } = await supabase.from("exam_results").insert({
-        exam_id: currentExam.id,
+    const resultRecord = {
+        id: 'res_' + Date.now(),
         student_id: currentUser.id,
-        answers: userAnswers,
-        score: finalScore,
-        violations_count: violationCounter
-    });
+        student_name: currentUser.name,
+        subject_id: currentExam.schedule.subject_id,
+        subject_name: currentExam.schedule.subject_name,
+        score: score,
+        total_questions: totalQuestions,
+        correct_answers: correctCount,
+        violations_count: currentExam.violationsCount,
+        submitted_at: new Date().toLocaleString()
+    };
 
-    if (error) {
-        alert("Gagal menyimapan hasil: " + error.message);
-    } else {
-        alert(`Ujian Selesai! Nilai Anda: ${finalScore.toFixed(2)}`);
-    }
+    DEMO_STATE.results.push(resultRecord);
 
-    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-    checkSession();
-}
-
-// PROTEKSI ANTI-KECURANGAN (BLUR & TAB SWITCH DETECTOR)
-function setupAntiCheating() {
-    // Disable Right Click
-    document.addEventListener("contextmenu", e => e.preventDefault());
-
-    // Disable Key Shortcuts (F12, Ctrl+C, Ctrl+U)
-    document.addEventListener("keydown", e => {
-        if (e.key === "F12" || (e.ctrlKey && ['c', 'u', 'a'].includes(e.key.toLowerCase()))) {
-            e.preventDefault();
-        }
-    });
-
-    // Detect Tab Switch / Window Blur
-    window.addEventListener("blur", () => {
-        if (!document.getElementById("viewExamEngine").classList.contains("hidden")) {
-            violationCounter++;
-            document.getElementById("violationCount").innerText = violationCounter;
-
-            if (violationCounter >= 3) {
-                alert("Anda terdeteksi melakukan pelanggaran 3 kali. Ujian dikumpulkan otomatis!");
-                submitExam();
-            } else {
-                alert(`Peringatan (${violationCounter}/3): Dilarang berpindah tab atau meninggalkan jendela ujian!`);
-            }
-        }
-    });
-}
-
-// ADMIN DASHBOARD LOADER
-async function loadDashboardData() {
-    const { data: exams } = await supabase.from("exams").select("*");
-    const { data: results } = await supabase.from("exam_results").select("*, profiles(full_name), exams(title)");
-
-    const examList = document.getElementById("examListAdmin");
-    examList.innerHTML = exams?.map(e => `
-        <div class="p-2 border rounded flex justify-between text-sm">
-            <span><b>${e.title}</b> (${e.duration_minutes}m)</span>
-            <span class="${e.is_active ? 'text-emerald-600' : 'text-slate-400'}">${e.is_active ? 'Aktif' : 'Nonaktif'}</span>
-        </div>
-    `).join('') || '<p class="text-xs text-slate-400">Belum ada ujian.</p>';
-
-    const resultList = document.getElementById("resultListAdmin");
-    resultList.innerHTML = results?.map(r => `
-        <div class="p-2 border rounded text-xs flex justify-between">
-            <div>
-                <b>${r.profiles?.full_name || 'Siswa'}</b> - ${r.exams?.title}<br>
-                <span class="text-slate-400">Pelanggaran: ${r.violations_count}x</span>
-            </div>
-            <div class="text-right">
-                <span class="font-bold text-sm text-indigo-600">${r.score}</span>
-            </div>
-        </div>
-    `).join('') || '<p class="text-xs text-slate-400">Belum ada data nilai.</p>';
-}
-
-// SWITCH TAB MANAGEMENT
-function switchAdminTab(tabName) {
-    const tabs = ['Accounts', 'Curriculum', 'Grades'];
-    tabs.forEach(t => {
-        const content = document.getElementById(`adminTab${t}`);
-        const btn = document.getElementById(`tabBtn${t}`);
-        if (content && btn) {
-            content.classList.add('hidden');
-            btn.className = "pb-2 font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700";
-        }
-    });
-
-    const activeContent = document.getElementById(`adminTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
-    const activeBtn = document.getElementById(`tabBtn${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
-    if (activeContent && activeBtn) {
-        activeContent.classList.remove('hidden');
-        activeBtn.className = "pb-2 font-bold border-b-2 border-indigo-600 text-indigo-600";
-    }
-
-    if (tabName === 'accounts') loadUsersData();
-    if (tabName === 'curriculum') loadCurriculumData();
-    if (tabName === 'grades') loadGradesData();
-}
-
-// -------------------------------------------------------------
-// 1. MANAJEMEN AKUN
-// -------------------------------------------------------------
-async function loadUsersData() {
-    const { data: users } = await supabase.from('profiles').select('*, classes(name)');
-    const { data: classes } = await supabase.from('classes').select('*');
-
-    // Populate Select Class Option
-    const classSelect = document.getElementById('userClassSelect');
-    classSelect.innerHTML = '<option value="">-- Pilih Kelas --</option>' + 
-        classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-
-    const tbody = document.getElementById('userTableBody');
-    tbody.innerHTML = users?.map(u => `
-        <tr class="border-b hover:bg-slate-50">
-            <td class="p-3 font-semibold">${u.full_name}</td>
-            <td class="p-3 text-slate-500">${u.id}</td>
-            <td class="p-3"><span class="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-bold">${u.role.toUpperCase()}</span></td>
-            <td class="p-3">${u.classes?.name || '-'}</td>
-            <td class="p-3 text-right">
-                <button onclick="deleteUser('${u.id}')" class="text-rose-600 hover:text-rose-800 text-xs font-bold"><i class="fa-solid fa-trash"></i> Hapus</button>
-            </td>
-        </tr>
-    `).join('') || '<tr><td colspan="5" class="p-3 text-center text-slate-400">Belum ada pengguna.</td></tr>';
-}
-
-async function handleSaveUser(e) {
-    e.preventDefault();
-    const fullName = document.getElementById('userFullName').value;
-    const email = document.getElementById('userEmail').value;
-    const password = document.getElementById('userPassword').value;
-    const role = document.getElementById('userRole').value;
-    const classId = document.getElementById('userClassSelect').value || null;
-
-    // SignUp User via Auth Admin API / Standard SignUp
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return alert("Gagal membuat akun: " + error.message);
-
-    if (data.user) {
-        await supabase.from('profiles').insert({
-            id: data.user.id,
-            full_name: fullName,
-            role: role,
-            class_id: classId
-        });
-        alert("Akun berhasil dibuat!");
-        loadUsersData();
-    }
-}
-
-async function deleteUser(id) {
-    if (confirm("Hapus pengguna ini dari database?")) {
-        await supabase.from('profiles').delete().eq('id', id);
-        loadUsersData();
-    }
-}
-
-// -------------------------------------------------------------
-// 2. MANAJEMEN KELAS & MAPEL
-// -------------------------------------------------------------
-async function loadCurriculumData() {
-    const { data: classes } = await supabase.from('classes').select('*');
-    const { data: subjects } = await supabase.from('subjects').select('*, profiles(full_name)');
-    const { data: teachers } = await supabase.from('profiles').select('*').eq('role', 'guru');
-
-    // Populate Guru Option
-    const teacherSelect = document.getElementById('subjectTeacherSelect');
-    teacherSelect.innerHTML = '<option value="">-- Pengampu (Guru) --</option>' + 
-        teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('');
-
-    // Render Classes
-    document.getElementById('classList').innerHTML = classes?.map(c => `
-        <li class="p-2 bg-white border rounded flex justify-between items-center text-sm">
-            <b>Kelas ${c.name}</b>
-            <button onclick="deleteClass('${c.id}')" class="text-rose-600 text-xs"><i class="fa-solid fa-trash"></i></button>
-        </li>
-    `).join('') || '<p class="text-xs text-slate-400">Belum ada kelas.</p>';
-
-    // Render Subjects
-    document.getElementById('subjectList').innerHTML = subjects?.map(s => `
-        <li class="p-2 bg-white border rounded flex justify-between items-center text-sm">
-            <div>
-                <b>[${s.code}] ${s.title}</b><br>
-                <span class="text-xs text-slate-500">Guru: ${s.profiles?.full_name || 'Belum diatur'}</span>
-            </div>
-            <button onclick="deleteSubject('${s.id}')" class="text-rose-600 text-xs"><i class="fa-solid fa-trash"></i></button>
-        </li>
-    `).join('') || '<p class="text-xs text-slate-400">Belum ada mata pelajaran.</p>';
-}
-
-async function handleSaveClass(e) {
-    e.preventDefault();
-    const name = document.getElementById('classNameInput').value;
-    await supabase.from('classes').insert({ name });
-    document.getElementById('classNameInput').value = '';
-    loadCurriculumData();
-}
-
-async function handleSaveSubject(e) {
-    e.preventDefault();
-    const code = document.getElementById('subjectCodeInput').value;
-    const title = document.getElementById('subjectTitleInput').value;
-    const teacher_id = document.getElementById('subjectTeacherSelect').value || null;
-
-    await supabase.from('subjects').insert({ code, title, teacher_id });
-    loadCurriculumData();
-}
-
-// -------------------------------------------------------------
-// 3. MANAJEMEN NILAI & EKSPOR CSV
-// -------------------------------------------------------------
-async function loadGradesData() {
-    const { data: results } = await supabase.from('exam_results').select('*, profiles(full_name, classes(name)), exams(title)');
+    alert(`Ujian Selesai!\n\nNilai Anda: ${score}\nBenar: ${correctCount}/${totalQuestions}\nPelanggaran Terdeteksi: ${currentExam.violationsCount}`);
     
-    const tbody = document.getElementById('gradesTableBody');
-    tbody.innerHTML = results?.map(r => `
-        <tr class="border-b hover:bg-slate-50">
-            <td class="p-3 font-semibold">${r.profiles?.full_name || 'Siswa'}</td>
-            <td class="p-3">${r.profiles?.classes?.name || '-'}</td>
-            <td class="p-3">${r.exams?.title || '-'}</td>
-            <td class="p-3 font-bold text-indigo-600">${r.score}</td>
-            <td class="p-3 text-amber-600 font-semibold">${r.violations_count}x</td>
-            <td class="p-3 text-xs text-slate-500">${new Date(r.submitted_at).toLocaleString('id-ID')}</td>
-            <td class="p-3 text-right">
-                <button onclick="deleteGrade('${r.id}')" class="text-rose-600 hover:text-rose-800 text-xs font-bold"><i class="fa-solid fa-trash"></i></button>
-            </td>
-        </tr>
-    `).join('') || '<tr><td colspan="7" class="p-3 text-center text-slate-400">Belum ada data nilai.</td></tr>';
+    navigateDashboardByRole();
 }
 
-function exportGradesToCSV() {
-    const table = document.getElementById('gradesTableBody');
-    let csv = [];
-    csv.push(["Siswa", "Kelas", "Ujian", "Skor", "Pelanggaran", "Tanggal"].join(","));
+// =========================================================================
+// 5. GURU DASHBOARD & DOC BULK UPLOAD
+// =========================================================================
+function initGuruDashboard() {
+    const subjectSelect = document.getElementById('guru-subject-select');
+    subjectSelect.innerHTML = '';
 
-    for (let row of table.rows) {
-        if (row.cells.length < 6) continue;
-        let cols = [
-            `"${row.cells[0].innerText}"`,
-            `"${row.cells[1].innerText}"`,
-            `"${row.cells[2].innerText}"`,
-            row.cells[3].innerText,
-            row.cells[4].innerText,
-            `"${row.cells[5].innerText}"`
-        ];
-        csv.push(cols.join(","));
+    DEMO_STATE.subjects.forEach(sub => {
+        const opt = document.createElement('option');
+        opt.value = sub.id;
+        opt.textContent = `${sub.name} (Kelas ${sub.class_name})`;
+        subjectSelect.appendChild(opt);
+    });
+
+    loadGuruQuestions();
+    loadGuruResults();
+}
+
+function switchGuruTab(tab) {
+    if (tab === 'soal') {
+        document.getElementById('guru-tab-soal-content').classList.remove('hidden');
+        document.getElementById('guru-tab-hasil-content').classList.add('hidden');
+        document.getElementById('tab-guru-soal').className = 'px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm';
+        document.getElementById('tab-guru-hasil').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm';
+    } else {
+        document.getElementById('guru-tab-soal-content').classList.add('hidden');
+        document.getElementById('guru-tab-hasil-content').classList.remove('hidden');
+        document.getElementById('tab-guru-soal').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm';
+        document.getElementById('tab-guru-hasil').className = 'px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm';
+    }
+}
+
+function loadGuruQuestions() {
+    const subjectId = document.getElementById('guru-subject-select').value;
+    const tbody = document.getElementById('guru-questions-tbody');
+    tbody.innerHTML = '';
+
+    const qList = DEMO_STATE.questions.filter(q => q.subject_id === subjectId);
+
+    if (qList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Belum ada soal pada mata pelajaran ini.</td></tr>`;
+        return;
     }
 
-    const csvFile = new Blob([csv.join("\n")], { type: "text/csv" });
-    const downloadLink = document.createElement("a");
-    downloadLink.download = `Rekap_Nilai_CBT_${new Date().toISOString().slice(0,10)}.csv`;
-    downloadLink.href = window.URL.createObjectURL(csvFile);
-    downloadLink.click();
+    qList.forEach((q, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50';
+        tr.innerHTML = `
+            <td class="p-3 text-center font-bold text-gray-600">${idx + 1}</td>
+            <td class="p-3 max-w-md font-medium text-gray-800">${q.question_text}</td>
+            <td class="p-3 text-gray-600 text-[11px]">
+                A: ${q.option_a} | B: ${q.option_b}<br>C: ${q.option_c} | D: ${q.option_d}
+            </td>
+            <td class="p-3 text-center font-bold text-brand-700">${q.correct_option}</td>
+            <td class="p-3 text-center space-x-1">
+                <button onclick="deleteQuestion('${q.id}')" class="text-red-600 hover:text-red-800 font-semibold text-xs">Hapus</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function deleteQuestion(id) {
+    if (confirm('Hapus soal ini?')) {
+        const idx = DEMO_STATE.questions.findIndex(q => q.id === id);
+        if (idx !== -1) DEMO_STATE.questions.splice(idx, 1);
+        loadGuruQuestions();
+    }
+}
+
+function openModalAddQuestion() {
+    document.getElementById('modal-add-question').classList.remove('hidden');
+}
+
+function closeModalAddQuestion() {
+    document.getElementById('modal-add-question').classList.add('hidden');
+}
+
+function saveQuestionForm(e) {
+    e.preventDefault();
+    const subjectId = document.getElementById('guru-subject-select').value;
+    const newQ = {
+        id: 'q_' + Date.now(),
+        subject_id: subjectId,
+        question_text: document.getElementById('fq-text').value,
+        option_a: document.getElementById('fq-a').value,
+        option_b: document.getElementById('fq-b').value,
+        option_c: document.getElementById('fq-c').value,
+        option_d: document.getElementById('fq-d').value,
+        correct_option: document.getElementById('fq-correct').value
+    };
+
+    DEMO_STATE.questions.push(newQ);
+    closeModalAddQuestion();
+    loadGuruQuestions();
+    alert('Soal berhasil ditambahkan!');
+}
+
+function triggerDocUpload() {
+    document.getElementById('guru-doc-file-input').click();
+}
+
+function handleBulkDocUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const subjectId = document.getElementById('guru-subject-select').value;
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        const text = e.target.result;
+        const parsedQuestions = parseDocQuestionsText(text, subjectId);
+
+        if (parsedQuestions.length > 0) {
+            DEMO_STATE.questions.push(...parsedQuestions);
+            loadGuruQuestions();
+            alert(`Berhasil mengunggah ${parsedQuestions.length} soal secara bulk!`);
+        } else {
+            alert('Format dokumen/teks tidak sesuai template. Pastikan memuat Soal, A, B, C, D, dan Kunci.');
+        }
+    };
+
+    reader.readAsText(file);
+}
+
+// Parser sederhana format dokumen/soal teks
+function parseDocQuestionsText(text, subjectId) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const questions = [];
+    let currentQ = null;
+
+    lines.forEach(line => {
+        if (line.match(/^soal\s*\d*[:.]?/i) || line.match(/^\d+[:.]/)) {
+            if (currentQ && currentQ.question_text && currentQ.option_a && currentQ.correct_option) {
+                questions.push(currentQ);
+            }
+            currentQ = { id: 'q_' + Math.random().toString(36).substr(2, 9), subject_id: subjectId, question_text: line.replace(/^soal\s*\d*[:.]?/i, '').replace(/^\d+[:.]/, '').trim(), option_a: '', option_b: '', option_c: '', option_d: '', correct_option: 'A' };
+        } else if (line.match(/^A[:.]/i) && currentQ) {
+            currentQ.option_a = line.replace(/^A[:.]/i, '').trim();
+        } else if (line.match(/^B[:.]/i) && currentQ) {
+            currentQ.option_b = line.replace(/^B[:.]/i, '').trim();
+        } else if (line.match(/^C[:.]/i) && currentQ) {
+            currentQ.option_c = line.replace(/^C[:.]/i, '').trim();
+        } else if (line.match(/^D[:.]/i) && currentQ) {
+            currentQ.option_d = line.replace(/^D[:.]/i, '').trim();
+        } else if (line.match(/^kunci[:.]/i) && currentQ) {
+            currentQ.correct_option = line.replace(/^kunci[:.]/i, '').trim().toUpperCase();
+        }
+    });
+
+    if (currentQ && currentQ.question_text && currentQ.option_a && currentQ.correct_option) {
+        questions.push(currentQ);
+    }
+
+    return questions;
+}
+
+function loadGuruResults() {
+    const tbody = document.getElementById('guru-results-tbody');
+    tbody.innerHTML = '';
+
+    if (DEMO_STATE.results.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Belum ada siswa yang menyelesaikan ujian.</td></tr>`;
+        return;
+    }
+
+    DEMO_STATE.results.forEach(res => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50';
+        tr.innerHTML = `
+            <td class="p-3 font-semibold text-gray-800">${res.student_name}</td>
+            <td class="p-3 text-gray-600">${res.subject_name}</td>
+            <td class="p-3 text-center font-bold text-brand-700 text-sm">${res.score}</td>
+            <td class="p-3 text-center text-gray-600">${res.correct_answers} / ${res.total_questions}</td>
+            <td class="p-3 text-center">
+                <span class="px-2 py-0.5 rounded text-xs font-bold ${res.violations_count > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">
+                    ${res.violations_count} Pelanggaran
+                </span>
+            </td>
+            <td class="p-3 text-right text-gray-500">${res.submitted_at}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// =========================================================================
+// 6. ADMIN DASHBOARD & CSV BULK UPLOAD
+// =========================================================================
+function initAdminDashboard() {
+    loadAdminStats();
+    loadAdminUsers();
+    loadAdminSchedules();
+}
+
+function loadAdminStats() {
+    const results = DEMO_STATE.results;
+    const totalUsers = DEMO_STATE.users.length;
+    let totalScore = 0;
+    let totalViolations = 0;
+
+    results.forEach(r => {
+        totalScore += r.score;
+        totalViolations += r.violations_count;
+    });
+
+    const avgScore = results.length > 0 ? (totalScore / results.length).toFixed(1) : '0.0';
+
+    document.getElementById('admin-stat-avg-score').textContent = avgScore;
+    document.getElementById('admin-stat-total-users').textContent = totalUsers;
+    document.getElementById('admin-stat-total-violations').textContent = totalViolations;
+}
+
+function switchAdminTab(tab) {
+    if (tab === 'users') {
+        document.getElementById('admin-tab-users-content').classList.remove('hidden');
+        document.getElementById('admin-tab-schedules-content').classList.add('hidden');
+        document.getElementById('tab-admin-users').className = 'px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm';
+        document.getElementById('tab-admin-schedules').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm';
+    } else {
+        document.getElementById('admin-tab-users-content').classList.add('hidden');
+        document.getElementById('admin-tab-schedules-content').classList.remove('hidden');
+        document.getElementById('tab-admin-users').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm';
+        document.getElementById('tab-admin-schedules').className = 'px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm';
+    }
+}
+
+function loadAdminUsers() {
+    const tbody = document.getElementById('admin-users-tbody');
+    tbody.innerHTML = '';
+
+    DEMO_STATE.users.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50';
+        tr.innerHTML = `
+            <td class="p-3 font-semibold text-gray-800">${u.name}</td>
+            <td class="p-3"><span class="px-2 py-0.5 rounded text-xs uppercase font-bold bg-gray-100 text-gray-700">${u.role}</span></td>
+            <td class="p-3 text-gray-600">${u.class_name || '-'}</td>
+            <td class="p-3 text-center">
+                <button onclick="deleteUser('${u.id}')" class="text-red-600 hover:text-red-800 font-semibold text-xs">Hapus</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function deleteUser(id) {
+    if (confirm('Hapus pengguna ini?')) {
+        const idx = DEMO_STATE.users.findIndex(u => u.id === id);
+        if (idx !== -1) DEMO_STATE.users.splice(idx, 1);
+        loadAdminUsers();
+        loadAdminStats();
+    }
+}
+
+function openModalAddUser() {
+    document.getElementById('modal-add-user').classList.remove('hidden');
+}
+
+function closeModalAddUser() {
+    document.getElementById('modal-add-user').classList.add('hidden');
+}
+
+function saveUserForm(e) {
+    e.preventDefault();
+    const newUser = {
+        id: 'u_' + Date.now(),
+        name: document.getElementById('fu-name').value,
+        role: document.getElementById('fu-role').value,
+        class_name: document.getElementById('fu-class').value || '-'
+    };
+
+    DEMO_STATE.users.push(newUser);
+    closeModalAddUser();
+    loadAdminUsers();
+    loadAdminStats();
+    alert('User berhasil ditambahkan!');
+}
+
+function downloadAccountTemplate() {
+    const csvContent = "data:text/csv;charset=utf-8,nama,role,kelas,email\nSiswa Contoh,murid,7A,siswa1@alwahdah.sch.id\nGuru Contoh,guru,7A,guru1@alwahdah.sch.id";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "template_akun_cbt.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function triggerCsvUpload() {
+    document.getElementById('admin-csv-file-input').click();
+}
+
+function handleBulkCsvUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const lines = e.target.result.split('\n');
+        let addedCount = 0;
+
+        lines.forEach((line, idx) => {
+            if (idx === 0 || !line.trim()) return; // Skip header
+            const [name, role, class_name, email] = line.split(',').map(s => s.trim());
+            if (name && role) {
+                DEMO_STATE.users.push({
+                    id: 'u_csv_' + Math.random().toString(36).substr(2, 9),
+                    name: name,
+                    role: role.toLowerCase(),
+                    class_name: class_name || '-',
+                    email: email || `${name.toLowerCase().replace(/\s+/g, '')}@alwahdah.sch.id`
+                });
+                addedCount++;
+            }
+        });
+
+        loadAdminUsers();
+        loadAdminStats();
+        alert(`Berhasil mengimpor ${addedCount} akun dari CSV!`);
+    };
+
+    reader.readAsText(file);
+}
+
+function loadAdminSchedules() {
+    const tbody = document.getElementById('admin-schedules-tbody');
+    tbody.innerHTML = '';
+
+    DEMO_STATE.schedules.forEach(sch => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50';
+        tr.innerHTML = `
+            <td class="p-3 font-semibold text-gray-800">${sch.subject_name}</td>
+            <td class="p-3 text-gray-600">${sch.class_name}</td>
+            <td class="p-3 text-gray-500 text-[11px]">${sch.start_time.replace('T', ' ')} s.d ${sch.end_time.replace('T', ' ')}</td>
+            <td class="p-3 text-center font-bold text-gray-700">${sch.duration_minutes} Mins</td>
+            <td class="p-3 text-center">
+                <span class="px-2 py-0.5 rounded text-xs font-bold ${sch.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}">
+                    ${sch.is_active ? 'Aktif' : 'Nonaktif'}
+                </span>
+            </td>
+            <td class="p-3 text-center">
+                <button onclick="deleteSchedule('${sch.id}')" class="text-red-600 hover:text-red-800 font-semibold text-xs">Hapus</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function deleteSchedule(id) {
+    if (confirm('Hapus jadwal ini?')) {
+        const idx = DEMO_STATE.schedules.findIndex(s => s.id === id);
+        if (idx !== -1) DEMO_STATE.schedules.splice(idx, 1);
+        loadAdminSchedules();
+    }
+}
+
+function openModalAddSchedule() {
+    const subSelect = document.getElementById('fs-subject');
+    subSelect.innerHTML = '';
+    DEMO_STATE.subjects.forEach(sub => {
+        const opt = document.createElement('option');
+        opt.value = sub.id;
+        opt.textContent = `${sub.name} (${sub.class_name})`;
+        subSelect.appendChild(opt);
+    });
+    document.getElementById('modal-add-schedule').classList.remove('hidden');
+}
+
+function closeModalAddSchedule() {
+    document.getElementById('modal-add-schedule').classList.add('hidden');
+}
+
+function saveScheduleForm(e) {
+    e.preventDefault();
+    const subId = document.getElementById('fs-subject').value;
+    const subObj = DEMO_STATE.subjects.find(s => s.id === subId);
+
+    const newSch = {
+        id: 'sch_' + Date.now(),
+        subject_id: subId,
+        subject_name: subObj ? subObj.name : 'Mata Pelajaran',
+        class_name: subObj ? subObj.class_name : '7A',
+        start_time: document.getElementById('fs-start').value,
+        end_time: document.getElementById('fs-end').value,
+        duration_minutes: parseInt(document.getElementById('fs-duration').value) || 60,
+        is_active: true
+    };
+
+    DEMO_STATE.schedules.push(newSch);
+    closeModalAddSchedule();
+    loadAdminSchedules();
+    alert('Jadwal Ujian berhasil dibuat!');
+}
+
+// =========================================================================
+// 7. SUPABASE CONFIG MODAL LOGIC
+// =========================================================================
+function openConfigModal() {
+    document.getElementById('cfg-supabase-url').value = SUPABASE_URL;
+    document.getElementById('cfg-supabase-key').value = SUPABASE_KEY;
+    document.getElementById('modal-config').classList.remove('hidden');
+}
+
+function closeConfigModal() {
+    document.getElementById('modal-config').classList.add('hidden');
+}
+
+function saveSupabaseConfig() {
+    const url = document.getElementById('cfg-supabase-url').value.trim();
+    const key = document.getElementById('cfg-supabase-key').value.trim();
+
+    localStorage.setItem('cbt_sb_url', url);
+    localStorage.setItem('cbt_sb_key', key);
+
+    SUPABASE_URL = url;
+    SUPABASE_KEY = key;
+
+    if (url && key) {
+        try {
+            supabase = window.supabase.createClient(url, key);
+        } catch (e) {
+            console.error("Inisialisasi Supabase gagal:", e);
+        }
+    }
+
+    closeConfigModal();
+    checkDatabaseConnectionStatus();
+    alert('Konfigurasi Supabase disimpan!');
 }
