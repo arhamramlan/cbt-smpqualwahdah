@@ -1,17 +1,45 @@
-/* Custom Styles Setup */
-body {
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
+/* Custom Stylesheet - SMP Qur'an Al Wahdah CBT */
+
+/* Mencegah seleksi teks dan klik kanan selama ujian */
+body.exam-mode {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
 }
 
-/* Transisi Halaman */
-section {
-    animation: fadeIn 0.25s ease-in-out;
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
+/* Modal Animation */
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.modal-anim {
+    animation: fadeIn 0.15s ease-out forwards;
+}
+
+/* Warning Blink Animation for Anti-Cheating */
+@keyframes warningPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.warning-pulse {
+    animation: warningPulse 1s infinite;
 }
