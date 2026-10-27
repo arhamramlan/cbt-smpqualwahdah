@@ -1,794 +1,423 @@
-/**
- * CBT System - SMP Qur'an Al Wahdah Engine
- * Frontend Single-Page Application JS
- */
+// CONFIGURATION SUPABASE
+const SUPABASE_URL = "https://YOUR-SUPABASE-URL.supabase.co";
+const SUPABASE_KEY = "YOUR-SUPABASE-ANON-KEY";
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// =========================================================================
-// 1. SUPABASE CLIENT & MOCK DEMO STATE CONFIGURATION
-// =========================================================================
-let SUPABASE_URL = localStorage.getItem('cbt_sb_url') || "";
-let SUPABASE_KEY = localStorage.getItem('cbt_sb_key') || "";
-let supabase = null;
-
-if (SUPABASE_URL && SUPABASE_KEY) {
-    try {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    } catch (e) {
-        console.warn("Gagal menginisialisasi Supabase:", e);
-    }
-}
-
-// Mock Data State
-const DEMO_STATE = {
-    users: [
-        { id: 'u1', name: 'Ahmad Faisal', role: 'murid', class_name: '7A', email: 'murid@alwahdah.sch.id' },
-        { id: 'u2', name: 'Ustadz Abdullah, S.Pd.', role: 'guru', class_name: '7A', email: 'guru@alwahdah.sch.id' },
-        { id: 'u3', name: 'Admin Utama', role: 'admin', class_name: '-', email: 'admin@alwahdah.sch.id' }
-    ],
-    subjects: [
-        { id: 's1', name: 'Pendidikan Agama Islam (PAI)', class_name: '7A', teacher_id: 'u2' },
-        { id: 's2', name: 'Bahasa Arab', class_name: '7A', teacher_id: 'u2' }
-    ],
-    schedules: [
-        { id: 'sch1', subject_id: 's1', subject_name: 'Pendidikan Agama Islam (PAI)', class_name: '7A', start_time: '2026-01-01T07:00', end_time: '2026-12-31T18:00', duration_minutes: 60, is_active: true }
-    ],
-    questions: [
-        { id: 'q1', subject_id: 's1', question_text: 'Rukun Islam yang pertama adalah...', option_a: 'Mendirikan Shalat', option_b: 'Mengucapkan Dua Kalimat Syahadat', option_c: 'Menunaikan Zakat', option_d: 'Berpuasa Ramadhan', correct_option: 'B' },
-        { id: 'q2', subject_id: 's1', question_text: 'Surah al-Fatihah terdiri dari berapa ayat?', option_a: '5 Ayat', option_b: '6 Ayat', option_c: '7 Ayat', option_d: '8 Ayat', correct_option: 'C' },
-        { id: 'q3', subject_id: 's1', question_text: 'Kitab suci Al-Qur\'an diturunkan kepada Nabi...', option_a: 'Musa A.S.', option_b: 'Isa A.S.', option_c: 'Ibrahim A.S.', option_d: 'Muhammad S.A.W.', correct_option: 'D' }
-    ],
-    results: []
-};
-
-// Application Global State
+// STATE UJIAN & USER
+let currentRole = 'murid';
 let currentUser = null;
-let currentExam = {
-    schedule: null,
-    questions: [],
-    userAnswers: {},
-    doubtful: {},
-    currentIndex: 0,
-    timerInterval: null,
-    remainingSeconds: 0,
-    violationsCount: 0
-};
+let questions = [];
+let currentQIndex = 0;
+let userAnswers = {}; // { id_soal: "A", id_soal_2: ["A", "C"] }
+let flaggedQuestions = {};
+let violationCount = 0;
+let examTimer = null;
+let totalTimeSeconds = 60 * 60; // 60 menit default
+let startTime = null;
 
-// =========================================================================
-// 2. INITIALIZATION & ROUTING
-// =========================================================================
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.lucide) lucide.createIcons();
-    checkDatabaseConnectionStatus();
-    checkSession();
-    setupAntiCheatingGlobal();
+// INIT & EVENT SECURITY LISTENERS
+document.addEventListener("DOMContentLoaded", () => {
+  renderOptionsInput();
+  setupSecurityEvents();
 });
 
-function checkDatabaseConnectionStatus() {
-    const banner = document.getElementById('db-status-banner');
-    const statusText = document.getElementById('db-status-text');
-    
-    if (supabase) {
-        banner.className = "mb-4 p-3 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs flex justify-between items-center shadow-sm";
-        statusText.innerHTML = `<strong>Koneksi Supabase Aktif:</strong> Terhubung ke ${SUPABASE_URL}`;
-    } else {
-        banner.className = "mb-4 p-3 bg-amber-100 border border-amber-300 text-amber-800 rounded-lg text-xs flex justify-between items-center shadow-sm";
-        statusText.innerHTML = `<strong>Mode Standalone/Demo Active:</strong> Menggunakan penyimpanan lokal sementara. Klik untuk konfigurasi Supabase.`;
-    }
-}
+function setupSecurityEvents() {
+  // Disable Right Click, Copy, Paste, Cut
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('copy', e => e.preventDefault());
+  document.addEventListener('paste', e => e.preventDefault());
+  document.addEventListener('cut', e => e.preventDefault());
 
-function showView(viewId) {
-    const views = ['view-login', 'view-murid-dashboard', 'view-murid-cbt', 'view-guru-dashboard', 'view-admin-dashboard'];
-    views.forEach(v => {
-        const el = document.getElementById(v);
-        if (el) el.classList.add('hidden');
-    });
-    
-    const targetEl = document.getElementById(viewId);
-    if (targetEl) targetEl.classList.remove('hidden');
-
-    const userInfoBar = document.getElementById('user-info-bar');
-    if (currentUser && viewId !== 'view-login') {
-        userInfoBar.classList.remove('hidden');
-        userInfoBar.classList.add('flex');
-        document.getElementById('user-display-name').textContent = currentUser.name;
-        document.getElementById('user-display-role').textContent = `${currentUser.role} (${currentUser.class_name || '-'})`;
-    } else {
-        userInfoBar.classList.add('hidden');
-        userInfoBar.classList.remove('flex');
-    }
-}
-
-// =========================================================================
-// 3. AUTHENTICATION SYSTEM (DIRECT BYPASS DEMO)
-// =========================================================================
-
-// Tombol Demo Instant
-function loginDemoDirect(role) {
-    let email = 'murid@alwahdah.sch.id';
-    let name = 'Ahmad Faisal (Demo)';
-
-    if (role === 'guru') {
-        email = 'guru@alwahdah.sch.id';
-        name = 'Ustadz Abdullah, S.Pd. (Demo)';
-    } else if (role === 'admin') {
-        email = 'admin@alwahdah.sch.id';
-        name = 'Admin Utama (Demo)';
-    }
-
-    currentUser = {
-        id: 'demo_' + role + '_' + Date.now(),
-        name: name,
-        role: role,
-        class_name: role === 'admin' ? '-' : '7A',
-        email: email
-    };
-
-    localStorage.setItem('cbt_session_user', JSON.stringify(currentUser));
-    navigateDashboardByRole();
-}
-
-// Submit Form Login
-async function handleLogin(e) {
-    if (e) {
+  // Disable Shortkey (F12, Ctrl+Shift+I, Alt+Tab, etc.)
+  document.addEventListener('keydown', e => {
+    if (currentUser && currentRole === 'murid') {
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) || (e.ctrlKey && e.key === 'u')) {
         e.preventDefault();
-        e.stopPropagation();
+        registerViolation("Penggunaan tombol pengembang terdeteksi!");
+      }
     }
+  });
 
-    const email = document.getElementById('login-email').value.trim();
-    const role = document.getElementById('login-role').value;
-
-    if (supabase) {
-        try {
-            const { data } = await supabase.from('profiles').select('*').eq('role', role).limit(1);
-            if (data && data.length > 0) {
-                currentUser = data[0];
-            } else {
-                currentUser = { id: 'sb_u1', name: email.split('@')[0] || 'User', role: role, class_name: '7A' };
-            }
-        } catch (err) {
-            currentUser = { id: 'sb_u1', name: email.split('@')[0] || 'User', role: role, class_name: '7A' };
-        }
-    } else {
-        currentUser = {
-            id: 'demo_' + Date.now(),
-            name: email ? email.split('@')[0] : 'Siswa Demo',
-            role: role,
-            class_name: '7A',
-            email: email
-        };
+  // Detect Tab Switching / Focus Loss
+  document.addEventListener("visibilitychange", () => {
+    if (currentUser && currentRole === 'murid' && document.hidden) {
+      registerViolation("Anda terdeteksi berpindah tab / aplikasi!");
     }
+  });
 
-    localStorage.setItem('cbt_session_user', JSON.stringify(currentUser));
-    navigateDashboardByRole();
+  window.addEventListener("blur", () => {
+    if (currentUser && currentRole === 'murid') {
+      registerViolation("Fokus browser hilang / membuka aplikasi lain!");
+    }
+  });
 }
 
-function checkSession() {
-    const session = localStorage.getItem('cbt_session_user');
-    if (session) {
-        try {
-            currentUser = JSON.parse(session);
-            navigateDashboardByRole();
-        } catch(e) {
-            showView('view-login');
-        }
-    } else {
-        showView('view-login');
-    }
+// REGISTER PELANGGARAN
+function registerViolation(reason) {
+  violationCount++;
+  document.getElementById("violation-count").innerText = violationCount;
+  document.getElementById("warning-text").innerText = reason;
+  document.getElementById("warning-modal").classList.remove("hidden");
+
+  if (violationCount >= 3) {
+    alert("Batas maksimal pelanggaran (3x) tercapai. Ujian otomatis dikirim!");
+    submitExam(true);
+  }
 }
 
-function handleLogout() {
-    if (confirm('Apakah Anda yakin ingin keluar dari aplikasi?')) {
-        currentUser = null;
-        localStorage.removeItem('cbt_session_user');
-        showView('view-login');
-    }
+function closeWarningModal() {
+  document.getElementById("warning-modal").classList.add("hidden");
+  requestFullScreen();
 }
 
-function navigateDashboardByRole() {
-    if (!currentUser) return showView('view-login');
-    if (currentUser.role === 'murid') {
-        initMuridDashboard();
-        showView('view-murid-dashboard');
-    } else if (currentUser.role === 'guru') {
-        initGuruDashboard();
-        showView('view-guru-dashboard');
-    } else if (currentUser.role === 'admin') {
-        initAdminDashboard();
-        showView('view-admin-dashboard');
-    }
+function requestFullScreen() {
+  const elem = document.documentElement;
+  if (elem.requestFullscreen) elem.requestFullscreen();
+  else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
 }
 
-// =========================================================================
-// 4. MURID & CBT ENGINE (ANTI-KECURANGAN)
-// =========================================================================
-function initMuridDashboard() {
-    document.getElementById('student-welcome-name').textContent = currentUser.name;
-    document.getElementById('student-welcome-class').textContent = currentUser.class_name || '7A';
-
-    const container = document.getElementById('student-schedules-list');
-    container.innerHTML = '';
-
-    const schedules = DEMO_STATE.schedules;
-    if (schedules.length === 0) {
-        container.innerHTML = `<div class="p-6 text-center text-xs text-gray-500">Belum ada jadwal ujian aktif untuk kelas Anda.</div>`;
-        return;
-    }
-
-    schedules.forEach(sch => {
-        const item = document.createElement('div');
-        item.className = 'p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-gray-50';
-        item.innerHTML = `
-            <div>
-                <h4 class="font-bold text-gray-800 text-sm">${sch.subject_name}</h4>
-                <div class="text-xs text-gray-500 flex items-center gap-3 mt-1">
-                    <span>Durasi: <strong>${sch.duration_minutes} Menit</strong></span>
-                    <span>Kelas: <strong>${sch.class_name}</strong></span>
-                </div>
-            </div>
-            <button onclick="startExam('${sch.id}')" class="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg text-xs shadow flex items-center gap-1 transition">
-                <i data-lucide="play-circle" class="w-4 h-4"></i> Kerjakan Ujian
-            </button>
-        `;
-        container.appendChild(item);
-    });
-    if (window.lucide) lucide.createIcons();
+// ROLE SWITCH & AUTHENTICATION
+function switchRole(role) {
+  currentRole = role;
+  document.querySelectorAll('.role-selector button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('label-user').innerText = role === 'murid' ? 'NISN / ID Siswa' : 'Username';
 }
 
-function startExam(scheduleId) {
-    const sch = DEMO_STATE.schedules.find(s => s.id === scheduleId) || DEMO_STATE.schedules[0];
-    const questions = DEMO_STATE.questions.filter(q => q.subject_id === sch.subject_id);
+async function handleLogin(e) {
+  e.preventDefault();
+  const u = document.getElementById('login-username').value;
+  const p = document.getElementById('login-password').value;
 
-    if (questions.length === 0) {
-        alert('Belum ada soal pada mata pelajaran ini!');
-        return;
-    }
+  if (currentRole === 'murid') {
+    const { data, error } = await supabase.from('siswa').select('*').eq('nisn', u).eq('password', p).single();
+    if (error || !data) return alert('NISN atau Password Salah!');
+    currentUser = data;
+    startExamSession();
+  } else {
+    const { data, error } = await supabase.from('admin').select('*').eq('username', u).eq('password', p).single();
+    if (error || !data) return alert('Username/Password Admin/Guru Salah!');
+    currentUser = data;
+    showDashboard(data.role);
+  }
+}
 
-    currentExam = {
-        schedule: sch,
-        questions: questions,
-        userAnswers: {},
-        doubtful: {},
-        currentIndex: 0,
-        timerInterval: null,
-        remainingSeconds: sch.duration_minutes * 60,
-        violationsCount: 0
-    };
+// LOGIKA UJIAN MURID
+async function startExamSession() {
+  document.getElementById('view-login').classList.add('hidden');
+  document.getElementById('view-murid').classList.remove('hidden');
+  document.getElementById('student-info').innerText = `${currentUser.nama} (${currentUser.kelas})`;
 
-    document.getElementById('cbt-title').textContent = sch.subject_name;
-    document.getElementById('cbt-student-info').textContent = `${currentUser.name} (${currentUser.class_name})`;
+  // Load Soal Sesuai Kelas Siswa
+  const { data } = await supabase.from('soal').select('*').eq('kelas', currentUser.kelas);
+  questions = data || [];
 
-    document.body.classList.add('exam-mode');
+  if (questions.length === 0) {
+    alert("Belum ada soal untuk kelas Anda!");
+    return logout();
+  }
 
-    startTimer();
-    renderCBTQuestion();
-    renderCBTGrid();
-    showView('view-murid-cbt');
+  // Restore LocalStorage Autosave
+  const saved = localStorage.getItem(`exam_ans_${currentUser.nisn}`);
+  if (saved) userAnswers = JSON.parse(saved);
+
+  startTime = new Date().toISOString();
+  requestFullScreen();
+  startTimer();
+  renderNavigationGrid();
+  loadQuestion(0);
 }
 
 function startTimer() {
-    clearInterval(currentExam.timerInterval);
-    currentExam.timerInterval = setInterval(() => {
-        currentExam.remainingSeconds--;
-        const hours = Math.floor(currentExam.remainingSeconds / 3600);
-        const minutes = Math.floor((currentExam.remainingSeconds % 3600) / 60);
-        const seconds = currentExam.remainingSeconds % 60;
+  examTimer = setInterval(() => {
+    totalTimeSeconds--;
+    const m = Math.floor(totalTimeSeconds / 60);
+    const s = totalTimeSeconds % 60;
+    document.getElementById('timer-display').innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
 
-        document.getElementById('cbt-timer').textContent = 
-            `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
-        if (currentExam.remainingSeconds <= 0) {
-            clearInterval(currentExam.timerInterval);
-            alert('Waktu ujian telah habis! Jawaban Anda akan terkirim secara otomatis.');
-            submitExam();
-        }
-    }, 1000);
+    if (totalTimeSeconds <= 0) {
+      clearInterval(examTimer);
+      alert('Waktu Ujian Habis!');
+      submitExam(false);
+    }
+  }, 1000);
 }
 
-function renderCBTQuestion() {
-    const q = currentExam.questions[currentExam.currentIndex];
-    document.getElementById('cbt-q-num').textContent = currentExam.currentIndex + 1;
-    document.getElementById('cbt-q-text').textContent = q.question_text;
+function loadQuestion(index) {
+  currentQIndex = index;
+  const q = questions[index];
+  document.getElementById('question-number').innerText = `Soal No. ${index + 1}`;
+  document.getElementById('question-text').innerText = q.pertanyaan;
+  document.getElementById('question-type').innerText = q.tipe_soal === 'pg' ? 'Pilihan Ganda' : q.tipe_soal === 'multi' ? 'Pilihan Lebih Dari Satu' : 'Benar / Salah';
 
-    document.getElementById('cbt-doubtful-check').checked = !!currentExam.doubtful[currentExam.currentIndex];
+  const container = document.getElementById('options-container');
+  container.innerHTML = '';
 
-    const optionsContainer = document.getElementById('cbt-options');
-    optionsContainer.innerHTML = '';
+  const ans = userAnswers[q.id_soal];
 
-    const opts = [
-        { key: 'A', text: q.option_a },
-        { key: 'B', text: q.option_b },
-        { key: 'C', text: q.option_c },
-        { key: 'D', text: q.option_d }
-    ];
-
-    opts.forEach(opt => {
-        const selected = currentExam.userAnswers[currentExam.currentIndex] === opt.key;
-        const optBtn = document.createElement('div');
-        optBtn.onclick = () => selectAnswer(opt.key);
-        optBtn.className = `p-3.5 rounded-lg border flex items-center gap-3 cursor-pointer transition ${
-            selected ? 'bg-brand-50 border-brand-600 text-brand-900 font-semibold shadow-sm' : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-700'
-        }`;
-        optBtn.innerHTML = `
-            <div class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
-                selected ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600'
-            }">${opt.key}</div>
-            <div class="text-sm">${opt.text}</div>
+  if (q.tipe_soal === 'pg') {
+    ['A', 'B', 'C', 'D'].forEach(opt => {
+      if (q[`opsi_${opt.toLowerCase()}`]) {
+        container.innerHTML += `
+          <label><input type="radio" name="opt" value="${opt}" ${ans === opt ? 'checked' : ''} onchange="saveAnswer('${opt}')"> ${opt}. ${q[`opsi_${opt.toLowerCase()}`]}</label>
         `;
-        optionsContainer.appendChild(optBtn);
+      }
     });
-
-    document.getElementById('btn-prev-q').disabled = currentExam.currentIndex === 0;
-}
-
-function selectAnswer(optionKey) {
-    currentExam.userAnswers[currentExam.currentIndex] = optionKey;
-    renderCBTQuestion();
-    renderCBTGrid();
-}
-
-function toggleDoubtful() {
-    const isChecked = document.getElementById('cbt-doubtful-check').checked;
-    currentExam.doubtful[currentExam.currentIndex] = isChecked;
-    renderCBTGrid();
-}
-
-function prevQuestion() {
-    if (currentExam.currentIndex > 0) {
-        currentExam.currentIndex--;
-        renderCBTQuestion();
-    }
-}
-
-function nextQuestion() {
-    if (currentExam.currentIndex < currentExam.questions.length - 1) {
-        currentExam.currentIndex++;
-        renderCBTQuestion();
-    }
-}
-
-function jumpToQuestion(idx) {
-    currentExam.currentIndex = idx;
-    renderCBTQuestion();
-}
-
-function renderCBTGrid() {
-    const grid = document.getElementById('cbt-grid-nav');
-    grid.innerHTML = '';
-
-    currentExam.questions.forEach((q, idx) => {
-        const isAnswered = currentExam.userAnswers[idx] !== undefined;
-        const isDoubt = currentExam.doubtful[idx];
-        const isCurrent = idx === currentExam.currentIndex;
-
-        let bgClass = 'bg-white text-gray-700 border-gray-300';
-        if (isDoubt) {
-            bgClass = 'bg-amber-400 text-white border-amber-500 font-bold';
-        } else if (isAnswered) {
-            bgClass = 'bg-brand-600 text-white border-brand-700 font-bold';
-        }
-
-        const activeRing = isCurrent ? 'ring-2 ring-brand-800 ring-offset-1' : '';
-
-        const btn = document.createElement('button');
-        btn.onclick = () => jumpToQuestion(idx);
-        btn.className = `h-9 w-full rounded border text-xs font-semibold flex items-center justify-center ${bgClass} ${activeRing}`;
-        btn.textContent = idx + 1;
-        grid.appendChild(btn);
+  } else if (q.tipe_soal === 'bs') {
+    ['BENAR', 'SALAH'].forEach(opt => {
+      container.innerHTML += `
+        <label><input type="radio" name="opt" value="${opt}" ${ans === opt ? 'checked' : ''} onchange="saveAnswer('${opt}')"> ${opt}</label>
+      `;
     });
-}
-
-function setupAntiCheatingGlobal() {
-    document.addEventListener('contextmenu', (e) => {
-        if (document.body.classList.contains('exam-mode')) {
-            e.preventDefault();
-            alert('Fitur klik kanan dinonaktifkan selama ujian berlangsung!');
-        }
+  } else if (q.tipe_soal === 'multi') {
+    const arrAns = Array.isArray(ans) ? ans : [];
+    ['A', 'B', 'C', 'D'].forEach(opt => {
+      if (q[`opsi_${opt.toLowerCase()}`]) {
+        container.innerHTML += `
+          <label><input type="checkbox" name="opt_multi" value="${opt}" ${arrAns.includes(opt) ? 'checked' : ''} onchange="saveMultiAnswer()"> ${opt}. ${q[`opsi_${opt.toLowerCase()}`]}</label>
+        `;
+      }
     });
+  }
 
-    document.addEventListener('keydown', (e) => {
-        if (!document.body.classList.contains('exam-mode')) return;
-
-        if (
-            e.key === 'F12' ||
-            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
-            (e.ctrlKey && (e.key === 'u' || e.key === 'c' || e.key === 'v' || e.key === 'a'))
-        ) {
-            e.preventDefault();
-            alert('Aksi tombol kombinasi disekat oleh sistem anti-kecurangan!');
-        }
-    });
-
-    window.addEventListener('visibilitychange', handleCheatingDetection);
-    window.addEventListener('blur', handleCheatingDetection);
+  document.getElementById('flag-checkbox').checked = !!flaggedQuestions[q.id_soal];
+  renderNavigationGrid();
 }
 
-function handleCheatingDetection() {
-    if (!document.body.classList.contains('exam-mode')) return;
-
-    if (document.hidden || !document.hasFocus()) {
-        currentExam.violationsCount++;
-        alert(`PERINGATAN PELANGGARAN (${currentExam.violationsCount}/3)!\n\nTerdeteksi meninggalkan layar ujian. Batas maksimal melanggar adalah 3x.`);
-
-        if (currentExam.violationsCount >= 3) {
-            alert('Anda telah melanggar aturan ujian sebanyak 3 kali! Ujian dihentikan secara otomatis.');
-            submitExam();
-        }
-    }
+function saveAnswer(val) {
+  const qId = questions[currentQIndex].id_soal;
+  userAnswers[qId] = val;
+  localStorage.setItem(`exam_ans_${currentUser.nisn}`, JSON.stringify(userAnswers));
+  renderNavigationGrid();
 }
 
-function confirmSubmitExam() {
-    const totalQ = currentExam.questions.length;
-    const answeredQ = Object.keys(currentExam.userAnswers).length;
+function saveMultiAnswer() {
+  const qId = questions[currentQIndex].id_soal;
+  const selected = Array.from(document.querySelectorAll('input[name="opt_multi"]:checked')).map(cb => cb.value);
+  userAnswers[qId] = selected;
+  localStorage.setItem(`exam_ans_${currentUser.nisn}`, JSON.stringify(userAnswers));
+  renderNavigationGrid();
+}
 
-    if (answeredQ < totalQ) {
-        if (!confirm(`Anda baru menjawab ${answeredQ} dari ${totalQ} soal. Yakin ingin menyelesaikan ujian?`)) {
-            return;
-        }
+function toggleFlag() {
+  const qId = questions[currentQIndex].id_soal;
+  flaggedQuestions[qId] = document.getElementById('flag-checkbox').checked;
+  renderNavigationGrid();
+}
+
+function prevQuestion() { if (currentQIndex > 0) loadQuestion(currentQIndex - 1); }
+function nextQuestion() { if (currentQIndex < questions.length - 1) loadQuestion(currentQIndex + 1); }
+
+function renderNavigationGrid() {
+  const grid = document.getElementById('number-grid');
+  grid.innerHTML = '';
+  questions.forEach((q, idx) => {
+    let cls = 'num-btn';
+    if (idx === currentQIndex) cls += ' active';
+    if (userAnswers[q.id_soal] && userAnswers[q.id_soal].length > 0) cls += ' answered';
+    if (flaggedQuestions[q.id_soal]) cls += ' flagged';
+    grid.innerHTML += `<button class="${cls}" onclick="loadQuestion(${idx})">${idx + 1}</button>`;
+  });
+}
+
+function confirmSubmit() {
+  if (confirm("Apakah Anda yakin ingin menyelesaikan dan mengumpulkan ujian?")) {
+    submitExam(false);
+  }
+}
+
+async function submitExam(forcedByViolation) {
+  clearInterval(examTimer);
+  let correctCount = 0;
+
+  // Logika KOREKSI AUTOMATIS
+  questions.forEach(q => {
+    const userAns = userAnswers[q.id_soal];
+    if (q.tipe_soal === 'multi') {
+      const formattedUser = Array.isArray(userAns) ? userAns.sort().join(',') : '';
+      const formattedKey = q.kunci_jawaban.split(',').sort().join(',');
+      if (formattedUser === formattedKey) correctCount++;
     } else {
-        if (!confirm('Apakah Anda yakin ingin menyelesaikan ujian ini?')) {
-            return;
-        }
+      if (userAns === q.kunci_jawaban) correctCount++;
     }
+  });
 
-    submitExam();
+  const finalScore = (correctCount / questions.length) * 100;
+
+  // Simpan ke Supabase
+  await supabase.from('hasil').insert([{
+    nisn: currentUser.nisn,
+    nama: currentUser.nama,
+    kelas: currentUser.kelas,
+    mata_pelajaran: questions[0].mata_pelajaran,
+    nilai: finalScore.toFixed(2),
+    waktu_mulai: startTime,
+    waktu_selesai: new Date().toISOString(),
+    jumlah_pelanggaran: violationCount
+  }]);
+
+  // Cleanup & Redirect
+  localStorage.removeItem(`exam_ans_${currentUser.nisn}`);
+  alert(`Ujian Selesai!\nNilai Anda: ${finalScore.toFixed(2)}\nJumlah Pelanggaran: ${violationCount}`);
+  location.reload();
 }
 
-function submitExam() {
-    clearInterval(currentExam.timerInterval);
-    document.body.classList.remove('exam-mode');
-
-    let correctCount = 0;
-    currentExam.questions.forEach((q, idx) => {
-        if (currentExam.userAnswers[idx] === q.correct_option) {
-            correctCount++;
-        }
-    });
-
-    const totalQuestions = currentExam.questions.length;
-    const score = Math.round((correctCount / totalQuestions) * 100);
-
-    const resultRecord = {
-        id: 'res_' + Date.now(),
-        student_id: currentUser.id,
-        student_name: currentUser.name,
-        subject_id: currentExam.schedule.subject_id,
-        subject_name: currentExam.schedule.subject_name,
-        score: score,
-        total_questions: totalQuestions,
-        correct_answers: correctCount,
-        violations_count: currentExam.violationsCount,
-        submitted_at: new Date().toLocaleString()
-    };
-
-    DEMO_STATE.results.push(resultRecord);
-
-    alert(`Ujian Selesai!\n\nNilai Anda: ${score}\nBenar: ${correctCount}/${totalQuestions}\nPelanggaran Terdeteksi: ${currentExam.violationsCount}`);
-    
-    navigateDashboardByRole();
+// DASHBOARD GURU & ADMIN
+function showDashboard(role) {
+  document.getElementById('view-login').classList.add('hidden');
+  document.getElementById('view-dashboard').classList.remove('hidden');
+  if (role === 'admin') {
+    document.querySelectorAll('.admin-only').forEach(e => e.classList.remove('hidden'));
+  }
+  loadResultsTab();
 }
 
-// =========================================================================
-// 5. GURU DASHBOARD
-// =========================================================================
-function initGuruDashboard() {
-    const subjectSelect = document.getElementById('guru-subject-select');
-    subjectSelect.innerHTML = '';
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
 
-    DEMO_STATE.subjects.forEach(sub => {
-        const opt = document.createElement('option');
-        opt.value = sub.id;
-        opt.textContent = `${sub.name} (Kelas ${sub.class_name})`;
-        subjectSelect.appendChild(opt);
-    });
+  document.getElementById(`tab-btn-${tabName}`).classList.add('active');
+  document.getElementById(`tab-${tabName}`).classList.remove('hidden');
 
-    loadGuruQuestions();
-    loadGuruResults();
+  if (tabName === 'results') loadResultsTab();
+  if (tabName === 'questions') loadQuestionsTab();
+  if (tabName === 'users') loadUsersTab();
 }
 
-function switchGuruTab(tab) {
-    if (tab === 'soal') {
-        document.getElementById('guru-tab-soal-content').classList.remove('hidden');
-        document.getElementById('guru-tab-hasil-content').classList.add('hidden');
-        document.getElementById('tab-guru-soal').className = 'px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm';
-        document.getElementById('tab-guru-hasil').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm';
-    } else {
-        document.getElementById('guru-tab-soal-content').classList.add('hidden');
-        document.getElementById('guru-tab-hasil-content').classList.remove('hidden');
-        document.getElementById('tab-guru-soal').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm';
-        document.getElementById('tab-guru-hasil').className = 'px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm';
-    }
+async function loadResultsTab() {
+  const { data } = await supabase.from('hasil').select('*').order('timestamp', { ascending: false });
+  const tbody = document.getElementById('table-results-body');
+  tbody.innerHTML = '';
+  let totalScore = 0;
+
+  (data || []).forEach(r => {
+    totalScore += parseFloat(r.nilai);
+    tbody.innerHTML += `
+      <tr>
+        <td>${new Date(r.timestamp).toLocaleString()}</td>
+        <td>${r.nisn}</td><td>${r.nama}</td><td>${r.kelas}</td>
+        <td>${r.mata_pelajaran}</td><td><b>${r.nilai}</b></td>
+        <td><span class="${r.jumlah_pelanggaran > 0 ? 'badge danger' : ''}">${r.jumlah_pelanggaran}x</span></td>
+      </tr>
+    `;
+  });
+
+  document.getElementById('stat-total').innerText = data ? data.length : 0;
+  document.getElementById('stat-avg').innerText = data && data.length ? (totalScore / data.length).toFixed(2) : 0;
 }
 
-function loadGuruQuestions() {
-    const subjectId = document.getElementById('guru-subject-select').value;
-    const tbody = document.getElementById('guru-questions-tbody');
-    tbody.innerHTML = '';
-
-    const qList = DEMO_STATE.questions.filter(q => q.subject_id === subjectId);
-
-    if (qList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Belum ada soal pada mata pelajaran ini.</td></tr>`;
-        return;
-    }
-
-    qList.forEach((q, idx) => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-gray-50';
-        tr.innerHTML = `
-            <td class="p-3 text-center font-bold text-gray-600">${idx + 1}</td>
-            <td class="p-3 max-w-md font-medium text-gray-800">${q.question_text}</td>
-            <td class="p-3 text-gray-600 text-[11px]">
-                A: ${q.option_a} | B: ${q.option_b}<br>C: ${q.option_c} | D: ${q.option_d}
-            </td>
-            <td class="p-3 text-center font-bold text-brand-700">${q.correct_option}</td>
-            <td class="p-3 text-center space-x-1">
-                <button onclick="deleteQuestion('${q.id}')" class="text-red-600 hover:text-red-800 font-semibold text-xs">Hapus</button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
+// MANAGEMENT SOAL & DYNAMIC FORM
+function renderOptionsInput() {
+  const type = document.getElementById('soal-tipe').value;
+  const container = document.getElementById('dynamic-options');
+  if (type === 'bs') {
+    container.innerHTML = '<p>Pilihan otomatis: BENAR / SALAH</p>';
+  } else {
+    container.innerHTML = `
+      <input type="text" id="opt-a" placeholder="Opsi A" required>
+      <input type="text" id="opt-b" placeholder="Opsi B" required>
+      <input type="text" id="opt-c" placeholder="Opsi C">
+      <input type="text" id="opt-d" placeholder="Opsi D">
+    `;
+  }
 }
 
-function deleteQuestion(id) {
-    if (confirm('Hapus soal ini?')) {
-        const idx = DEMO_STATE.questions.findIndex(q => q.id === id);
-        if (idx !== -1) DEMO_STATE.questions.splice(idx, 1);
-        loadGuruQuestions();
-    }
+async function saveQuestion(e) {
+  e.preventDefault();
+  const tipe = document.getElementById('soal-tipe').value;
+  const payload = {
+    mata_pelajaran: document.getElementById('soal-mapel').value,
+    kelas: document.getElementById('soal-kelas').value,
+    tipe_soal: tipe,
+    pertanyaan: document.getElementById('soal-pertanyaan').value,
+    opsi_a: tipe === 'bs' ? 'BENAR' : document.getElementById('opt-a')?.value,
+    opsi_b: tipe === 'bs' ? 'SALAH' : document.getElementById('opt-b')?.value,
+    opsi_c: tipe === 'bs' ? '' : document.getElementById('opt-c')?.value,
+    opsi_d: tipe === 'bs' ? '' : document.getElementById('opt-d')?.value,
+    kunci_jawaban: document.getElementById('soal-kunci').value.toUpperCase()
+  };
+
+  await supabase.from('soal').insert([payload]);
+  alert('Soal Berhasil Disimpan!');
+  loadQuestionsTab();
 }
 
-function openModalAddQuestion() {
-    document.getElementById('modal-add-question').classList.remove('hidden');
+async function loadQuestionsTab() {
+  const { data } = await supabase.from('soal').select('*');
+  const tbody = document.getElementById('table-soal-body');
+  tbody.innerHTML = '';
+  (data || []).forEach(q => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${q.mata_pelajaran} (${q.kelas})</td>
+        <td>${q.tipe_soal}</td><td>${q.pertanyaan}</td><td>${q.kunci_jawaban}</td>
+        <td><button class="btn-danger" onclick="deleteQuestion(${q.id_soal})">Hapus</button></td>
+      </tr>
+    `;
+  });
 }
 
-function closeModalAddQuestion() {
-    document.getElementById('modal-add-question').classList.add('hidden');
+async function deleteQuestion(id) {
+  if (confirm("Hapus soal ini?")) {
+    await supabase.from('soal').delete().eq('id_soal', id);
+    loadQuestionsTab();
+  }
 }
 
-function saveQuestionForm(e) {
-    e.preventDefault();
-    const subjectId = document.getElementById('guru-subject-select').value;
-    const newQ = {
-        id: 'q_' + Date.now(),
-        subject_id: subjectId,
-        question_text: document.getElementById('fq-text').value,
-        option_a: document.getElementById('fq-a').value,
-        option_b: document.getElementById('fq-b').value,
-        option_c: document.getElementById('fq-c').value,
-        option_d: document.getElementById('fq-d').value,
-        correct_option: document.getElementById('fq-correct').value
-    };
-
-    DEMO_STATE.questions.push(newQ);
-    closeModalAddQuestion();
-    loadGuruQuestions();
-    alert('Soal berhasil ditambahkan!');
+// MANAGEMENT USER & EXCEL UPLOAD
+async function loadUsersTab() {
+  const { data } = await supabase.from('siswa').select('*');
+  const tbody = document.getElementById('table-users-body');
+  tbody.innerHTML = '';
+  (data || []).forEach(s => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${s.nisn}</td><td>${s.nama}</td><td>${s.kelas}</td><td>${s.password}</td>
+        <td><button class="btn-danger" onclick="deleteUser('${s.nisn}')">Hapus</button></td>
+      </tr>
+    `;
+  });
 }
 
-function loadGuruResults() {
-    const tbody = document.getElementById('guru-results-tbody');
-    tbody.innerHTML = '';
-
-    if (DEMO_STATE.results.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Belum ada siswa yang menyelesaikan ujian.</td></tr>`;
-        return;
-    }
-
-    DEMO_STATE.results.forEach(res => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-gray-50';
-        tr.innerHTML = `
-            <td class="p-3 font-semibold text-gray-800">${res.student_name}</td>
-            <td class="p-3 text-gray-600">${res.subject_name}</td>
-            <td class="p-3 text-center font-bold text-brand-700 text-sm">${res.score}</td>
-            <td class="p-3 text-center text-gray-600">${res.correct_answers} / ${res.total_questions}</td>
-            <td class="p-3 text-center">
-                <span class="px-2 py-0.5 rounded text-xs font-bold ${res.violations_count > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">
-                    ${res.violations_count} Pelanggaran
-                </span>
-            </td>
-            <td class="p-3 text-right text-gray-500">${res.submitted_at}</td>
-        `;
-        tbody.appendChild(tr);
-    });
+async function saveUser(e) {
+  e.preventDefault();
+  await supabase.from('siswa').insert([{
+    nisn: document.getElementById('user-nisn').value,
+    nama: document.getElementById('user-nama').value,
+    kelas: document.getElementById('user-kelas').value,
+    password: document.getElementById('user-pass').value
+  }]);
+  alert('Siswa berhasil ditambahkan!');
+  loadUsersTab();
 }
 
-// =========================================================================
-// 6. ADMIN DASHBOARD
-// =========================================================================
-function initAdminDashboard() {
-    loadAdminStats();
-    loadAdminUsers();
-    loadAdminSchedules();
+async function deleteUser(nisn) {
+  if (confirm("Hapus akun siswa ini?")) {
+    await supabase.from('siswa').delete().eq('nisn', nisn);
+    loadUsersTab();
+  }
 }
 
-function loadAdminStats() {
-    const results = DEMO_STATE.results;
-    const totalUsers = DEMO_STATE.users.length;
-    let totalScore = 0;
-    let totalViolations = 0;
+function uploadExcelUsers(e) {
+  const reader = new FileReader();
+  reader.onload = async function(evt) {
+    const data = new Uint8Array(evt.target.result);
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(sheet); // Format Excel Header: NISN, Nama, Kelas, Password
 
-    results.forEach(r => {
-        totalScore += r.score;
-        totalViolations += r.violations_count;
-    });
+    const formatted = json.map(x => ({
+      nisn: String(x.NISN),
+      nama: x.Nama,
+      kelas: x.Kelas,
+      password: String(x.Password)
+    }));
 
-    const avgScore = results.length > 0 ? (totalScore / results.length).toFixed(1) : '0.0';
-
-    document.getElementById('admin-stat-avg-score').textContent = avgScore;
-    document.getElementById('admin-stat-total-users').textContent = totalUsers;
-    document.getElementById('admin-stat-total-violations').textContent = totalViolations;
+    await supabase.from('siswa').upsert(formatted);
+    alert('Import Akun Excel Berhasil!');
+    loadUsersTab();
+  };
+  reader.readAsArrayBuffer(e.target.files[0]);
 }
 
-function switchAdminTab(tab) {
-    if (tab === 'users') {
-        document.getElementById('admin-tab-users-content').classList.remove('hidden');
-        document.getElementById('admin-tab-schedules-content').classList.add('hidden');
-        document.getElementById('tab-admin-users').className = 'px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm';
-        document.getElementById('tab-admin-schedules').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm';
-    } else {
-        document.getElementById('admin-tab-users-content').classList.add('hidden');
-        document.getElementById('admin-tab-schedules-content').classList.remove('hidden');
-        document.getElementById('tab-admin-users').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm';
-        document.getElementById('tab-admin-schedules').className = 'px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm';
-    }
-}
-
-function loadAdminUsers() {
-    const tbody = document.getElementById('admin-users-tbody');
-    tbody.innerHTML = '';
-
-    DEMO_STATE.users.forEach(u => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-gray-50';
-        tr.innerHTML = `
-            <td class="p-3 font-semibold text-gray-800">${u.name}</td>
-            <td class="p-3"><span class="px-2 py-0.5 rounded text-xs uppercase font-bold bg-gray-100 text-gray-700">${u.role}</span></td>
-            <td class="p-3 text-gray-600">${u.class_name || '-'}</td>
-            <td class="p-3 text-center">
-                <button onclick="deleteUser('${u.id}')" class="text-red-600 hover:text-red-800 font-semibold text-xs">Hapus</button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-function deleteUser(id) {
-    if (confirm('Hapus pengguna ini?')) {
-        const idx = DEMO_STATE.users.findIndex(u => u.id === id);
-        if (idx !== -1) DEMO_STATE.users.splice(idx, 1);
-        loadAdminUsers();
-        loadAdminStats();
-    }
-}
-
-function openModalAddUser() {
-    document.getElementById('modal-add-user').classList.remove('hidden');
-}
-
-function closeModalAddUser() {
-    document.getElementById('modal-add-user').classList.add('hidden');
-}
-
-function saveUserForm(e) {
-    e.preventDefault();
-    const newUser = {
-        id: 'u_' + Date.now(),
-        name: document.getElementById('fu-name').value,
-        role: document.getElementById('fu-role').value,
-        class_name: document.getElementById('fu-class').value || '-'
-    };
-
-    DEMO_STATE.users.push(newUser);
-    closeModalAddUser();
-    loadAdminUsers();
-    loadAdminStats();
-    alert('User berhasil ditambahkan!');
-}
-
-function loadAdminSchedules() {
-    const tbody = document.getElementById('admin-schedules-tbody');
-    tbody.innerHTML = '';
-
-    DEMO_STATE.schedules.forEach(sch => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-gray-50';
-        tr.innerHTML = `
-            <td class="p-3 font-semibold text-gray-800">${sch.subject_name}</td>
-            <td class="p-3 text-gray-600">${sch.class_name}</td>
-            <td class="p-3 text-gray-500 text-[11px]">${sch.start_time.replace('T', ' ')} s.d ${sch.end_time.replace('T', ' ')}</td>
-            <td class="p-3 text-center font-bold text-gray-700">${sch.duration_minutes} Mins</td>
-            <td class="p-3 text-center">
-                <span class="px-2 py-0.5 rounded text-xs font-bold ${sch.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}">
-                    ${sch.is_active ? 'Aktif' : 'Nonaktif'}
-                </span>
-            </td>
-            <td class="p-3 text-center">
-                <button onclick="deleteSchedule('${sch.id}')" class="text-red-600 hover:text-red-800 font-semibold text-xs">Hapus</button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-function deleteSchedule(id) {
-    if (confirm('Hapus jadwal ini?')) {
-        const idx = DEMO_STATE.schedules.findIndex(s => s.id === id);
-        if (idx !== -1) DEMO_STATE.schedules.splice(idx, 1);
-        loadAdminSchedules();
-    }
-}
-
-function openModalAddSchedule() {
-    const subSelect = document.getElementById('fs-subject');
-    subSelect.innerHTML = '';
-    DEMO_STATE.subjects.forEach(sub => {
-        const opt = document.createElement('option');
-        opt.value = sub.id;
-        opt.textContent = `${sub.name} (${sub.class_name})`;
-        subSelect.appendChild(opt);
-    });
-    document.getElementById('modal-add-schedule').classList.remove('hidden');
-}
-
-function closeModalAddSchedule() {
-    document.getElementById('modal-add-schedule').classList.add('hidden');
-}
-
-function saveScheduleForm(e) {
-    e.preventDefault();
-    const subId = document.getElementById('fs-subject').value;
-    const subObj = DEMO_STATE.subjects.find(s => s.id === subId);
-
-    const newSch = {
-        id: 'sch_' + Date.now(),
-        subject_id: subId,
-        subject_name: subObj ? subObj.name : 'Mata Pelajaran',
-        class_name: subObj ? subObj.class_name : '7A',
-        start_time: document.getElementById('fs-start').value,
-        end_time: document.getElementById('fs-end').value,
-        duration_minutes: parseInt(document.getElementById('fs-duration').value) || 60,
-        is_active: true
-    };
-
-    DEMO_STATE.schedules.push(newSch);
-    closeModalAddSchedule();
-    loadAdminSchedules();
-    alert('Jadwal Ujian berhasil dibuat!');
-}
-
-// =========================================================================
-// 7. SUPABASE CONFIG MODAL LOGIC
-// =========================================================================
-function openConfigModal() {
-    document.getElementById('cfg-supabase-url').value = SUPABASE_URL;
-    document.getElementById('cfg-supabase-key').value = SUPABASE_KEY;
-    document.getElementById('modal-config').classList.remove('hidden');
-}
-
-function closeConfigModal() {
-    document.getElementById('modal-config').classList.add('hidden');
-}
-
-function saveSupabaseConfig() {
-    const url = document.getElementById('cfg-supabase-url').value.trim();
-    const key = document.getElementById('cfg-supabase-key').value.trim();
-
-    localStorage.setItem('cbt_sb_url', url);
-    localStorage.setItem('cbt_sb_key', key);
-
-    SUPABASE_URL = url;
-    SUPABASE_KEY = key;
-
-    if (url && key) {
-        try {
-            supabase = window.supabase.createClient(url, key);
-        } catch (e) {
-            console.error("Inisialisasi Supabase gagal:", e);
-        }
-    }
-
-    closeConfigModal();
-    checkDatabaseConnectionStatus();
-    alert('Konfigurasi Supabase disimpan!');
-}
+function logout() { location.reload(); }
