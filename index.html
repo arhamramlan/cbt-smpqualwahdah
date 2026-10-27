@@ -33,7 +33,7 @@
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800 flex flex-col justify-between selection:bg-brand-500 selection:text-white">
 
-    <!-- Navbar Minimalis -->
+    <!-- Header / Navbar -->
     <header class="bg-brand-800 text-white shadow-md sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-3">
@@ -58,14 +58,14 @@
         </div>
     </header>
 
-    <!-- Main Container / Views -->
+    <!-- Main Content Container -->
     <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
 
-        <!-- Banner Indikator Koneksi Demo / Supabase -->
+        <!-- Banner Indikator Koneksi Supabase / Demo -->
         <div id="db-status-banner" class="mb-4 p-3 bg-amber-100 border border-amber-300 text-amber-800 rounded-lg text-xs flex justify-between items-center shadow-sm">
             <span class="flex items-center gap-2">
                 <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
-                <span id="db-status-text"><strong>Mode Standalone/Demo Active:</strong> Konfigurasi Supabase URL & Anon Key belum diisi di `app.js`. Menggunakan penyimpanan lokal sementara.</span>
+                <span id="db-status-text"><strong>Mode Standalone/Demo Active:</strong> Menggunakan penyimpanan lokal sementara.</span>
             </span>
             <button onclick="openConfigModal()" class="underline font-semibold hover:text-amber-900">Pengaturan Supabase</button>
         </div>
@@ -98,27 +98,18 @@
                             <option value="admin">Administrator Sekolah</option>
                         </select>
                     </div>
-                
+
                     <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2 rounded-lg text-sm shadow transition duration-150 flex justify-center items-center gap-2">
                         <i data-lucide="log-in" class="w-4 h-4"></i> Masuk Sekarang
                     </button>
                 </form>
-                
+
                 <div class="mt-6 pt-4 border-t text-center text-xs text-gray-500">
                     <p class="font-semibold text-gray-600 mb-2">Akun Uji Coba Demo Instant:</p>
                     <div class="flex justify-center gap-1">
-                        <!-- Menggunakan type="button" agar tidak mentrigger reload/submit form -->
                         <button type="button" onclick="loginDemoDirect('murid')" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border text-gray-700 text-[11px]">Murid</button>
                         <button type="button" onclick="loginDemoDirect('guru')" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border text-gray-700 text-[11px]">Guru</button>
                         <button type="button" onclick="loginDemoDirect('admin')" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border text-gray-700 text-[11px]">Admin</button>
-                    </div>
-                </div>
-                <div class="mt-6 pt-4 border-t text-center text-xs text-gray-500">
-                    <p class="font-semibold text-gray-600 mb-2">Akun Uji Coba Demo Instant:</p>
-                    <div class="flex justify-center gap-1">
-                        <button type="button" onclick="fillDemoAcc('murid', event)" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border text-gray-700 text-[11px]">Murid</button>
-                        <button type="button" onclick="fillDemoAcc('guru', event)" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border text-gray-700 text-[11px]">Guru</button>
-                        <button type="button" onclick="fillDemoAcc('admin', event)" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded border text-gray-700 text-[11px]">Admin</button>
                     </div>
                 </div>
             </div>
@@ -140,15 +131,14 @@
                     </h3>
                 </div>
                 <div id="student-schedules-list" class="divide-y divide-gray-100">
-                    <!-- Dynamic rendering via JS -->
+                    <!-- Dynamic Rendering -->
                 </div>
             </div>
         </section>
 
-        <!-- 3. MURID CBT ENGINE VIEW (RUANG UJIAN) -->
+        <!-- 3. MURID CBT ENGINE VIEW -->
         <section id="view-murid-cbt" class="hidden">
             <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                <!-- Header CBT & Timer -->
                 <div class="bg-brand-900 text-white p-4 flex justify-between items-center sticky top-0 z-30 shadow">
                     <div>
                         <h2 id="cbt-title" class="font-bold text-base md:text-lg">Ujian Mata Pelajaran</h2>
@@ -163,9 +153,7 @@
                     </div>
                 </div>
 
-                <!-- Main CBT Content -->
                 <div class="grid grid-cols-1 lg:grid-cols-4 min-h-[500px]">
-                    <!-- Question Area -->
                     <div class="lg:col-span-3 p-6 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-gray-200">
                         <div>
                             <div class="flex justify-between items-center mb-4 pb-2 border-b">
@@ -185,7 +173,6 @@
                             </div>
                         </div>
 
-                        <!-- CBT Navigation Buttons -->
                         <div class="flex justify-between items-center mt-8 pt-4 border-t">
                             <button onclick="prevQuestion()" id="btn-prev-q" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1 transition">
                                 <i data-lucide="chevron-left" class="w-4 h-4"></i> Sebelumnya
@@ -196,13 +183,12 @@
                         </div>
                     </div>
 
-                    <!-- Question Grid Navigation Side Panel -->
                     <div class="p-5 bg-gray-50">
                         <h4 class="font-bold text-gray-700 text-xs uppercase tracking-wider mb-3 flex items-center gap-1">
                             <i data-lucide="grid" class="w-4 h-4"></i> Navigasi Soal
                         </h4>
                         <div id="cbt-grid-nav" class="grid grid-cols-5 gap-2 max-h-[350px] overflow-y-auto p-1">
-                            <!-- Dynamic grid numbers -->
+                            <!-- Dynamic Grid -->
                         </div>
 
                         <div class="mt-6 pt-4 border-t space-y-2 text-xs">
@@ -221,76 +207,60 @@
 
         <!-- 4. GURU DASHBOARD VIEW -->
         <section id="view-guru-dashboard" class="hidden space-y-6">
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
-                <div>
-                    <h2 class="text-xl font-bold text-gray-800">Dashboard Guru / Pengajar</h2>
-                    <p class="text-xs text-gray-500">Manajemen Bank Soal & Hasil Evaluasi Siswa</p>
-                </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                <h2 class="text-xl font-bold text-gray-800">Dashboard Guru / Pengajar</h2>
+                <p class="text-xs text-gray-500">Manajemen Bank Soal & Hasil Evaluasi Siswa</p>
             </div>
 
-            <!-- Tabs Guru -->
             <div class="flex border-b border-gray-200 bg-white rounded-t-xl px-4 pt-2">
                 <button onclick="switchGuruTab('soal')" id="tab-guru-soal" class="px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm">Bank Soal</button>
                 <button onclick="switchGuruTab('hasil')" id="tab-guru-hasil" class="px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm">Monitoring & Hasil Ujian</button>
             </div>
 
-            <!-- Tab Content: Bank Soal -->
             <div id="guru-tab-soal-content" class="bg-white p-6 rounded-b-xl shadow-sm border border-t-0 border-gray-100 space-y-6">
                 <div class="flex flex-col sm:flex-row justify-between gap-4 bg-gray-50 p-4 rounded-lg border">
                     <div class="flex items-center gap-3 w-full sm:w-auto">
                         <label class="text-xs font-semibold text-gray-600 whitespace-nowrap">Mata Pelajaran:</label>
                         <select id="guru-subject-select" onchange="loadGuruQuestions()" class="bg-white border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-500 w-full">
-                            <!-- Dynamic -->
                         </select>
                     </div>
-                    <div class="flex gap-2">
-                        <button onclick="openModalAddQuestion()" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 shadow">
-                            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Soal
-                        </button>
-                        <button onclick="triggerDocUpload()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 shadow">
-                            <i data-lucide="file-up" class="w-4 h-4"></i> Upload Bulk (.doc/.txt)
-                        </button>
-                        <input type="file" id="guru-doc-file-input" accept=".doc,.docx,.txt" class="hidden" onchange="handleBulkDocUpload(event)">
-                    </div>
+                    <button onclick="openModalAddQuestion()" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 shadow">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Tambah Soal Manual
+                    </button>
                 </div>
 
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse">
                         <thead>
                             <tr class="bg-gray-100 text-gray-700 uppercase tracking-wider font-semibold">
-                                <th class="p-3 border-b">No</th>
-                                <th class="p-3 border-b">Pertanyaan / Teks Soal</th>
-                                <th class="p-3 border-b">Pilihan A / B / C / D</th>
+                                <th class="p-3 border-b text-center">No</th>
+                                <th class="p-3 border-b">Pertanyaan</th>
+                                <th class="p-3 border-b">Pilihan Jawaban</th>
                                 <th class="p-3 border-b text-center">Kunci</th>
                                 <th class="p-3 border-b text-center">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="guru-questions-tbody" class="divide-y divide-gray-100">
-                            <!-- Dynamic -->
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Tab Content: Monitoring Hasil -->
             <div id="guru-tab-hasil-content" class="hidden bg-white p-6 rounded-b-xl shadow-sm border border-t-0 border-gray-100 space-y-4">
-                <div class="flex justify-between items-center">
-                    <h3 class="font-bold text-gray-800 text-sm">Rekap Hasil Ujian Siswa Real-time</h3>
-                </div>
+                <h3 class="font-bold text-gray-800 text-sm">Rekap Hasil Ujian Siswa Real-time</h3>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse">
                         <thead>
                             <tr class="bg-gray-100 text-gray-700 uppercase tracking-wider font-semibold">
                                 <th class="p-3 border-b">Siswa</th>
                                 <th class="p-3 border-b">Mata Pelajaran</th>
-                                <th class="p-3 border-b text-center">Skor / Nilai</th>
+                                <th class="p-3 border-b text-center">Nilai</th>
                                 <th class="p-3 border-b text-center">Benar / Total</th>
                                 <th class="p-3 border-b text-center">Pelanggaran</th>
-                                <th class="p-3 border-b text-right">Waktu Selesai</th>
+                                <th class="p-3 border-b text-right">Waktu</th>
                             </tr>
                         </thead>
                         <tbody id="guru-results-tbody" class="divide-y divide-gray-100">
-                            <!-- Dynamic -->
                         </tbody>
                     </table>
                 </div>
@@ -304,55 +274,42 @@
                 <p class="text-xs text-gray-500">Kelola Pengguna, Jadwal Ujian, dan Mata Pelajaran</p>
             </div>
 
-            <!-- Summary Stat Cards -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div>
-                        <div class="text-xs text-gray-500 font-semibold">Rata-Rata Nilai Sekolah</div>
+                        <div class="text-xs text-gray-500 font-semibold">Rata-Rata Nilai</div>
                         <div id="admin-stat-avg-score" class="text-2xl font-bold text-brand-700 mt-1">0.0</div>
                     </div>
                     <div class="bg-brand-50 p-3 rounded-lg text-brand-600"><i data-lucide="award" class="w-6 h-6"></i></div>
                 </div>
                 <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div>
-                        <div class="text-xs text-gray-500 font-semibold">Total Pengguna Terdaftar</div>
+                        <div class="text-xs text-gray-500 font-semibold">Total Pengguna</div>
                         <div id="admin-stat-total-users" class="text-2xl font-bold text-blue-700 mt-1">0</div>
                     </div>
                     <div class="bg-blue-50 p-3 rounded-lg text-blue-600"><i data-lucide="users" class="w-6 h-6"></i></div>
                 </div>
                 <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div>
-                        <div class="text-xs text-gray-500 font-semibold">Total Kecurangan Terdeteksi</div>
+                        <div class="text-xs text-gray-500 font-semibold">Total Pelanggaran</div>
                         <div id="admin-stat-total-violations" class="text-2xl font-bold text-red-600 mt-1">0</div>
                     </div>
                     <div class="bg-red-50 p-3 rounded-lg text-red-600"><i data-lucide="shield-alert" class="w-6 h-6"></i></div>
                 </div>
             </div>
 
-            <!-- Admin Tabs -->
             <div class="flex border-b border-gray-200 bg-white rounded-t-xl px-4 pt-2">
                 <button onclick="switchAdminTab('users')" id="tab-admin-users" class="px-4 py-2 border-b-2 border-brand-600 text-brand-700 font-semibold text-sm">Pengguna (Siswa/Guru)</button>
-                <button onclick="switchAdminTab('schedules')" id="tab-admin-schedules" class="px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm">Mata Pelajaran & Jadwal</button>
+                <button onclick="switchAdminTab('schedules')" id="tab-admin-schedules" class="px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-semibold text-sm">Jadwal Ujian</button>
             </div>
 
-            <!-- Admin Tab Content: Users -->
             <div id="admin-tab-users-content" class="bg-white p-6 rounded-b-xl shadow-sm border border-t-0 border-gray-100 space-y-4">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div class="flex justify-between items-center">
                     <h3 class="font-bold text-gray-800 text-sm">Daftar Akun Sistem</h3>
-                    <div class="flex gap-2 flex-wrap">
-                        <button onclick="openModalAddUser()" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 shadow">
-                            <i data-lucide="user-plus" class="w-4 h-4"></i> Tambah User
-                        </button>
-                        <button onclick="downloadAccountTemplate()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 border px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
-                            <i data-lucide="download" class="w-4 h-4"></i> Template CSV
-                        </button>
-                        <button onclick="triggerCsvUpload()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 shadow">
-                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Bulk Upload CSV
-                        </button>
-                        <input type="file" id="admin-csv-file-input" accept=".csv" class="hidden" onchange="handleBulkCsvUpload(event)">
-                    </div>
+                    <button onclick="openModalAddUser()" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 shadow">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i> Tambah User
+                    </button>
                 </div>
-
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse">
                         <thead>
@@ -364,13 +321,11 @@
                             </tr>
                         </thead>
                         <tbody id="admin-users-tbody" class="divide-y divide-gray-100">
-                            <!-- Dynamic -->
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Admin Tab Content: Schedules -->
             <div id="admin-tab-schedules-content" class="hidden bg-white p-6 rounded-b-xl shadow-sm border border-t-0 border-gray-100 space-y-4">
                 <div class="flex justify-between items-center">
                     <h3 class="font-bold text-gray-800 text-sm">Manajemen Jadwal Ujian CBT</h3>
@@ -378,7 +333,6 @@
                         <i data-lucide="calendar-plus" class="w-4 h-4"></i> Buat Jadwal Ujian
                     </button>
                 </div>
-
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse">
                         <thead>
@@ -387,12 +341,11 @@
                                 <th class="p-3 border-b">Kelas</th>
                                 <th class="p-3 border-b">Waktu Akses</th>
                                 <th class="p-3 border-b text-center">Durasi</th>
-                                <th class="p-3 border-b text-center">Status Aktif</th>
+                                <th class="p-3 border-b text-center">Status</th>
                                 <th class="p-3 border-b text-center">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="admin-schedules-tbody" class="divide-y divide-gray-100">
-                            <!-- Dynamic -->
                         </tbody>
                     </table>
                 </div>
@@ -401,38 +354,38 @@
 
     </main>
 
-    <!-- Modal Konfigurasi Supabase -->
+    <!-- Modals -->
+    <!-- Modal Config Supabase -->
     <div id="modal-config" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
             <h3 class="font-bold text-gray-800 text-base flex items-center gap-2">
                 <i data-lucide="database" class="w-5 h-5 text-brand-600"></i> Pengaturan Supabase Backend
             </h3>
-            <p class="text-xs text-gray-500">Masukkan kredensial Supabase Anda untuk menghubungkan database secara live.</p>
             <div class="space-y-3 text-xs">
                 <div>
                     <label class="block font-semibold mb-1">Supabase URL</label>
-                    <input type="text" id="cfg-supabase-url" placeholder="https://xyz.supabase.co" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500">
+                    <input type="text" id="cfg-supabase-url" placeholder="https://xyz.supabase.co" class="w-full px-3 py-2 border rounded-lg">
                 </div>
                 <div>
                     <label class="block font-semibold mb-1">Supabase Anon Key</label>
-                    <input type="password" id="cfg-supabase-key" placeholder="eyJhbGciOi..." class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500">
+                    <input type="password" id="cfg-supabase-key" placeholder="eyJhbGciOi..." class="w-full px-3 py-2 border rounded-lg">
                 </div>
             </div>
             <div class="flex justify-end gap-2 pt-2">
-                <button onclick="closeConfigModal()" class="px-4 py-2 border rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50">Batal</button>
-                <button onclick="saveSupabaseConfig()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow">Simpan & Hubungkan</button>
+                <button type="button" onclick="closeConfigModal()" class="px-4 py-2 border rounded-lg text-xs font-semibold text-gray-600">Batal</button>
+                <button type="button" onclick="saveSupabaseConfig()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow">Simpan</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal Form Tambah Soal Guru -->
+    <!-- Modal Form Tambah Soal -->
     <div id="modal-add-question" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 class="font-bold text-gray-800 text-base">Tambah / Edit Soal Ujian</h3>
+            <h3 class="font-bold text-gray-800 text-base">Tambah Soal Ujian</h3>
             <form onsubmit="saveQuestionForm(event)" class="space-y-3 text-xs">
                 <div>
-                    <label class="block font-semibold mb-1">Teks Pertanyaan / Soal</label>
-                    <textarea id="fq-text" required rows="3" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500"></textarea>
+                    <label class="block font-semibold mb-1">Teks Pertanyaan</label>
+                    <textarea id="fq-text" required rows="3" class="w-full px-3 py-2 border rounded-lg"></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div>
@@ -453,7 +406,7 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block font-semibold mb-1">Kunci Jawaban Benar</label>
+                    <label class="block font-semibold mb-1">Kunci Jawaban</label>
                     <select id="fq-correct" class="w-full px-3 py-2 border rounded-lg bg-white">
                         <option value="A">A</option>
                         <option value="B">B</option>
@@ -463,13 +416,13 @@
                 </div>
                 <div class="flex justify-end gap-2 pt-3">
                     <button type="button" onclick="closeModalAddQuestion()" class="px-4 py-2 border rounded-lg text-xs font-semibold text-gray-600">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow">Simpan Soal</button>
+                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow">Simpan</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal Form Tambah User Admin -->
+    <!-- Modal Form Tambah User -->
     <div id="modal-add-user" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
             <h3 class="font-bold text-gray-800 text-base">Tambah Akun Pengguna</h3>
@@ -479,7 +432,7 @@
                     <input type="text" id="fu-name" required class="w-full px-3 py-2 border rounded-lg">
                 </div>
                 <div>
-                    <label class="block font-semibold mb-1">Role / Peran</label>
+                    <label class="block font-semibold mb-1">Role</label>
                     <select id="fu-role" class="w-full px-3 py-2 border rounded-lg bg-white">
                         <option value="murid">Murid / Siswa</option>
                         <option value="guru">Guru</option>
@@ -487,26 +440,25 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block font-semibold mb-1">Kelas (Khusus Siswa / Pengampuan)</label>
+                    <label class="block font-semibold mb-1">Kelas</label>
                     <input type="text" id="fu-class" placeholder="Contoh: 7A" class="w-full px-3 py-2 border rounded-lg">
                 </div>
                 <div class="flex justify-end gap-2 pt-3">
                     <button type="button" onclick="closeModalAddUser()" class="px-4 py-2 border rounded-lg text-xs font-semibold text-gray-600">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow">Simpan Akun</button>
+                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow">Simpan</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal Form Tambah Jadwal Admin -->
+    <!-- Modal Form Tambah Jadwal -->
     <div id="modal-add-schedule" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
-            <h3 class="font-bold text-gray-800 text-base">Buat Jadwal Ujian Baru</h3>
+            <h3 class="font-bold text-gray-800 text-base">Buat Jadwal Ujian</h3>
             <form onsubmit="saveScheduleForm(event)" class="space-y-3 text-xs">
                 <div>
                     <label class="block font-semibold mb-1">Mata Pelajaran</label>
                     <select id="fs-subject" class="w-full px-3 py-2 border rounded-lg bg-white">
-                        <!-- Dynamic -->
                     </select>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
@@ -520,12 +472,12 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block font-semibold mb-1">Durasi Ujian (Menit)</label>
+                    <label class="block font-semibold mb-1">Durasi (Menit)</label>
                     <input type="number" id="fs-duration" value="60" required class="w-full px-3 py-2 border rounded-lg">
                 </div>
                 <div class="flex justify-end gap-2 pt-3">
                     <button type="button" onclick="closeModalAddSchedule()" class="px-4 py-2 border rounded-lg text-xs font-semibold text-gray-600">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow">Simpan Jadwal</button>
+                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow">Simpan</button>
                 </div>
             </form>
         </div>
@@ -533,10 +485,10 @@
 
     <!-- Footer -->
     <footer class="bg-white border-t border-gray-200 py-3 text-center text-xs text-gray-500 mt-auto">
-        <p>&copy; 2026 SMP Qur'an Al Wahdah - Single Page Application CBT Engine</p>
+        <p>&copy; 2026 SMP Qur'an Al Wahdah - CBT System</p>
     </footer>
 
-    <!-- App JavaScript Module -->
+    <!-- App JS -->
     <script src="app.js"></script>
 </body>
 </html>
