@@ -6,8 +6,8 @@
 // =========================================================================
 // 1. SUPABASE CLIENT & MOCK DEMO STATE CONFIGURATION
 // =========================================================================
-let SUPABASE_URL = localStorage.getItem('cbt_sb_url') || "";
-let SUPABASE_KEY = localStorage.getItem('cbt_sb_key') || "";
+let SUPABASE_URL = localStorage.getItem('https://wwizvphxjieoorngoszd.supabase.co') || "";
+let SUPABASE_KEY = localStorage.getItem('sb_publishable_i6fQkGiYivOH65lWNqMbvw_tlW08UE_') || "";
 let supabase = null;
 
 if (SUPABASE_URL && SUPABASE_KEY) {
