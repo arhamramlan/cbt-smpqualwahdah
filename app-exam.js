@@ -1,5 +1,5 @@
 // ==========================================
-// APP-EXAM.JS: MODUL UJIAN, MONITORING & LAPORAN GURU
+// APP-EXAM.JS: DROPDOWN GURU, MONITORING & LAPORAN UJIAN
 // ==========================================
 
 window.initTeacherDashboard = function() {
@@ -39,38 +39,41 @@ function populateTeacherDropdowns() {
 
   if (!subSelect || !classSelect) return;
 
-  const assignedSubs = session.assignedSubjects || [];
-  const assignedClasses = session.assignedClasses || [];
+  const assignments = session.teacherAssignments || [];
 
-  subSelect.innerHTML = assignedSubs.length ? assignedSubs.map(s => `<option value="${s}">${s}</option>`).join('') : `<option value="">-- Belum Ada Mapel Ditugaskan --</option>`;
-  classSelect.innerHTML = assignedClasses.length ? assignedClasses.map(c => `<option value="${c}">${c}</option>`).join('') : `<option value="">-- Belum Ada Kelas Ditugaskan --</option>`;
+  if (assignments.length === 0) {
+    subSelect.innerHTML = `<option value="">-- Belum Ada Mapel Ditugaskan --</option>`;
+    classSelect.innerHTML = `<option value="">-- Belum Ada Kelas Ditugaskan --</option>`;
+    return;
+  }
 
-  populateScheduleDropdowns(assignedSubs, assignedClasses);
-  loadBankQuestions();
+  const assignedSubjects = Array.from(new Set(assignments.map(a => a.subject)));
+  subSelect.innerHTML = assignedSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
+
+  updateTeacherClassesDropdown();
+  subSelect.onchange = updateTeacherClassesDropdown;
 }
 
-function populateScheduleDropdowns(assignedSubs, assignedClasses) {
-  const schedSubject = document.getElementById('schedSubject');
-  const schedBank = document.getElementById('schedBank');
-  const classBox = document.getElementById('schedClassesCheckbox');
+function updateTeacherClassesDropdown() {
+  const session = JSON.parse(localStorage.getItem('cbt_session') || '{}');
+  const selectedSub = document.getElementById('bankSubjectSelect').value;
+  const classSelect = document.getElementById('bankClassSelect');
 
-  if (schedSubject) schedSubject.innerHTML = assignedSubs.map(s => `<option value="${s}">${s}</option>`).join('');
-  if (schedBank) schedBank.innerHTML = assignedSubs.map(s => `<option value="${s}">Bank Soal ${s}</option>`).join('');
+  const assignments = session.teacherAssignments || [];
+  const assignment = assignments.find(a => a.subject === selectedSub);
 
-  if (classBox) {
-    classBox.innerHTML = assignedClasses.map(c => `
-      <label class="inline-flex items-center text-xs bg-slate-100 px-2 py-1 rounded border">
-        <input type="checkbox" name="schedClasses" value="${c}" class="mr-1.5"> ${c}
-      </label>
-    `).join('');
+  if (assignment && assignment.classes) {
+    classSelect.innerHTML = assignment.classes.map(c => `<option value="${c}">${c}</option>`).join('');
+  } else {
+    classSelect.innerHTML = `<option value="">-- Tidak Ada Kelas --</option>`;
   }
+
+  loadBankQuestions();
 }
 
 function renderSummaryTab() {
   const schedules = JSON.parse(localStorage.getItem('cbt_schedules') || '[]');
-  const activeCount = schedules.filter(s => s.active).length;
-
-  document.getElementById('statActiveExams').innerText = activeCount;
+  document.getElementById('statActiveExams').innerText = schedules.filter(s => s.active).length;
   document.getElementById('statTotalQuestions').innerText = '120';
   document.getElementById('statPendingGrading').innerText = '0';
   document.getElementById('statOnlineStudents').innerText = '0';
@@ -92,7 +95,7 @@ function loadBankQuestions() {
   const list = document.getElementById('bankQuestionsList');
 
   if (!sub || !cls) {
-    list.innerHTML = `<p class="text-xs text-slate-400 p-4 bg-slate-50 rounded">Pilih mata pelajaran dan kelas di atas.</p>`;
+    list.innerHTML = `<p class="text-xs text-slate-400 p-4 bg-slate-50 rounded">Pilih mata pelajaran dan kelas yang Anda ampu.</p>`;
     return;
   }
 
@@ -101,7 +104,7 @@ function loadBankQuestions() {
 
   list.innerHTML = questions.length ? questions.map((q, i) => `
     <div class="bg-slate-50 p-3 rounded-lg border text-xs">#${i + 1} [${q.type}] ${q.text}</div>
-  `).join('') : `<p class="text-xs text-slate-400 p-4 bg-slate-50 rounded">Belum ada soal untuk ${sub} (${cls}).</p>`;
+  `).join('') : `<p class="text-xs text-slate-400 p-4 bg-slate-50 rounded">Belum ada soal pada paket ${sub} (${cls}).</p>`;
 }
 
 function generateRandomToken() {
