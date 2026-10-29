@@ -34,7 +34,7 @@ function initDefaultData() {
     const defaultUsers = [
       { id: '1', username: 'admin', password: 'admin123', name: 'Administrator', role: 'admin', active: true },
       { id: '2', username: 'guru1', password: 'guru123', name: 'Ustadz Fulan, S.Pd.', role: 'guru', active: true, teacherAssignments: [{ subject: 'PAI', classes: ['VII-A', 'VII-B'] }] },
-      { id: '3', username: 'siswa1', password: '123', name: 'Ahmad Abdullah', role: 'siswa', nisn: '00123456', class: 'VII-A', active: true }
+      { id: '3', username: 'murid1', password: 'murid123', name: 'Ahmad Abdullah', role: 'siswa', nisn: '00123456', class: 'VII-A', active: true }
     ];
     localStorage.setItem('cbt_users', JSON.stringify(defaultUsers));
   }
