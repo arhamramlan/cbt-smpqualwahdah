@@ -26,7 +26,7 @@
         <i class="fa-solid fa-graduation-cap text-2xl text-amber-400"></i>
         <div>
           <h1 class="font-bold text-base leading-tight" id="headerSchoolName">SMP Qur'an Al Wahdah</h1>
-          <p class="text-xs text-blue-200">Computer Based Test (CBT) System</p>
+          <p class="text-xs text-blue-200" id="headerSubTitle">CBT System - Tahun Ajaran 2026/2027 (Ganjil)</p>
         </div>
       </div>
       <div id="navUserArea" class="hidden flex items-center space-x-3">
@@ -47,8 +47,8 @@
     <!-- VIEW 1: LOGIN -->
     <section id="viewLogin" class="max-w-md mx-auto my-12 bg-white p-6 rounded-2xl shadow-xl border border-slate-200 space-y-4">
       <div class="text-center space-y-1">
-        <h2 class="text-xl font-bold text-blue-900">Masuk ke Sistem</h2>
-        <p class="text-xs text-slate-500">Gunakan akun Admin, Guru, atau Siswa</p>
+        <h2 class="text-xl font-bold text-blue-900" id="loginSchoolTitle">SMP Qur'an Al Wahdah</h2>
+        <p class="text-xs text-slate-500">Masuk ke Sistem Ujian Berbasis Komputer</p>
       </div>
       
       <form onsubmit="handleLogin(event)" class="space-y-3">
@@ -75,6 +75,7 @@
           <button onclick="switchAdminTab('adminTabSubjects')" id="btnAdminSubjects" class="admin-tab-btn"><i class="fa-solid fa-book mr-1.5"></i>Master Mapel</button>
           <button onclick="switchAdminTab('adminTabAssign')" id="btnAdminAssign" class="admin-tab-btn"><i class="fa-solid fa-chalkboard-user mr-1.5"></i>Penugasan Guru</button>
           <button onclick="switchAdminTab('adminTabCards')" id="btnAdminCards" class="admin-tab-btn"><i class="fa-solid fa-id-card mr-1.5"></i>Cetak Kartu Ujian</button>
+          <button onclick="switchAdminTab('adminTabLogs')" id="btnAdminLogs" class="admin-tab-btn"><i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Log Aktivitas</button>
           <button onclick="switchAdminTab('adminTabSettings')" id="btnAdminSettings" class="admin-tab-btn"><i class="fa-solid fa-sliders mr-1.5"></i>Pengaturan Sistem</button>
         </div>
       </div>
@@ -115,7 +116,7 @@
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Password</label>
                 <div class="flex gap-2">
-                  <input type="password" id="userPassword" minlength="6" placeholder="Min 6 Karakter" class="flex-1 px-3 py-1.5 border rounded-lg">
+                  <input type="password" id="userPassword" placeholder="Abaikan jika tidak diubah" class="flex-1 px-3 py-1.5 border rounded-lg">
                   <button type="button" onclick="generateAutoPassword()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded text-xs font-bold">Auto</button>
                 </div>
               </div>
@@ -136,7 +137,7 @@
 
           <div class="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b pb-3">
-              <h3 class="font-bold text-slate-800"><i class="fa-solid fa-users text-blue-600 mr-2"></i>Daftar Pengguna Sistem</h3>
+              <h3 class="font-bold text-slate-800"><i class="fa-solid fa-users text-blue-600 mr-2"></i>Daftar Pengguna System</h3>
               <div class="flex gap-2 w-full md:w-auto">
                 <input type="text" id="searchUser" onkeyup="renderUserTable()" placeholder="Cari Nama/NISN..." class="px-3 py-1 border rounded-lg text-xs w-full md:w-40">
                 <select id="filterRole" onchange="renderUserTable()" class="px-2 py-1 border rounded-lg text-xs">
@@ -145,6 +146,7 @@
                   <option value="guru">Guru</option>
                   <option value="admin">Admin</option>
                 </select>
+                <select id="filterUserClass" onchange="renderUserTable()" class="px-2 py-1 border rounded-lg text-xs"></select>
               </div>
             </div>
             <div class="overflow-x-auto">
@@ -152,7 +154,7 @@
                 <thead class="bg-slate-100 font-bold uppercase">
                   <tr>
                     <th class="p-2.5">User & Identitas</th>
-                    <th class="p-2.5">Peran & Kelas</th>
+                    <th class="p-2.5">Peran & Keterangan</th>
                     <th class="p-2.5">Status</th>
                     <th class="p-2.5 text-center">Aksi</th>
                   </tr>
@@ -170,9 +172,10 @@
           <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-plus-circle text-blue-600 mr-2"></i>Tambah / Edit Kelas</h3>
             <form onsubmit="handleSaveClass(event)" class="space-y-3">
+              <input type="hidden" id="editClassOldCode">
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Kode / Nama Kelas</label>
-                <input type="text" id="classNameInput" placeholder="Misal: VII-A" required class="w-full px-3 py-1.5 border rounded-lg">
+                <input type="text" id="classNameInput" placeholder="Misal: VII-A" required class="w-full px-3 py-1.5 border rounded-lg font-bold uppercase">
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Tingkat</label>
@@ -181,6 +184,10 @@
                   <option value="8">Tingkat 8</option>
                   <option value="9">Tingkat 9</option>
                 </select>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Wali Kelas (Opsional)</label>
+                <input type="text" id="classHomeroomInput" placeholder="Nama Wali Kelas" class="w-full px-3 py-1.5 border rounded-lg">
               </div>
               <button type="submit" class="w-full bg-blue-800 text-white font-bold py-2 rounded-lg text-xs">Simpan Kelas</button>
             </form>
@@ -193,6 +200,7 @@
                   <tr>
                     <th class="p-2.5">Kode Kelas</th>
                     <th class="p-2.5">Tingkat</th>
+                    <th class="p-2.5">Wali Kelas</th>
                     <th class="p-2.5">Jml Siswa</th>
                     <th class="p-2.5 text-center">Aksi</th>
                   </tr>
@@ -210,6 +218,7 @@
           <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-plus-circle text-blue-600 mr-2"></i>Tambah / Edit Mapel</h3>
             <form onsubmit="handleSaveSubject(event)" class="space-y-3">
+              <input type="hidden" id="editSubjectOldCode">
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Kode Mapel</label>
                 <input type="text" id="subjectCodeInput" placeholder="Misal: PAI" required class="w-full px-3 py-1.5 border rounded-lg uppercase font-mono">
@@ -239,28 +248,47 @@
         </div>
       </div>
 
-      <!-- TAB 4: PENUGASAN GURU -->
+      <!-- TAB 4: PENUGASAN GURU BERBASIS PASANGAN -->
       <div id="adminTabAssign" class="admin-tab-content hidden space-y-5">
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div>
             <h3 class="font-bold text-slate-800"><i class="fa-solid fa-chalkboard-user text-blue-600 mr-2"></i>Penugasan Mengajar Guru</h3>
-            <p class="text-xs text-slate-500">Tentukan mata pelajaran dan kelas yang diampu oleh setiap guru. Ini mengatur hak akses dropdown pada panel guru.</p>
+            <p class="text-xs text-slate-500">Pilih Guru, lalu tentukan pasangan mata pelajaran dan kelas yang diampu.</p>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border">
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Pilih Guru</label>
-              <select id="assignTeacherSelect" onchange="loadTeacherAssignments()" class="w-full px-3 py-1.5 border rounded-lg font-semibold bg-slate-50"></select>
+              <label class="block font-bold text-slate-700 mb-1">1. Pilih Guru</label>
+              <select id="assignTeacherSelect" onchange="renderTeacherAssignmentUI()" class="w-full px-3 py-1.5 border rounded-lg font-semibold bg-white"></select>
             </div>
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Mata Pelajaran diAmpu</label>
-              <div id="assignSubjectsBox" class="border p-2.5 rounded-lg space-y-1 max-h-36 overflow-y-auto"></div>
+              <label class="block font-bold text-slate-700 mb-1">2. Pilih Mata Pelajaran</label>
+              <select id="assignSubjectSelect" class="w-full px-3 py-1.5 border rounded-lg bg-white"></select>
             </div>
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Kelas yang Diajar</label>
-              <div id="assignClassesBox" class="border p-2.5 rounded-lg space-y-1 max-h-36 overflow-y-auto"></div>
+              <label class="block font-bold text-slate-700 mb-1">3. Centang Kelas Terkait</label>
+              <div id="assignClassesBox" class="bg-white border p-2.5 rounded-lg space-y-1 max-h-36 overflow-y-auto"></div>
             </div>
           </div>
-          <button onclick="saveTeacherAssignments()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs"><i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Penugasan Guru</button>
+
+          <button onclick="addTeacherAssignment()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs"><i class="fa-solid fa-plus mr-1"></i>Tambahkan Penugasan</button>
+
+          <div class="space-y-2 border-t pt-3">
+            <h4 class="font-bold text-slate-800">Tabel Ringkasan Penugasan Guru</h4>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs text-left text-slate-600">
+                <thead class="bg-slate-100 font-bold uppercase">
+                  <tr>
+                    <th class="p-2.5">Nama Guru</th>
+                    <th class="p-2.5">Mata Pelajaran</th>
+                    <th class="p-2.5">Kelas Diajar</th>
+                    <th class="p-2.5 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="teacherAssignmentTableBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -270,41 +298,73 @@
           <div class="flex justify-between items-center border-b pb-3 print:hidden">
             <div>
               <h3 class="font-bold text-slate-800"><i class="fa-solid fa-id-card text-blue-600 mr-2"></i>Cetak Kartu Peserta Ujian</h3>
-              <p class="text-xs text-slate-500">Pilih kelas untuk mencetak kartu ujian berisi akun login siswa.</p>
+              <p class="text-xs text-slate-500">Layout A4 untuk pencetakan resmi sekolah.</p>
             </div>
             <div class="flex gap-2">
               <select id="cardClassFilter" onchange="renderExamCards()" class="px-3 py-1.5 border rounded-lg text-xs font-semibold bg-slate-50"></select>
-              <button onclick="window.print()" class="bg-blue-800 hover:bg-blue-900 text-white px-4 py-1.5 rounded-lg text-xs font-bold"><i class="fa-solid fa-print mr-1"></i>Cetak Kartu</button>
+              <button onclick="window.print()" class="bg-blue-800 hover:bg-blue-900 text-white px-4 py-1.5 rounded-lg text-xs font-bold"><i class="fa-solid fa-print mr-1"></i>Cetak Kartu (A4)</button>
             </div>
           </div>
-          <div id="examCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 print:grid-cols-2 print:gap-2"></div>
+          <div id="examCardsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-2"></div>
         </div>
       </div>
 
-      <!-- TAB 6: PENGATURAN -->
+      <!-- TAB 6: LOG AKTIVITAS -->
+      <div id="adminTabLogs" class="admin-tab-content hidden space-y-5">
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-clock-rotate-left text-blue-600 mr-2"></i>Log Aktivitas Sistem</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left text-slate-600">
+              <thead class="bg-slate-100 font-bold uppercase">
+                <tr>
+                  <th class="p-2.5">Waktu</th>
+                  <th class="p-2.5">User</th>
+                  <th class="p-2.5">Aktivitas / Event</th>
+                </tr>
+              </thead>
+              <tbody id="adminLogsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 7: PENGATURAN SISTEM -->
       <div id="adminTabSettings" class="admin-tab-content hidden space-y-5">
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-sliders text-blue-600 mr-2"></i>Pengaturan Sekolah & Sesi Akademik</h3>
           <form onsubmit="handleSaveSettings(event)" class="space-y-3 max-w-md">
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Nama Sekolah / Lembaga</label>
+              <label class="block font-bold text-slate-700 mb-1">Nama Sekolah</label>
               <input type="text" id="settingSchoolName" required class="w-full px-3 py-1.5 border rounded-lg">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">NPSN</label>
+              <input type="text" id="settingNPSN" placeholder="10801234" class="w-full px-3 py-1.5 border rounded-lg">
             </div>
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Tahun Ajaran</label>
-                <input type="text" id="settingYear" placeholder="2026/2027" required class="w-full px-3 py-1.5 border rounded-lg">
+                <input type="text" id="settingYear" value="2026/2027" required class="w-full px-3 py-1.5 border rounded-lg">
               </div>
               <div>
-                <label class="block font-bold text-slate-700 mb-1">Semester Aktif</label>
+                <label class="block font-bold text-slate-700 mb-1">Semester</label>
                 <select id="settingSemester" class="w-full px-3 py-1.5 border rounded-lg">
                   <option value="Ganjil">Ganjil</option>
                   <option value="Genap">Genap</option>
                 </select>
               </div>
             </div>
-            <button type="submit" class="bg-blue-800 text-white font-bold px-4 py-2 rounded-lg text-xs">Simpan Pengaturan</button>
+            <button type="submit" class="bg-blue-800 text-white font-bold px-4 py-2 rounded-lg text-xs"><i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Pengaturan</button>
           </form>
+
+          <div class="border-t pt-4 space-y-2">
+            <h4 class="font-bold text-slate-800 text-xs">Backup & Restore Sistem</h4>
+            <div class="flex gap-2">
+              <button onclick="backupSystemData()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold"><i class="fa-solid fa-download mr-1"></i>Backup Database (.json)</button>
+              <input type="file" id="restoreFile" accept=".json" class="hidden" onchange="restoreSystemData(event)">
+              <button onclick="document.getElementById('restoreFile').click()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-xs font-bold"><i class="fa-solid fa-upload mr-1"></i>Restore Database</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -343,14 +403,12 @@
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div class="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-clock-rotate-left text-blue-600 mr-2"></i>Ujian Berlangsung / Hari Ini</h3>
+            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-clock-rotate-left text-blue-600 mr-2"></i>Ujian Berlangsung Hari Ini</h3>
             <div id="summaryExamsList" class="space-y-2"></div>
           </div>
           <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-            <div>
-              <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-circle-exclamation text-amber-500 mr-2"></i>Perlu Koreksi Segera</h3>
-              <div id="summaryGradingPendingList" class="mt-2 space-y-2"></div>
-            </div>
+            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-circle-exclamation text-amber-500 mr-2"></i>Perlu Koreksi Segera</h3>
+            <div id="summaryGradingPendingList" class="space-y-2"></div>
           </div>
         </div>
       </div>
@@ -359,25 +417,23 @@
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div class="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b pb-3">
             <div>
-              <h3 class="font-bold text-slate-800"><i class="fa-solid fa-folder-open text-blue-600 mr-2"></i>Pengelolaan Paket Bank Soal</h3>
-              <p class="text-xs text-slate-500">Mata pelajaran dan kelas sesuai penugasan Admin.</p>
+              <h3 class="font-bold text-slate-800"><i class="fa-solid fa-folder-open text-blue-600 mr-2"></i>Bank Soal Guru</h3>
+              <p class="text-xs text-slate-500">Pilih mata pelajaran dan kelas yang Anda ampu.</p>
             </div>
             <div class="flex gap-2">
-              <select id="bankSubjectSelect" onchange="loadBankQuestions()" class="px-3 py-1.5 border rounded-lg bg-slate-50 font-semibold"></select>
-              <select id="bankClassSelect" onchange="loadBankQuestions()" class="px-3 py-1.5 border rounded-lg bg-slate-50 font-semibold"></select>
+              <select id="bankSubjectSelect" class="px-3 py-1.5 border rounded-lg bg-slate-50 font-semibold text-xs"></select>
+              <select id="bankClassSelect" class="px-3 py-1.5 border rounded-lg bg-slate-50 font-semibold text-xs"></select>
             </div>
           </div>
           <div id="bankQuestionsList" class="space-y-3"></div>
         </div>
       </div>
 
-      <!-- TAB JADWAL UJIAN -->
       <div id="tabSchedule" class="teacher-tab-content hidden space-y-5">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div class="lg:col-span-1 bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-calendar-plus text-blue-600 mr-2"></i>Buat / Edit Jadwal Ujian</h3>
+            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-calendar-plus text-blue-600 mr-2"></i>Terbit Ujian</h3>
             <form onsubmit="handleSaveSchedule(event)" class="space-y-3">
-              <input type="hidden" id="schedIdInput">
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Judul Ujian</label>
                 <input type="text" id="schedTitle" placeholder="Misal: PAS Matematika Kelas 7" required class="w-full px-3 py-1.5 border rounded-lg">
@@ -388,7 +444,7 @@
                   <select id="schedSubject" class="w-full px-2 py-1.5 border rounded-lg"></select>
                 </div>
                 <div>
-                  <label class="block font-bold text-slate-700 mb-1">Bank Soal Acuan</label>
+                  <label class="block font-bold text-slate-700 mb-1">Bank Soal</label>
                   <select id="schedBank" class="w-full px-2 py-1.5 border rounded-lg"></select>
                 </div>
               </div>
@@ -419,7 +475,7 @@
             </form>
           </div>
           <div class="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-list-check text-blue-600 mr-2"></i>Daftar Jadwal Ujian Diterbitkan</h3>
+            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-list-check text-blue-600 mr-2"></i>Daftar Jadwal Ujian</h3>
             <div class="overflow-x-auto">
               <table class="w-full text-xs text-left text-slate-600">
                 <thead class="bg-slate-100 font-bold uppercase">
@@ -437,15 +493,10 @@
         </div>
       </div>
 
-      <!-- TAB MONITORING REAL-TIME -->
       <div id="tabMonitoring" class="teacher-tab-content hidden space-y-5">
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div class="flex justify-between items-center border-b pb-3">
             <h3 class="font-bold text-slate-800"><i class="fa-solid fa-desktop text-blue-600 mr-2"></i>Monitoring Ujian Real-Time</h3>
-            <div class="flex gap-2">
-              <select id="monitorExamFilter" onchange="renderMonitoringData()" class="px-3 py-1 border rounded-lg bg-slate-50 font-semibold text-xs"></select>
-              <select id="monitorClassFilter" onchange="renderMonitoringData()" class="px-3 py-1 border rounded-lg bg-slate-50 font-semibold text-xs"></select>
-            </div>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-xs text-left text-slate-600">
@@ -464,13 +515,13 @@
         </div>
       </div>
 
-      <!-- TAB KOREKSI URAIAN & LAPORAN -->
       <div id="tabGrading" class="teacher-tab-content hidden space-y-5">
         <div class="bg-white p-5 rounded-xl border shadow-sm space-y-3">
           <h3 class="font-bold border-b pb-2">Koreksi Manual Soal Uraian</h3>
           <div id="gradingStudentList" class="space-y-2"></div>
         </div>
       </div>
+
       <div id="tabReports" class="teacher-tab-content hidden space-y-5">
         <div class="bg-white p-5 rounded-xl border shadow-sm space-y-3">
           <h3 class="font-bold border-b pb-2">Laporan Rekapitulasi & Analisis</h3>
