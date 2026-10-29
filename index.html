@@ -1,19 +1,18 @@
-<!DOCTYPE1 html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CBT System - SMP Qur'an Al Wahdah</title>
   
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <!-- External Libraries for File Processing -->
+  <!-- External Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   </script>
@@ -28,7 +27,7 @@
         <i class="fa-solid fa-graduation-cap text-2xl text-amber-400"></i>
         <div>
           <h1 class="font-bold text-base leading-tight">SMP Qur'an Al Wahdah</h1>
-          <p class="text-xs text-blue-200">Computer Based Test (CBT)</p>
+          <p class="text-xs text-blue-200">Computer Based Test (CBT) System</p>
         </div>
       </div>
       <div id="navUserArea" class="hidden flex items-center space-x-3">
@@ -44,7 +43,7 @@
   <main class="flex-1 max-w-7xl w-full mx-auto p-4">
 
     <!-- VIEW 1: LOGIN -->
-    <section id="viewLogin" class="max-w-md mx-auto my-12 bg-white p-6 rounded-2xl shadow-xl border border-slate-200 space-y-4">
+    <section id="viewLogin" class="max-w-md mx-auto my-10 bg-white p-6 rounded-2xl shadow-xl border border-slate-200 space-y-4">
       <div class="text-center space-y-1">
         <h2 class="text-xl font-bold text-blue-900">Masuk ke Sistem</h2>
         <p class="text-xs text-slate-500">Gunakan akun Admin, Guru, atau Siswa</p>
@@ -64,36 +63,37 @@
         </button>
       </form>
 
-      <div class="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg border border-slate-200">
-        <p class="font-bold text-slate-600 mb-1">Akun Default Demo:</p>
+      <div class="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
+        <p class="font-bold text-slate-700">Akun Demo:</p>
         <p>• Admin: <code class="text-blue-600">admin / admin123</code></p>
         <p>• Guru: <code class="text-blue-600">guru / guru123</code></p>
         <p>• Siswa: <code class="text-blue-600">siswa / siswa123</code></p>
       </div>
     </section>
 
-
     <!-- VIEW 2: DASHBOARD ADMIN -->
     <section id="viewAdmin" class="hidden space-y-6">
       <div class="bg-blue-900 text-white p-4 rounded-xl shadow flex justify-between items-center">
         <div>
           <h2 class="text-lg font-bold">Panel Administrator</h2>
-          <p class="text-xs text-blue-200">Kelola master data pengguna, kelas, dan mata pelajaran</p>
+          <p class="text-xs text-blue-200">Kelola Pengguna, Master Data, dan Rekap Ujian</p>
         </div>
       </div>
 
+      <!-- Master Data & User Management Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Input Single User & Mass Regist -->
+        
+        <!-- Kelola Akun & Impor -->
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-user-plus text-blue-600 mr-2"></i>Tambah Pengguna</h3>
+          <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-users-gear text-blue-600 mr-2"></i>Kelola Pengguna</h3>
           <form onsubmit="handleAddUser(event)" class="space-y-3">
             <div class="grid grid-cols-2 gap-2">
-              <input type="text" id="addUserUsername" placeholder="Username / NISN" required class="px-3 py-2 text-xs border border-slate-300 rounded-lg">
-              <input type="password" id="addUserPassword" placeholder="Password" required class="px-3 py-2 text-xs border border-slate-300 rounded-lg">
+              <input type="text" id="addUserUsername" placeholder="Username / NISN" required class="px-3 py-2 text-xs border rounded-lg">
+              <input type="password" id="addUserPassword" placeholder="Password" required class="px-3 py-2 text-xs border rounded-lg">
             </div>
             <div class="grid grid-cols-2 gap-2">
-              <input type="text" id="addUserName" placeholder="Nama Lengkap" required class="px-3 py-2 text-xs border border-slate-300 rounded-lg">
-              <select id="addUserRole" class="px-3 py-2 text-xs border border-slate-300 rounded-lg">
+              <input type="text" id="addUserName" placeholder="Nama Lengkap" required class="px-3 py-2 text-xs border rounded-lg">
+              <select id="addUserRole" class="px-3 py-2 text-xs border rounded-lg">
                 <option value="siswa">Siswa</option>
                 <option value="guru">Guru</option>
                 <option value="admin">Admin</option>
@@ -102,97 +102,218 @@
             <button type="submit" class="w-full bg-blue-800 hover:bg-blue-900 text-white text-xs font-bold py-2 rounded-lg">Simpan User</button>
           </form>
 
-          <hr class="border-slate-200">
+          <hr>
 
           <div>
-            <h4 class="font-bold text-xs text-slate-700 mb-2">Impor Pengguna Massal via Excel</h4>
-            <div class="flex gap-2 items-center mb-2">
-              <button onclick="downloadUserExcelTemplate()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+            <h4 class="font-bold text-xs text-slate-700 mb-2">Impor Pengguna Massal (Excel)</h4>
+            <div class="flex gap-2 mb-2">
+              <button onclick="downloadUserExcelTemplate()" class="text-xs bg-emerald-600 text-white font-semibold px-3 py-1.5 rounded-lg">
                 <i class="fa-solid fa-file-excel mr-1"></i>Unduh Template User
               </button>
             </div>
-            <input type="file" id="excelUserFileInput" accept=".xlsx, .xls" class="text-xs text-slate-500 mb-2">
-            <button onclick="handleUploadUserExcel()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2 rounded-lg text-xs">Proses Impor Excel</button>
+            <input type="file" id="excelUserFileInput" accept=".xlsx, .xls" class="text-xs text-slate-500 mb-2 w-full">
+            <button onclick="handleUploadUserExcel()" class="w-full bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs">Impor User Excel</button>
           </div>
-        </div>
 
-        <!-- Tambah Mapel & Kelas -->
-        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-book text-blue-600 mr-2"></i>Kelola Mata Pelajaran</h3>
-          <form onsubmit="handleAddSubject(event)" class="flex gap-2">
-            <input type="text" id="addSubjectCode" placeholder="Kode (misal: MTK)" required class="w-1/3 px-3 py-2 text-xs border border-slate-300 rounded-lg">
-            <input type="text" id="addSubjectName" placeholder="Nama Mata Pelajaran" required class="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg">
-            <button type="submit" class="bg-blue-800 hover:bg-blue-900 text-white text-xs font-bold px-4 py-2 rounded-lg">Tambah</button>
-          </form>
+          <hr>
 
-          <!-- Tabel Mapel dengan Aksi Edit & Hapus -->
-          <div class="overflow-x-auto border rounded-lg">
+          <!-- Tabel User & Reset Password -->
+          <h4 class="font-bold text-xs text-slate-700 mb-1">Daftar Akun Pengguna</h4>
+          <div class="overflow-y-auto max-h-40 border rounded-lg">
             <table class="w-full text-xs text-left text-slate-600">
-              <thead class="bg-slate-100 text-slate-700 font-bold uppercase">
-                <tr>
-                  <th class="p-2">Kode</th>
-                  <th class="p-2">Mata Pelajaran</th>
-                  <th class="p-2 text-center">Aksi</th>
-                </tr>
+              <thead class="bg-slate-100 font-bold">
+                <tr><th class="p-2">User</th><th class="p-2">Role</th><th class="p-2 text-center">Aksi</th></tr>
               </thead>
-              <tbody id="adminSubjectTableBody">
-                <!-- Inner content rendered via JS -->
-              </tbody>
+              <tbody id="adminUserTableBody"></tbody>
             </table>
           </div>
         </div>
+
+        <!-- Kelola Master Data (Kelas, Mapel, Ta/Semester) -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-database text-blue-600 mr-2"></i>Kelola Master Data</h3>
+          
+          <!-- Master Tahun Ajaran & Semester -->
+          <div class="space-y-2">
+            <h4 class="font-semibold text-xs text-slate-700">Tahun Ajaran & Semester Aktif</h4>
+            <div class="flex gap-2">
+              <input type="text" id="academicYearInput" placeholder="Misal: 2026/2027" class="px-3 py-1.5 text-xs border rounded-lg w-1/2">
+              <select id="semesterInput" class="px-3 py-1.5 text-xs border rounded-lg w-1/2">
+                <option value="Ganjil">Ganjil</option>
+                <option value="Genap">Genap</option>
+              </select>
+              <button onclick="saveAcademicSettings()" class="bg-blue-800 text-white text-xs px-3 py-1.5 rounded-lg font-bold">Simpan</button>
+            </div>
+          </div>
+
+          <hr>
+
+          <!-- Master Kelas -->
+          <div class="space-y-2">
+            <h4 class="font-semibold text-xs text-slate-700">Master Kelas</h4>
+            <form onsubmit="handleAddClass(event)" class="flex gap-2">
+              <input type="text" id="addClassName" placeholder="Nama Kelas (misal: VII-A)" required class="flex-1 px-3 py-1.5 text-xs border rounded-lg">
+              <button type="submit" class="bg-blue-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Tambah Kelas</button>
+            </form>
+            <div id="classListBadges" class="flex flex-wrap gap-1 mt-2"></div>
+          </div>
+
+          <hr>
+
+          <!-- Master Mapel -->
+          <div class="space-y-2">
+            <h4 class="font-semibold text-xs text-slate-700">Master Mata Pelajaran</h4>
+            <form onsubmit="handleAddSubject(event)" class="flex gap-2">
+              <input type="text" id="addSubjectCode" placeholder="Kode" required class="w-1/3 px-3 py-1.5 text-xs border rounded-lg">
+              <input type="text" id="addSubjectName" placeholder="Nama Mapel" required class="flex-1 px-3 py-1.5 text-xs border rounded-lg">
+              <button type="submit" class="bg-blue-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Tambah</button>
+            </form>
+            <div class="overflow-y-auto max-h-36 border rounded-lg mt-2">
+              <table class="w-full text-xs text-left text-slate-600">
+                <thead class="bg-slate-100 font-bold">
+                  <tr><th class="p-2">Kode</th><th class="p-2">Mapel</th><th class="p-2 text-center">Aksi</th></tr>
+                </thead>
+                <tbody id="adminSubjectTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rekap Seluruh Hasil Ujian (Admin View) -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-chart-line text-blue-600 mr-2"></i>Rekap Seluruh Ujian & Hasil</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-600">
+            <thead class="bg-slate-100 font-bold uppercase">
+              <tr>
+                <th class="p-2.5">Siswa</th>
+                <th class="p-2.5">Ujian / Mapel</th>
+                <th class="p-2.5">Nilai Objektif</th>
+                <th class="p-2.5">Nilai Uraian</th>
+                <th class="p-2.5">Total Nilai</th>
+                <th class="p-2.5">Status Koreksi</th>
+              </tr>
+            </thead>
+            <tbody id="adminExamResultsTable"></tbody>
+          </table>
+        </div>
       </div>
     </section>
-
 
     <!-- VIEW 3: DASHBOARD GURU -->
     <section id="viewTeacher" class="hidden space-y-6">
       <div class="bg-blue-900 text-white p-4 rounded-xl shadow flex justify-between items-center">
         <div>
           <h2 class="text-lg font-bold">Panel Guru / Pembuat Soal</h2>
-          <p class="text-xs text-blue-200">Kelola bank soal dan jadwal ujian siswa</p>
+          <p class="text-xs text-blue-200">Bank Soal, Jadwal Ujian, Koreksi Manual & Analisis Butir Soal</p>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Modul Unggah Soal Word/PDF -->
-        <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 space-y-3">
-          <h4 class="font-bold text-sm text-blue-900">
-            <i class="fa-solid fa-file-arrow-up mr-2 text-blue-600"></i>Unggah Soal (.docx / .pdf)
-          </h4>
+        
+        <!-- Bank Soal & Impor -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-folder-open text-blue-600 mr-2"></i>Bank Soal per Mapel & Kelas</h3>
           
-          <p class="text-xs text-slate-600">
-            File Word/PDF berisi daftar soal (PG, Pilihan Majemuk, Benar/Salah) sesuai format standar.
-          </p>
-
-          <div>
-            <button onclick="downloadWordQuestionTemplate()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3 py-1.5 rounded-lg transition shadow-sm">
-              <i class="fa-solid fa-file-word mr-1"></i>Unduh Format 3 Jenis Soal (.doc)
-            </button>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">Pilih Mapel</label>
+              <select id="teacherSelectSubject" class="w-full px-2 py-1.5 text-xs border rounded-lg"></select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">Pilih Kelas Target</label>
+              <select id="teacherSelectClass" class="w-full px-2 py-1.5 text-xs border rounded-lg"></select>
+            </div>
           </div>
 
-          <div>
-            <input type="file" id="qFileInputGuru" accept=".docx, .pdf" class="w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
+          <div class="bg-blue-50 p-3 rounded-xl border border-blue-200 space-y-2">
+            <h4 class="font-bold text-xs text-blue-900"><i class="fa-solid fa-file-import mr-1"></i>Impor Soal (5 Jenis Soal)</h4>
+            <p class="text-[11px] text-slate-600">Dukungan: Pilihan Ganda, PG Kompleks, Benar/Salah, Isian Singkat, Uraian & Gambar/Format Teks.</p>
+            <div class="flex gap-2">
+              <button onclick="downloadWordQuestionTemplate()" class="text-xs bg-blue-600 text-white px-2.5 py-1 rounded-lg">
+                <i class="fa-solid fa-file-word mr-1"></i>Template Word
+              </button>
+              <button onclick="downloadExcelQuestionTemplate()" class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-lg">
+                <i class="fa-solid fa-file-excel mr-1"></i>Template Excel
+              </button>
+            </div>
+            <input type="file" id="qFileInputGuru" accept=".docx, .pdf, .xlsx" class="w-full text-xs text-slate-500 pt-2">
+            <button onclick="handleUploadQuestionFile('teacher')" class="w-full bg-blue-700 text-white font-bold py-1.5 rounded-lg text-xs">Proses & Simpan ke Bank Soal</button>
           </div>
-          
-          <button onclick="handleUploadQuestionFile('teacher')" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 rounded-lg text-xs shadow transition">
-            <i class="fa-solid fa-upload mr-1"></i>Proses & Impor Soal
-          </button>
+
+          <div id="teacherBankStats" class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border">
+            Pilih mapel & kelas untuk melihat ketersediaan bank soal.
+          </div>
         </div>
 
-        <!-- Modul Bank Soal & Terbit Ujian -->
+        <!-- Pembuat Jadwal Ujian -->
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-list-check text-blue-600 mr-2"></i>Status Bank Soal</h3>
-          <div id="teacherQuestionStats" class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border">
-            Belum ada paket soal yang diunggah.
+          <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-calendar-plus text-blue-600 mr-2"></i>Buat Jadwal Ujian</h3>
+          <form onsubmit="handleCreateExamSchedule(event)" class="space-y-2">
+            <input type="text" id="examTitleInput" placeholder="Judul Ujian (misal: PAS Matematika Kelas 7)" required class="w-full px-3 py-1.5 text-xs border rounded-lg">
+            
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600">Tanggal & Jam Mulai</label>
+                <input type="datetime-local" id="examStartTimeInput" required class="w-full px-2 py-1 text-xs border rounded-lg">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600">Durasi (Menit)</label>
+                <input type="number" id="examDurationInput" placeholder="60" required class="w-full px-2 py-1 text-xs border rounded-lg">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600">Token Ujian</label>
+                <input type="text" id="examTokenInput" placeholder="Misal: QURAN7" required class="w-full px-2 py-1 text-xs border rounded-lg uppercase font-mono">
+              </div>
+              <div class="flex flex-col justify-end">
+                <button type="button" onclick="generateRandomToken()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs py-1 rounded-lg font-bold">Generate Token</button>
+              </div>
+            </div>
+
+            <div class="space-y-1 pt-1">
+              <label class="flex items-center text-xs text-slate-700"><input type="checkbox" id="optRandomQuestions" class="mr-2" checked> Acak Urutan Soal</label>
+              <label class="flex items-center text-xs text-slate-700"><input type="checkbox" id="optRandomOptions" class="mr-2" checked> Acak Urutan Pilihan Jawaban</label>
+              <label class="flex items-center text-xs text-slate-700"><input type="checkbox" id="optShowScore" class="mr-2" checked> Tampilkan Nilai Setelah Ujian</label>
+            </div>
+
+            <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs transition">Terbitkan Jadwal Ujian</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Section Koreksi Manual & Analisis Butir Soal -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Koreksi Manual Uraian -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-pen-nib text-blue-600 mr-2"></i>Koreksi Manual Soal Uraian</h3>
+          <div id="teacherEssayGradingList" class="space-y-2 max-h-60 overflow-y-auto text-xs">
+            <!-- Dynamic List for grading essay -->
           </div>
-          <button onclick="publishExam()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 rounded-lg">
-            Terbitkan Ujian Sekarang
-          </button>
+        </div>
+
+        <!-- Analisis & Ekspor -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-file-export text-blue-600 mr-2"></i>Analisis & Ekspor Rekap Nilai</h3>
+          <p class="text-xs text-slate-600">Ekspor rekapitulasi nilai dan tingkat kesulitan per butir soal (Mudah, Sedang, Sukar).</p>
+          <div class="flex gap-2">
+            <button onclick="exportResultsToExcel()" class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 rounded-lg">
+              <i class="fa-solid fa-file-excel mr-1"></i>Ekspor Excel
+            </button>
+            <button onclick="exportResultsToPDF()" class="flex-1 bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold py-2 rounded-lg">
+              <i class="fa-solid fa-file-pdf mr-1"></i>Ekspor PDF
+            </button>
+          </div>
+          <div id="itemAnalysisContainer" class="mt-3 text-xs bg-slate-50 p-3 rounded-lg border max-h-40 overflow-y-auto">
+            <!-- Display item analysis -->
+          </div>
         </div>
       </div>
     </section>
-
 
     <!-- VIEW 4: DASHBOARD SISWA -->
     <section id="viewStudent" class="hidden space-y-6">
@@ -203,26 +324,27 @@
         </div>
       </div>
 
-      <div id="studentExamNotice" class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center space-y-4">
-        <i class="fa-solid fa-file-pen text-4xl text-blue-600"></i>
-        <h3 class="font-bold text-base text-slate-800">Ujian Siap Dimulai</h3>
-        <p class="text-xs text-slate-500 max-w-md mx-auto">
-          Pastikan koneksi stabil. Mengubah tab atau keluar layar penuh akan dicatat sebagai pelanggaran anti-kecurangan.
-        </p>
-        <button onclick="startExamProcess()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-lg">
-          Mulai Ujian Sekarang
+      <!-- Masukkan Token Ujian -->
+      <div id="studentTokenCard" class="max-w-md mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center space-y-4">
+        <i class="fa-solid fa-key text-4xl text-blue-600"></i>
+        <h3 class="font-bold text-base text-slate-800">Masukkan Token Ujian</h3>
+        <p class="text-xs text-slate-500">Minta token resmi dari pengawas atau guru pengampu ujian.</p>
+        <input type="text" id="studentTokenInput" placeholder="Masukkan Token" class="w-full text-center tracking-widest text-lg font-mono font-bold uppercase px-3 py-2 border rounded-lg">
+        <button onclick="validateStudentToken()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs shadow">
+          Konfirmasi Token & Mulai
         </button>
       </div>
 
       <!-- WORKSPACE UJIAN -->
       <div id="studentExamWorkspace" class="hidden grid grid-cols-1 md:grid-cols-4 gap-6">
-        <!-- Area Soal -->
-        <div class="md:col-span-3 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6 flex flex-col justify-between min-h-[400px]">
+        <div class="md:col-span-3 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6 flex flex-col justify-between min-h-[420px]">
           <div>
             <div class="flex justify-between items-center border-b pb-3 mb-4">
               <span id="questionTypeBadge" class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase">Pilihan Ganda</span>
               <span id="examTimer" class="font-mono font-bold text-rose-600 text-sm"><i class="fa-solid fa-clock mr-1"></i>00:00:00</span>
             </div>
+            
+            <div id="questionMedia" class="mb-3"></div>
             <div id="questionText" class="text-sm font-medium text-slate-800 mb-6 leading-relaxed"></div>
             <div id="optionsContainer" class="space-y-2"></div>
           </div>
@@ -233,7 +355,6 @@
           </div>
         </div>
 
-        <!-- Navigasi Soal -->
         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <h4 class="font-bold text-xs text-slate-700 border-b pb-2">Navigasi Soal</h4>
           <div id="questionGridNav" class="grid grid-cols-5 gap-2"></div>
