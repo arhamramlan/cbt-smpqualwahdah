@@ -1,14 +1,17 @@
 // ==========================================
-// APP-CORE.JS: MANAJEMEN PENGGUNA, AUTH & MASTER DATA
+// APP-CORE.JS: MANAJEMEN AKUN, MASTER DATA & REKAP
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
   initDefaultData();
   checkSession();
   renderSubjectTable();
+  renderClassBadges();
+  renderUserTable();
+  renderAdminResultsTable();
 });
 
-// 1. Inisialisasi Data Default jika LocalStorage Kosong
+// 1. Inisialisasi Data Master Default
 function initDefaultData() {
   if (!localStorage.getItem('cbt_users')) {
     const defaultUsers = [
@@ -26,9 +29,17 @@ function initDefaultData() {
     ];
     localStorage.setItem('cbt_subjects', JSON.stringify(defaultSubjects));
   }
+
+  if (!localStorage.getItem('cbt_classes')) {
+    localStorage.setItem('cbt_classes', JSON.stringify(['VII-A', 'VII-B', 'VIII-A']));
+  }
+
+  if (!localStorage.getItem('cbt_academic')) {
+    localStorage.setItem('cbt_academic', JSON.stringify({ year: '2026/2027', semester: 'Ganjil' }));
+  }
 }
 
-// 2. Autentikasi dan Manajemen Sesi
+// 2. Autentikasi & Sesi
 function handleLogin(e) {
   e.preventDefault();
   const u = document.getElementById('loginUsername').value.trim();
@@ -54,33 +65,29 @@ function handleLogout() {
 function checkSession() {
   const session = JSON.parse(localStorage.getItem('cbt_session') || 'null');
   
-  // Sembunyikan semua tampilan terlebih dahulu
-  document.getElementById('viewLogin').classList.add('hidden');
-  document.getElementById('viewAdmin').classList.add('hidden');
-  document.getElementById('viewTeacher').classList.add('hidden');
-  document.getElementById('viewStudent').classList.add('hidden');
-  document.getElementById('navUserArea').classList.add('hidden');
+  ['viewLogin', 'viewAdmin', 'viewTeacher', 'viewStudent', 'navUserArea'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
 
   if (!session) {
     document.getElementById('viewLogin').classList.remove('hidden');
     return;
   }
 
-  // Tampilkan Navigasi Sesi User
   document.getElementById('navUserArea').classList.remove('hidden');
   document.getElementById('navUserInfo').innerText = `${session.name} (${session.role.toUpperCase()})`;
 
-  // Alihkan sesuai Role
   if (session.role === 'admin') {
     document.getElementById('viewAdmin').classList.remove('hidden');
   } else if (session.role === 'guru') {
     document.getElementById('viewTeacher').classList.remove('hidden');
+    if (window.initTeacherView) window.initTeacherView();
   } else if (session.role === 'siswa') {
     document.getElementById('viewStudent').classList.remove('hidden');
   }
 }
 
-// 3. Admin: Tambah Pengguna Baru (Single)
+// 3. Admin: Kelola Akun & Reset Password
 function handleAddUser(e) {
   e.preventDefault();
   const username = document.getElementById('addUserUsername').value.trim();
@@ -90,23 +97,52 @@ function handleAddUser(e) {
 
   let users = JSON.parse(localStorage.getItem('cbt_users') || '[]');
   if (users.some(x => x.username === username)) {
-    alert('Username sudah terdaftar!');
+    alert('Username sudah ada!');
     return;
   }
 
   users.push({ username, password, name, role });
   localStorage.setItem('cbt_users', JSON.stringify(users));
-  alert('Pengguna berhasil ditambahkan!');
+  renderUserTable();
   e.target.reset();
 }
 
-// 4. Admin: Impor Pengguna Massal dari Excel
+function renderUserTable() {
+  const tbody = document.getElementById('adminUserTableBody');
+  if (!tbody) return;
+  const users = JSON.parse(localStorage.getItem('cbt_users') || '[]');
+  tbody.innerHTML = '';
+
+  users.forEach((u, i) => {
+    const tr = document.createElement('tr');
+    tr.className = 'border-b hover:bg-slate-50';
+    tr.innerHTML = `
+      <td class="p-2 font-semibold">${u.username} (${u.name})</td>
+      <td class="p-2 uppercase text-[10px]"><span class="bg-slate-200 px-1.5 py-0.5 rounded">${u.role}</span></td>
+      <td class="p-2 text-center">
+        <button onclick="resetPassword(${i})" class="bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded text-[10px]">Reset Pass</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function resetPassword(index) {
+  let users = JSON.parse(localStorage.getItem('cbt_users') || '[]');
+  const newPass = prompt(`Reset password untuk ${users[index].username}:`, "123456");
+  if (newPass) {
+    users[index].password = newPass.trim();
+    localStorage.setItem('cbt_users', JSON.stringify(users));
+    alert('Password berhasil di-reset!');
+  }
+}
+
 function downloadUserExcelTemplate() {
-  const templateData = [
-    { "Username": "siswa01", "Password": "123", "Nama Lengkap": "Siswa Contoh 1", "Role": "siswa" },
-    { "Username": "guru01", "Password": "123", "Nama Lengkap": "Guru Contoh 1", "Role": "guru" }
+  const data = [
+    { "Username": "siswa01", "Password": "123", "Nama Lengkap": "Ahmad", "Role": "siswa" },
+    { "Username": "guru01", "Password": "123", "Nama Lengkap": "Ustadz Ali", "Role": "guru" }
   ];
-  const ws = XLSX.utils.json_to_sheet(templateData);
+  const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Pengguna");
   XLSX.writeFile(wb, "Template_User_CBT.xlsx");
@@ -114,56 +150,70 @@ function downloadUserExcelTemplate() {
 
 function handleUploadUserExcel() {
   const fileInput = document.getElementById('excelUserFileInput');
-  if (!fileInput.files.length) {
-    alert('Pilih file Excel terlebih dahulu!');
-    return;
-  }
+  if (!fileInput.files.length) return alert('Pilih file Excel!');
 
-  const file = fileInput.files[0];
   const reader = new FileReader();
-
   reader.onload = function(e) {
     const data = new Uint8Array(e.target.result);
-    const workbook = XLSX.read(data, { type: 'array' });
-    const sheetName = workbook.SheetNames[0];
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    const wb = XLSX.read(data, { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
 
     let users = JSON.parse(localStorage.getItem('cbt_users') || '[]');
     let count = 0;
 
-    rows.forEach(row => {
-      if (row.Username && row.Password) {
-        if (!users.some(x => x.username === String(row.Username))) {
-          users.push({
-            username: String(row.Username).trim(),
-            password: String(row.Password).trim(),
-            name: row['Nama Lengkap'] || row.Username,
-            role: (row.Role || 'siswa').toLowerCase().trim()
-          });
-          count++;
-        }
+    rows.forEach(r => {
+      if (r.Username && r.Password && !users.some(u => u.username === String(r.Username))) {
+        users.push({
+          username: String(r.Username).trim(),
+          password: String(r.Password).trim(),
+          name: r['Nama Lengkap'] || r.Username,
+          role: (r.Role || 'siswa').toLowerCase().trim()
+        });
+        count++;
       }
     });
 
     localStorage.setItem('cbt_users', JSON.stringify(users));
-    alert(`Berhasil mengimpor ${count} pengguna baru!`);
-    fileInput.value = '';
+    renderUserTable();
+    alert(`Berhasil mengimpor ${count} pengguna!`);
   };
-
-  reader.readAsArrayBuffer(file);
+  reader.readAsArrayBuffer(fileInput.files[0]);
 }
 
-// 5. Admin: Kelola Mata Pelajaran (Tambah, Render, Edit, Hapus)
+// 4. Admin: Master Data (Kelas, Mapel, Akademik)
+function saveAcademicSettings() {
+  const year = document.getElementById('academicYearInput').value.trim();
+  const semester = document.getElementById('semesterInput').value;
+  if (!year) return alert('Masukkan Tahun Ajaran!');
+
+  localStorage.setItem('cbt_academic', JSON.stringify({ year, semester }));
+  alert('Pengaturan Tahun Ajaran & Semester berhasil disimpan!');
+}
+
+function handleAddClass(e) {
+  e.preventDefault();
+  const cName = document.getElementById('addClassName').value.trim().toUpperCase();
+  let classes = JSON.parse(localStorage.getItem('cbt_classes') || '[]');
+  if (classes.includes(cName)) return alert('Kelas sudah ada!');
+
+  classes.push(cName);
+  localStorage.setItem('cbt_classes', JSON.stringify(classes));
+  renderClassBadges();
+  e.target.reset();
+}
+
+function renderClassBadges() {
+  const container = document.getElementById('classListBadges');
+  if (!container) return;
+  const classes = JSON.parse(localStorage.getItem('cbt_classes') || '[]');
+  container.innerHTML = classes.map(c => `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-md font-semibold">${c}</span>`).join(' ');
+}
+
 function handleAddSubject(e) {
   e.preventDefault();
   const code = document.getElementById('addSubjectCode').value.trim().toUpperCase();
   const name = document.getElementById('addSubjectName').value.trim();
-
   let subjects = JSON.parse(localStorage.getItem('cbt_subjects') || '[]');
-  if (subjects.some(x => x.code === code)) {
-    alert('Kode mapel sudah ada!');
-    return;
-  }
 
   subjects.push({ code, name });
   localStorage.setItem('cbt_subjects', JSON.stringify(subjects));
@@ -174,67 +224,65 @@ function handleAddSubject(e) {
 function renderSubjectTable() {
   const tbody = document.getElementById('adminSubjectTableBody');
   if (!tbody) return;
-
   const subjects = JSON.parse(localStorage.getItem('cbt_subjects') || '[]');
   tbody.innerHTML = '';
 
-  if (subjects.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="3" class="p-3 text-center text-slate-400">Belum ada mata pelajaran.</td></tr>`;
-    return;
-  }
-
-  subjects.forEach((subject, index) => {
+  subjects.forEach((s, i) => {
     const tr = document.createElement('tr');
     tr.className = 'border-b hover:bg-slate-50';
     tr.innerHTML = `
-      <td class="p-2 font-semibold">${subject.code}</td>
-      <td class="p-2">${subject.name}</td>
+      <td class="p-2 font-semibold">${s.code}</td>
+      <td class="p-2">${s.name}</td>
       <td class="p-2 text-center space-x-1">
-        <button onclick="editSubject(${index})" class="bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded text-xs transition">
-          <i class="fa-solid fa-pen-to-square"></i> Edit
-        </button>
-        <button onclick="deleteSubject(${index})" class="bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 rounded text-xs transition">
-          <i class="fa-solid fa-trash"></i> Hapus
-        </button>
+        <button onclick="editSubject(${i})" class="bg-amber-500 text-white px-2 py-0.5 rounded text-[10px]">Edit</button>
+        <button onclick="deleteSubject(${i})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">Hapus</button>
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-function editSubject(index) {
+function editSubject(i) {
   let subjects = JSON.parse(localStorage.getItem('cbt_subjects') || '[]');
-  const subject = subjects[index];
+  const name = prompt("Edit Nama Mapel:", subjects[i].name);
+  if (name) {
+    subjects[i].name = name.trim();
+    localStorage.setItem('cbt_subjects', JSON.stringify(subjects));
+    renderSubjectTable();
+  }
+}
 
-  const newCode = prompt("Masukkan Kode Mapel Baru:", subject.code);
-  if (newCode === null) return;
+function deleteSubject(i) {
+  let subjects = JSON.parse(localStorage.getItem('cbt_subjects') || '[]');
+  if (confirm(`Hapus mapel ${subjects[i].name}?`)) {
+    subjects.splice(i, 1);
+    localStorage.setItem('cbt_subjects', JSON.stringify(subjects));
+    renderSubjectTable();
+  }
+}
 
-  const newName = prompt("Masukkan Nama Mapel Baru:", subject.name);
-  if (newName === null) return;
+function renderAdminResultsTable() {
+  const tbody = document.getElementById('adminExamResultsTable');
+  if (!tbody) return;
+  const results = JSON.parse(localStorage.getItem('cbt_results') || '[]');
+  tbody.innerHTML = '';
 
-  if (!newCode.trim() || !newName.trim()) {
-    alert("Kode dan Nama Mapel tidak boleh kosong!");
+  if (!results.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="p-3 text-center text-slate-400">Belum ada rekap hasil ujian.</td></tr>`;
     return;
   }
 
-  subjects[index] = {
-    code: newCode.trim().toUpperCase(),
-    name: newName.trim()
-  };
-
-  localStorage.setItem('cbt_subjects', JSON.stringify(subjects));
-  renderSubjectTable();
-  alert("Mata pelajaran berhasil diperbarui!");
-}
-
-function deleteSubject(index) {
-  let subjects = JSON.parse(localStorage.getItem('cbt_subjects') || '[]');
-  const subjectName = subjects[index].name;
-
-  if (confirm(`Apakah Anda yakin ingin menghapus mapel "${subjectName}"?`)) {
-    subjects.splice(index, 1);
-    localStorage.setItem('cbt_subjects', JSON.stringify(subjects));
-    renderSubjectTable();
-    alert("Mata pelajaran berhasil dihapus!");
-  }
+  results.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.className = 'border-b hover:bg-slate-50';
+    tr.innerHTML = `
+      <td class="p-2 font-semibold">${r.studentName}</td>
+      <td class="p-2">${r.examTitle}</td>
+      <td class="p-2">${r.objScore || 0}</td>
+      <td class="p-2">${r.essayScore !== undefined ? r.essayScore : '-'}</td>
+      <td class="p-2 font-bold text-blue-900">${(r.objScore || 0) + (r.essayScore || 0)}</td>
+      <td class="p-2"><span class="px-2 py-0.5 text-[10px] rounded ${r.essayScore !== undefined ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${r.essayScore !== undefined ? 'Selesai' : 'Perlu Koreksi'}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
