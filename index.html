@@ -610,6 +610,22 @@
       </div>
     </section>
 
+    <!-- VIEW 4: DASHBOARD SISWA -->
+    <section id="viewStudent" class="hidden space-y-6">
+      <div class="bg-blue-900 text-white p-4 rounded-xl shadow flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-bold">Ruang Ujian Siswa</h2>
+          <p class="text-xs text-blue-200">SMP Qur'an Al Wahdah</p>
+        </div>
+      </div>
+      <div id="studentTokenCard" class="max-w-md mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center space-y-4">
+        <i class="fa-solid fa-key text-4xl text-blue-600"></i>
+        <h3 class="font-bold text-base text-slate-800">Masukkan Token Ujian</h3>
+        <input type="text" id="studentTokenInput" placeholder="TOKEN" class="w-full text-center tracking-widest text-lg font-mono font-bold uppercase px-3 py-2 border rounded-lg">
+        <button onclick="validateStudentToken()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs shadow">Konfirmasi & Mulai Ujian</button>
+      </div>
+    </section>
+
   </main>
 
   <!-- MODAL: BUAT PAKET SOAL -->
