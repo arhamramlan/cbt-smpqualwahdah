@@ -26,6 +26,11 @@ body {
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
 }
 
+textarea[dir="rtl"], input[dir="rtl"] {
+  font-family: 'Amiri', 'Traditional Arabic', 'Arial', sans-serif;
+  font-size: 1.1rem;
+}
+
 @media print {
   header, nav, button, input, select, .print\:hidden {
     display: none !important;
