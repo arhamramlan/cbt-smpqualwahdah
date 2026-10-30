@@ -1,5 +1,5 @@
 // ==========================================
-// APP-CORE.JS: CORE SYSTEM & ADMIN MANAGEMENT
+// APP-CORE.JS: MIGRATION, AUTH, ADMIN HUB & LOGS
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -34,7 +34,7 @@ function initDefaultData() {
     const defaultUsers = [
       { id: '1', username: 'admin', password: 'admin123', name: 'Administrator', role: 'admin', active: true },
       { id: '2', username: 'guru1', password: 'guru123', name: 'Ustadz Fulan, S.Pd.', role: 'guru', active: true, teacherAssignments: [{ subject: 'PAI', classes: ['VII-A', 'VII-B'] }] },
-      { id: '3', username: 'murid1', password: 'murid123', name: 'Ahmad Abdullah', role: 'siswa', nisn: '00123456', class: 'VII-A', active: true }
+      { id: '3', username: 'siswa1', password: '123', name: 'Ahmad Abdullah', role: 'siswa', nisn: '00123456', class: 'VII-A', active: true }
     ];
     localStorage.setItem('cbt_users', JSON.stringify(defaultUsers));
   }
@@ -54,6 +54,22 @@ function initDefaultData() {
     ]));
   }
 
+  if (!localStorage.getItem('cbt_packages')) {
+    localStorage.setItem('cbt_packages', JSON.stringify([
+      {
+        id: 'PKG_PAI_7_1',
+        title: 'PAI Kelas 7 PTS Ganjil',
+        subject: 'PAI',
+        targetClass: 'VII-A',
+        status: 'Siap',
+        questions: [
+          { type: 'PG', text: 'Ibu kota Indonesia adalah...', options: ['Bandung', 'Jakarta', 'Surabaya', 'Medan'], key: 'Jakarta', score: 2 },
+          { type: 'ISIAN', text: 'Rukun Islam yang pertama adalah...', key: 'syahadat | dua kalimat syahadat', score: 2 }
+        ]
+      }
+    ]));
+  }
+
   if (!localStorage.getItem('cbt_settings')) {
     localStorage.setItem('cbt_settings', JSON.stringify({
       schoolName: "SMP Qur'an Al Wahdah",
@@ -63,9 +79,7 @@ function initDefaultData() {
     }));
   }
 
-  if (!localStorage.getItem('cbt_logs')) {
-    localStorage.setItem('cbt_logs', JSON.stringify([]));
-  }
+  if (!localStorage.getItem('cbt_logs')) localStorage.setItem('cbt_logs', JSON.stringify([]));
 }
 
 function logActivity(eventText) {
@@ -181,6 +195,7 @@ function switchAdminTab(tabId) {
   if (tabId === 'adminTabLogs') renderLogsTable();
 }
 
+// MASTER KELAS & MAPEL & USER
 function handleSaveClass(e) {
   e.preventDefault();
   const oldCode = document.getElementById('editClassOldCode').value;
@@ -189,7 +204,6 @@ function handleSaveClass(e) {
   const homeroom = document.getElementById('classHomeroomInput').value.trim() || '-';
 
   let classes = JSON.parse(localStorage.getItem('cbt_classes') || '[]');
-
   if (!oldCode && classes.some(c => c.code === code)) return alert('Kode kelas sudah ada!');
 
   if (oldCode) {
@@ -200,7 +214,7 @@ function handleSaveClass(e) {
   }
 
   localStorage.setItem('cbt_classes', JSON.stringify(classes));
-  alert('Kelas berhasil disimpan!');
+  alert('Kelas disimpan!');
   document.getElementById('editClassOldCode').value = '';
   document.getElementById('classNameInput').value = '';
   document.getElementById('classHomeroomInput').value = '';
@@ -214,7 +228,7 @@ function renderClassTable() {
   const classes = JSON.parse(localStorage.getItem('cbt_classes') || '[]');
   const users = JSON.parse(localStorage.getItem('cbt_users') || '[]');
 
-  tbody.innerHTML = classes.map((c, i) => {
+  tbody.innerHTML = classes.map(c => {
     const studentCount = users.filter(u => u.role === 'siswa' && u.class === c.code).length;
     return `
       <tr class="border-b">
@@ -243,7 +257,7 @@ function editClass(code) {
 }
 
 function deleteClass(code, studentCount) {
-  if (studentCount > 0) return alert(`Tidak bisa menghapus kelas ${code} karena masih berisi ${studentCount} siswa!`);
+  if (studentCount > 0) return alert(`Tidak bisa menghapus kelas ${code} karena masih terikat ${studentCount} siswa!`);
   if (confirm(`Hapus kelas ${code}?`)) {
     let classes = JSON.parse(localStorage.getItem('cbt_classes') || '[]');
     classes = classes.filter(c => c.code !== code);
@@ -260,7 +274,6 @@ function handleSaveSubject(e) {
   const name = document.getElementById('subjectNameInput').value.trim();
 
   let subjects = JSON.parse(localStorage.getItem('cbt_subjects') || '[]');
-
   if (!oldCode && subjects.some(s => s.code === code)) return alert('Kode mapel sudah ada!');
 
   if (oldCode) {
@@ -271,7 +284,7 @@ function handleSaveSubject(e) {
   }
 
   localStorage.setItem('cbt_subjects', JSON.stringify(subjects));
-  alert('Mata pelajaran disimpan!');
+  alert('Mapel disimpan!');
   document.getElementById('editSubjectOldCode').value = '';
   document.getElementById('subjectCodeInput').value = '';
   document.getElementById('subjectNameInput').value = '';
@@ -306,7 +319,7 @@ function editSubject(code) {
 }
 
 function deleteSubject(code) {
-  if (confirm(`Hapus mata pelajaran ${code}?`)) {
+  if (confirm(`Hapus mapel ${code}?`)) {
     let subjects = JSON.parse(localStorage.getItem('cbt_subjects') || '[]');
     subjects = subjects.filter(s => s.code !== code);
     localStorage.setItem('cbt_subjects', JSON.stringify(subjects));
@@ -627,6 +640,7 @@ function backupSystemData() {
     users: JSON.parse(localStorage.getItem('cbt_users') || '[]'),
     classes: JSON.parse(localStorage.getItem('cbt_classes') || '[]'),
     subjects: JSON.parse(localStorage.getItem('cbt_subjects') || '[]'),
+    packages: JSON.parse(localStorage.getItem('cbt_packages') || '[]'),
     settings: JSON.parse(localStorage.getItem('cbt_settings') || '{}'),
     schedules: JSON.parse(localStorage.getItem('cbt_schedules') || '[]')
   };
@@ -649,11 +663,12 @@ function restoreSystemData(e) {
       if (data.users) localStorage.setItem('cbt_users', JSON.stringify(data.users));
       if (data.classes) localStorage.setItem('cbt_classes', JSON.stringify(data.classes));
       if (data.subjects) localStorage.setItem('cbt_subjects', JSON.stringify(data.subjects));
+      if (data.packages) localStorage.setItem('cbt_packages', JSON.stringify(data.packages));
       if (data.settings) localStorage.setItem('cbt_settings', JSON.stringify(data.settings));
-      alert('Database berhasil di-restore!');
+      alert('Database di-restore!');
       location.reload();
     } catch (err) {
-      alert('Format file JSON tidak valid!');
+      alert('File JSON tidak valid!');
     }
   };
   reader.readAsText(file);
