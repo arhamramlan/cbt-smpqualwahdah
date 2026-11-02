@@ -19,26 +19,24 @@ import {
 } from './firebase-config.js';
 
 let currentUserSession = null;
+let isLogoutProcessing = false;
 
-// Inisialisasi Aplikasi saat DOM Siap
 document.addEventListener('DOMContentLoaded', () => {
-  // Cek Sesi Pengguna dari LocalStorage
-  const savedSession = localStorage.getItem('cbt_session');
-  if (savedSession) {
-    try {
-      currentUserSession = JSON.parse(savedSession);
-      renderUserInterface();
-    } catch (e) {
-      localStorage.removeItem('cbt_session');
-      renderUserInterface();
-    }
-  } else {
-    renderUserInterface();
-  }
-
-  // Muat Pengaturan Header Publik
+  initAuthObserver();
   initSettingsListener();
+  setupGlobalEvents();
 });
+
+function setupGlobalEvents() {
+  const logoutBtn = document.getElementById('btnLogoutHeader');
+  if (logoutBtn && !logoutBtn.dataset.bound) {
+    logoutBtn.dataset.bound = "true";
+    logoutBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.handleLogout();
+    });
+  }
+}
 
 function initAuthObserver() {
   onAuthStateChanged(auth, async (user) => {
@@ -87,6 +85,7 @@ function renderUserInterface() {
   if (currentUserSession.role === 'admin') {
     document.getElementById('viewAdmin')?.classList.remove('hidden');
     listenToMasterData();
+    renderAdminSummary();
   } else if (currentUserSession.role === 'guru') {
     document.getElementById('viewTeacher')?.classList.remove('hidden');
     if (window.initTeacherFirebaseDashboard) window.initTeacherFirebaseDashboard(currentUserSession);
@@ -96,148 +95,152 @@ function renderUserInterface() {
 }
 
 // -------------------------------------------------------------
-// NAVIGASI TAB ADMIN & AUTH
+// HELPER FORMAT TANGGAL & LOG AKTIVITAS (DEDUPLIKASI LOG)
 // -------------------------------------------------------------
 
-window.switchAdminTab = function(tabId) {
-  document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.add('hidden'));
-  document.querySelectorAll('.admin-tab-btn').forEach(el => el.classList.remove('active-tab'));
+function formatIndonesiaDateTime(timestamp) {
+  const date = new Date(timestamp || Date.now());
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = months[date.getMonth()];
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${day} ${month} ${year}, ${hours}.${minutes}.${seconds}`;
+}
 
-  const target = document.getElementById(tabId);
-  if (target) target.classList.remove('hidden');
-  
-  const btnMap = {
-    'adminTabUsers': 'btnAdminUsers',
-    'adminTabClasses': 'btnAdminClasses',
-    'adminTabSubjects': 'btnAdminSubjects',
-    'adminTabAssign': 'btnAdminAssign',
-    'adminTabCards': 'btnAdminCards',
-    'adminTabLogs': 'btnAdminLogs',
-    'adminTabSettings': 'btnAdminSettings'
-  };
-
-  if (btnMap[tabId] && document.getElementById(btnMap[tabId])) {
-    document.getElementById(btnMap[tabId]).classList.add('active-tab');
-  }
-
-  if (tabId === 'adminTabAssign') window.populateAssignTab();
-  if (tabId === 'adminTabCards') window.renderExamCards();
-  if (tabId === 'adminTabLogs') listenToLogs();
-  if (tabId === 'adminTabSettings') loadSettingsForm();
-};
-
-// Fungsi Login Langsung Cek Ke Database Firestore
-window.handleLogin = async function(e) {
-  e.preventDefault();
-  const u = document.getElementById('loginUsername').value.trim();
-  const p = document.getElementById('loginPassword').value.trim();
-
-  if (!u || !p) return alert("Username dan Password wajib diisi!");
-
+async function logActivity(eventText) {
+  if (!currentUserSession) return;
   try {
-    // 1. Cari pengguna berdasarkan username di koleksi Firestore 'users'
-    const q = query(collection(db, "users"), where("username", "==", u));
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-      return alert("Login Gagal: Username tidak ditemukan!");
-    }
-
-    let userData = null;
-    let userId = null;
-
-    querySnapshot.forEach((docSnap) => {
-      userData = docSnap.data();
-      userId = docSnap.id;
+    await addDoc(collection(db, "logs"), {
+      formattedTime: formatIndonesiaDateTime(Date.now()),
+      timestamp: Date.now(),
+      user: currentUserSession.name || currentUserSession.username || 'Sistem',
+      role: currentUserSession.role || 'system',
+      event: eventText
     });
-
-    // 2. Cek status aktif akun
-    if (userData.active === false) {
-      return alert("Login Gagal: Akun Anda sedang dinonaktifkan oleh Admin!");
-    }
-
-    // 3. Verifikasi Password dari Firestore
-    if (userData.password && userData.password !== p) {
-      return alert("Login Gagal: Password salah!");
-    }
-
-    // 4. Simpan Sesi Pengguna
-    currentUserSession = {
-      uid: userId,
-      name: userData.name || userData.username,
-      role: userData.role || 'siswa',
-      ...userData
-    };
-
-    localStorage.setItem('cbt_session', JSON.stringify(currentUserSession));
-    alert(`Selamat datang, ${currentUserSession.name}!`);
-    
-    // 5. Render tampilan sesuai role
-    renderUserInterface();
-    logActivity(`User ${u} (${userData.role}) berhasil login.`);
-
-  } catch (err) {
-    alert("Gagal melakukan login: " + err.message);
+  } catch (e) {
+    console.error("Gagal mencatat log:", e);
   }
-};
-// Fungsi Logout Global
+}
+
 window.handleLogout = async function() {
-  if (confirm("Apakah Anda yakin ingin keluar dari sistem?")) {
-    try {
-      // 1. Catat aktivitas logout jika sesi aktif
-      if (typeof logActivity === 'function') {
-        await logActivity(`User logout dari sistem.`);
-      }
+  if (isLogoutProcessing) return;
+  if (!confirm("Apakah Anda yakin ingin keluar dari sistem CBT?")) return;
 
-      // 2. Hapus sesi lokal di LocalStorage
-      localStorage.removeItem('cbt_session');
-      currentUserSession = null;
-
-      // 3. Logout dari Firebase Auth (jika terhubung)
-      if (auth) {
-        await signOut(auth);
-      }
-    } catch (err) {
-      console.warn("Logout firebase auth:", err.message);
-    } finally {
-      // 4. Bersihkan halaman dan muat ulang ke layar Login
-      location.reload();
-    }
+  isLogoutProcessing = true;
+  try {
+    await logActivity(`Pengguna keluar dari sistem.`);
+    localStorage.removeItem('cbt_session');
+    currentUserSession = null;
+    await signOut(auth);
+  } catch (err) {
+    console.warn("Logout error:", err.message);
+  } finally {
+    isLogoutProcessing = false;
+    location.reload();
   }
 };
 
 // -------------------------------------------------------------
-// MANAJEMEN PENGGUNA (USERS)
+// MANAJEMEN PENGGUNA (TAMBAH, EDIT, RESET PASSWORD, HAPUS)
 // -------------------------------------------------------------
+
+function generateSecureRandomPassword() {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let pass = '';
+  for (let i = 0; i < 7; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pass;
+}
 
 window.handleSaveUser = async function(e) {
   e.preventDefault();
+  const editId = document.getElementById('editUserId')?.value;
   const name = document.getElementById('userName').value.trim();
-  const username = document.getElementById('userUsername').value.trim();
+  const username = document.getElementById('userUsername').value.trim().toLowerCase();
   const role = document.getElementById('userRole').value;
   const nisn = document.getElementById('userNisn')?.value.trim() || '';
   const userClass = document.getElementById('userClass')?.value || '';
-  const password = document.getElementById('userPassword')?.value.trim() || '123456';
 
-  if (!name || !username) return alert("Nama dan Username wajib diisi!");
+  if (!name || !username) return alert("Nama Lengkap dan Username wajib diisi!");
+  if (role === 'siswa' && !nisn) return alert("NISN wajib diisi untuk siswa!");
 
   try {
-    const newDocRef = doc(collection(db, "users"));
-    await setDoc(newDocRef, {
-      name,
-      username,
-      role,
-      nisn,
-      class: userClass,
-      password,
-      active: true,
-      createdAt: Date.now()
-    });
-    alert("Pengguna berhasil ditambahkan!");
+    // Validasi Duplikat Username
+    const qUser = query(collection(db, "users"), where("username", "==", username));
+    const snapUser = await getDocs(qUser);
+    if (!editId && !snapUser.empty) {
+      return alert(`Username "${username}" sudah digunakan oleh akun lain!`);
+    }
+
+    if (editId) {
+      // Edit Pengguna
+      await updateDoc(doc(db, "users", editId), {
+        name,
+        role,
+        nisn,
+        class: userClass,
+        updatedAt: Date.now()
+      });
+      alert(`Data pengguna ${name} berhasil diperbarui!`);
+      logActivity(`Memperbarui profil pengguna: ${username}`);
+    } else {
+      // Tambah Pengguna Baru + Buat Password Acak
+      const tempPassword = generateSecureRandomPassword();
+      const newDocRef = doc(collection(db, "users"));
+      
+      await setDoc(newDocRef, {
+        name,
+        username,
+        role,
+        nisn,
+        class: userClass,
+        active: true,
+        mustChangePassword: true,
+        createdAt: Date.now()
+      });
+
+      alert(`Pengguna Baru Berhasil Ditambahkan!\n\nNama: ${name}\nUsername: ${username}\nPassword Sementara: ${tempPassword}\n\n*Catat kata sandi ini karena tidak akan ditampilkan lagi demi keamanan.*`);
+      logActivity(`Menambahkan pengguna baru: ${username} (${role})`);
+    }
+
     window.resetUserForm();
-    logActivity(`Menambahkan pengguna baru: ${name} (${role})`);
   } catch (err) {
     alert("Gagal menyimpan pengguna: " + err.message);
+  }
+};
+
+window.resetPasswordUser = async function(userId, username) {
+  if (confirm(`Reset password untuk pengguna ${username}? Kata sandi acak baru akan dibuat.`)) {
+    const newTempPassword = generateSecureRandomPassword();
+    try {
+      await updateDoc(doc(db, "users", userId), { 
+        mustChangePassword: true,
+        updatedAt: Date.now() 
+      });
+      alert(`Password Berhasil Di-reset!\n\nUsername: ${username}\nPassword Baru Sementara: ${newTempPassword}`);
+      logActivity(`Mereset kata sandi pengguna: ${username}`);
+    } catch (err) {
+      alert("Gagal mereset password: " + err.message);
+    }
+  }
+};
+
+window.editUserDoc = async function(userId) {
+  const docSnap = await getDoc(doc(db, "users", userId));
+  if (docSnap.exists()) {
+    const u = docSnap.data();
+    document.getElementById('editUserId').value = userId;
+    document.getElementById('userName').value = u.name || '';
+    document.getElementById('userUsername').value = u.username || '';
+    document.getElementById('userUsername').disabled = true; // Username tidak boleh diubah
+    document.getElementById('userRole').value = u.role || 'siswa';
+    if (document.getElementById('userNisn')) document.getElementById('userNisn').value = u.nisn || '';
+    if (document.getElementById('userClass')) document.getElementById('userClass').value = u.class || '';
+    window.toggleRoleFields();
   }
 };
 
@@ -245,44 +248,27 @@ window.resetUserForm = function() {
   document.getElementById('editUserId').value = '';
   document.getElementById('userName').value = '';
   document.getElementById('userUsername').value = '';
-  document.getElementById('userPassword').value = '';
+  document.getElementById('userUsername').disabled = false;
   if (document.getElementById('userNisn')) document.getElementById('userNisn').value = '';
 };
 
-window.toggleRoleFields = function() {
-  const role = document.getElementById('userRole').value;
-  const fieldSiswa = document.getElementById('fieldSiswa');
-  if (fieldSiswa) {
-    if (role === 'siswa') fieldSiswa.classList.remove('hidden');
-    else fieldSiswa.classList.add('hidden');
-  }
-};
-
-window.generateAutoPassword = function() {
-  document.getElementById('userPassword').value = Math.random().toString(36).substring(2, 8);
-};
-
 window.toggleUserActive = async function(userId, currentStatus, username) {
-  if (username === 'admin') {
-    return alert("Akun Admin Utama tidak bisa dinonaktifkan!");
-  }
+  if (username === 'admin') return alert("Akun Admin Utama tidak bisa dinonaktifkan!");
 
-  try {
-    const newStatus = !currentStatus;
-    await updateDoc(doc(db, "users", userId), { active: newStatus });
-    alert(`Status akun ${username} diubah menjadi: ${newStatus ? 'Aktif' : 'Nonaktif'}`);
-    logActivity(`Mengubah status pengguna ${username} menjadi ${newStatus ? 'Aktif' : 'Nonaktif'}`);
-  } catch (err) {
-    alert("Gagal mengubah status: " + err.message);
+  if (confirm(`Ubah status akun ${username} menjadi ${!currentStatus ? 'Aktif' : 'Nonaktif'}?`)) {
+    try {
+      await updateDoc(doc(db, "users", userId), { active: !currentStatus });
+      logActivity(`Mengubah status akun ${username} menjadi ${!currentStatus ? 'Aktif' : 'Nonaktif'}`);
+    } catch (err) {
+      alert("Gagal mengubah status: " + err.message);
+    }
   }
 };
 
 window.deleteUserDoc = async function(userId, username) {
-  if (username === 'admin') {
-    return alert("Akun Admin Utama tidak bisa dihapus!");
-  }
+  if (username === 'admin') return alert("Akun Admin Utama tidak bisa dihapus!");
 
-  if (confirm(`Apakah Anda yakin ingin menghapus akun ${username} secara permanen?`)) {
+  if (confirm(`Apakah Anda YAKIN ingin menghapus akun ${username} secara permanen?`)) {
     try {
       await deleteDoc(doc(db, "users", userId));
       alert(`Akun ${username} berhasil dihapus.`);
@@ -293,318 +279,101 @@ window.deleteUserDoc = async function(userId, username) {
   }
 };
 
-window.togglePasswordVisibility = function(elementId) {
-  const el = document.getElementById(elementId);
-  if (el) {
-    el.type = el.type === "password" ? "text" : "password";
-  }
-};
-
 // -------------------------------------------------------------
-// IMPOR & TEMPLATE EXCEL PENGGUNA
+// MASTER KELAS, MAPEL & HITUNG PENGGUNA REAL-TIME
 // -------------------------------------------------------------
 
-window.downloadUserTemplate = function() {
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
-  }
-
-  const templateData = [
-    {
-      "Nama Lengkap": "Ahmad Abdullah",
-      "Username": "ahmad01",
-      "Role": "siswa",
-      "NISN": "0012345678",
-      "Kelas": "VII",
-      "Password": "123"
-    },
-    {
-      "Nama Lengkap": "Arham Ramlan",
-      "Username": "arham",
-      "Role": "guru",
-      "NISN": "",
-      "Kelas": "",
-      "Password": "guru123"
-    }
-  ];
-
-  const worksheet = XLSX.utils.json_to_sheet(templateData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Template Pengguna");
-
-  worksheet['!cols'] = [
-    { wch: 30 },
-    { wch: 18 },
-    { wch: 12 },
-    { wch: 15 },
-    { wch: 10 },
-    { wch: 15 }
-  ];
-
-  XLSX.writeFile(workbook, "Template_Import_Pengguna_CBT.xlsx");
-};
-
-window.handleImportUsersExcel = function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
-  }
-
-  const reader = new FileReader();
-  reader.onload = async function(evt) {
-    try {
-      const data = new Uint8Array(evt.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const jsonUsers = XLSX.utils.sheet_to_json(worksheet);
-
-      if (!jsonUsers || jsonUsers.length === 0) {
-        return alert("File Excel kosong atau format tidak sesuai!");
-      }
-
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const row of jsonUsers) {
-        const name = row["Nama Lengkap"] ? String(row["Nama Lengkap"]).trim() : "";
-        const username = row["Username"] ? String(row["Username"]).trim() : "";
-        const role = row["Role"] ? String(row["Role"]).trim().toLowerCase() : "siswa";
-        const nisn = row["NISN"] ? String(row["NISN"]).trim() : "";
-        const userClass = row["Kelas"] ? String(row["Kelas"]).trim().toUpperCase() : "";
-        const password = row["Password"] ? String(row["Password"]).trim() : "123456";
-
-        if (name && username) {
-          const newDocRef = doc(collection(db, "users"));
-          await setDoc(newDocRef, {
-            name,
-            username,
-            role,
-            nisn,
-            class: userClass,
-            password,
-            active: true,
-            createdAt: Date.now()
-          });
-          successCount++;
-        } else {
-          failCount++;
-        }
-      }
-
-      alert(`Impor Selesai!\n✔ ${successCount} Pengguna Ditambahkan.\n${failCount > 0 ? `✖ ${failCount} Baris Gagal.` : ''}`);
-      e.target.value = '';
-    } catch (err) {
-      alert("Gagal memproses file Excel: " + err.message);
-    }
-  };
-
-  reader.readAsArrayBuffer(file);
-};
-
-window.filterUserTableUI = function() {
-  const search = (document.getElementById('searchUser')?.value || '').toLowerCase();
-  const roleFilter = document.getElementById('filterRole')?.value || '';
-  const classFilter = document.getElementById('filterUserClass')?.value || '';
-
-  const rows = document.querySelectorAll('#userTableBody tr');
-  rows.forEach(row => {
-    const text = row.innerText.toLowerCase();
-    const matchesSearch = text.includes(search);
-    const matchesRole = !roleFilter || text.includes(roleFilter);
-    const matchesClass = !classFilter || text.includes(classFilter.toLowerCase());
-
-    row.style.display = (matchesSearch && matchesRole && matchesClass) ? '' : 'none';
-  });
-};
-
-// -------------------------------------------------------------
-// MASTER KELAS & MAPEL FIRESTORE
-// -------------------------------------------------------------
-
-window.handleSaveClass = async function(e) {
-  e.preventDefault();
-  const code = document.getElementById('classNameInput').value.trim().toUpperCase();
-  const level = document.getElementById('classLevelInput').value;
-  const homeroom = document.getElementById('classHomeroomInput').value.trim() || '-';
-
-  if (!code) return alert("Kode kelas wajib diisi!");
-
-  try {
-    await setDoc(doc(db, "classes", code), {
-      code,
-      level,
-      homeroom,
-      updatedAt: Date.now()
+function listenToMasterData() {
+  onSnapshot(collection(db, "users"), (userSnap) => {
+    const users = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderUserTable(users);
+    
+    // Hitung Jumlah Siswa per Kelas secara Real-Time
+    onSnapshot(collection(db, "classes"), (classSnap) => {
+      const classes = classSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderClassTable(classes, users);
+      populateClassOptions(classes);
     });
-    alert(`Kelas ${code} berhasil disimpan!`);
-    document.getElementById('classNameInput').value = '';
-    document.getElementById('classHomeroomInput').value = '';
-    logActivity(`Menyimpan Master Kelas: ${code}`);
-  } catch (err) {
-    alert("Gagal menyimpan kelas: " + err.message);
-  }
-};
+  });
 
-window.deleteClass = async function(code) {
+  onSnapshot(collection(db, "subjects"), (snapshot) => {
+    const subjects = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderSubjectTable(subjects);
+  });
+}
+
+function renderClassTable(classes, users) {
+  const tbody = document.getElementById('classTableBody');
+  if (!tbody) return;
+
+  tbody.innerHTML = classes.length ? classes.map(c => {
+    const studentCount = users.filter(u => u.role === 'siswa' && u.class === c.code).length;
+    return `
+      <tr class="border-b text-xs">
+        <td class="p-2.5 font-bold text-blue-900">${c.code}</td>
+        <td class="p-2.5">Tingkat ${c.level}</td>
+        <td class="p-2.5">${c.homeroom || '-'}</td>
+        <td class="p-2.5 font-bold text-slate-700">${studentCount} Siswa</td>
+        <td class="p-2.5 text-center space-x-1">
+          <button onclick="deleteClass('${c.code}', ${studentCount})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
+        </td>
+      </tr>
+    `;
+  }).join('') : `<tr><td colspan="5" class="p-4 text-center text-slate-400">Belum ada kelas.</td></tr>`;
+}
+
+window.deleteClass = async function(code, studentCount) {
+  if (studentCount > 0) {
+    return alert(`Gagal Menghapus: Kelas ${code} masih memiliki ${studentCount} siswa terdaftar!`);
+  }
   if (confirm(`Hapus kelas ${code}?`)) {
     await deleteDoc(doc(db, "classes", code));
     logActivity(`Menghapus Master Kelas: ${code}`);
   }
 };
 
-window.handleSaveSubject = async function(e) {
-  e.preventDefault();
-  const code = document.getElementById('subjectCodeInput').value.trim().toUpperCase();
-  const name = document.getElementById('subjectNameInput').value.trim();
-
-  if (!code || !name) return alert("Kode dan nama mapel wajib diisi!");
-
-  try {
-    await setDoc(doc(db, "subjects", code), { code, name, updatedAt: Date.now() });
-    alert(`Mapel ${name} berhasil disimpan!`);
-    document.getElementById('subjectCodeInput').value = '';
-    document.getElementById('subjectNameInput').value = '';
-    logActivity(`Menyimpan Master Mapel: ${name}`);
-  } catch (err) {
-    alert("Gagal menyimpan mapel: " + err.message);
-  }
-};
-
-window.deleteSubject = async function(code) {
-  if (confirm(`Hapus mapel ${code}?`)) {
-    await deleteDoc(doc(db, "subjects", code));
-    logActivity(`Menghapus Master Mapel: ${code}`);
-  }
-};
-
-// -------------------------------------------------------------
-// MODUL PENUGASAN GURU
-// -------------------------------------------------------------
-
-window.populateAssignTab = async function() {
-  try {
-    const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "guru")));
-    const teachers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
-    const teacherSelect = document.getElementById('assignTeacherSelect');
-    if (teacherSelect) {
-      teacherSelect.innerHTML = teachers.length 
-        ? teachers.map(g => `<option value="${g.id}">${g.name || g.username}</option>`).join('')
-        : `<option value="">-- Belum Ada Guru --</option>`;
-    }
-
-    const subjectsSnap = await getDocs(collection(db, "subjects"));
-    const subjects = subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
-    const subSelect = document.getElementById('assignSubjectSelect');
-    if (subSelect) {
-      subSelect.innerHTML = subjects.length 
-        ? subjects.map(s => `<option value="${s.code}">${s.name} (${s.code})</option>`).join('')
-        : `<option value="">-- Belum Ada Mapel --</option>`;
-    }
-
-    const classesSnap = await getDocs(collection(db, "classes"));
-    const classes = classesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
-    const classBox = document.getElementById('assignClassesBox');
-    if (classBox) {
-      classBox.innerHTML = classes.length 
-        ? classes.map(c => `
-          <label class="flex items-center text-xs space-x-2 py-0.5">
-            <input type="checkbox" name="assignCls" value="${c.code}" class="rounded border-slate-300">
-            <span>Kelas ${c.code}</span>
-          </label>
-        `).join('')
-        : `<p class="text-xs text-slate-400">Belum ada kelas.</p>`;
-    }
-
-    window.renderTeacherAssignmentUI();
-  } catch (err) {
-    console.error("Gagal memuat form penugasan:", err);
-  }
-};
-
-window.addTeacherAssignment = async function() {
-  const teacherId = document.getElementById('assignTeacherSelect')?.value;
-  const subjectCode = document.getElementById('assignSubjectSelect')?.value;
-  const selectedClasses = Array.from(document.querySelectorAll('input[name="assignCls"]:checked')).map(cb => cb.value);
-
-  if (!teacherId || !subjectCode || !selectedClasses.length) return alert('Lengkapi pilihan Guru, Mapel, dan Kelas!');
-
-  try {
-    const teacherRef = doc(db, "users", teacherId);
-    const teacherSnap = await getDoc(teacherRef);
-
-    if (teacherSnap.exists()) {
-      let assignments = teacherSnap.data().teacherAssignments || [];
-      const existingIndex = assignments.findIndex(a => a.subject === subjectCode);
-
-      if (existingIndex > -1) {
-        assignments[existingIndex].classes = Array.from(new Set([...assignments[existingIndex].classes, ...selectedClasses]));
-      } else {
-        assignments.push({ subject: subjectCode, classes: selectedClasses });
-      }
-
-      await updateDoc(teacherRef, { teacherAssignments: assignments });
-      alert("Penugasan guru berhasil disimpan!");
-      logActivity(`Memperbarui penugasan guru: ${teacherSnap.data().name}`);
-      window.renderTeacherAssignmentUI();
-    }
-  } catch (err) {
-    alert("Gagal menyimpan penugasan: " + err.message);
-  }
-};
-
-window.renderTeacherAssignmentUI = async function() {
-  const tbody = document.getElementById('teacherAssignmentTableBody');
+function renderUserTable(users) {
+  const tbody = document.getElementById('userTableBody');
   if (!tbody) return;
 
-  try {
-    const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "guru")));
-    const teachers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    let rows = [];
+  tbody.innerHTML = users.length ? users.map(u => {
+    const isAdmin = u.username === 'admin';
+    return `
+      <tr class="border-b text-xs">
+        <td class="p-2.5">
+          <strong class="text-slate-800 block">${u.name || u.username}</strong>
+          <span class="text-[10px] text-slate-500">Username: <code class="font-bold text-blue-900">${u.username}</code> ${u.nisn ? `| NISN: ${u.nisn}` : ''}</span>
+        </td>
+        <td class="p-2.5">
+          <span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase text-[10px]">${u.role}</span>
+          ${u.class ? `<span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] ml-1 font-semibold">${u.class}</span>` : ''}
+        </td>
+        <td class="p-2.5">
+          <button onclick="toggleUserActive('${u.id}', ${u.active !== false}, '${u.username}')" ${isAdmin ? 'disabled' : ''} class="px-2 py-0.5 rounded text-[10px] font-bold ${u.active !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+            ${u.active !== false ? '● Aktif' : '○ Nonaktif'}
+          </button>
+        </td>
+        <td class="p-2.5 text-center space-x-1">
+          ${isAdmin ? `<span class="text-[10px] text-slate-400 italic">Terproteksi</span>` : `
+            <button onclick="editUserDoc('${u.id}')" class="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Edit</button>
+            <button onclick="resetPasswordUser('${u.id}', '${u.username}')" class="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Reset Pass</button>
+            <button onclick="deleteUserDoc('${u.id}', '${u.username}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join('') : `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada pengguna.</td></tr>`;
+}
 
-    teachers.forEach(g => {
-      if (g.teacherAssignments && g.teacherAssignments.length > 0) {
-        g.teacherAssignments.forEach((a, aIdx) => {
-          rows.push(`
-            <tr class="border-b text-xs">
-              <td class="p-2.5 font-bold text-slate-800">${g.name || g.username}</td>
-              <td class="p-2.5 font-semibold text-blue-900">${a.subject}</td>
-              <td class="p-2.5">${a.classes ? a.classes.join(', ') : '-'}</td>
-              <td class="p-2.5 text-center">
-                <button onclick="removeTeacherAssignment('${g.id}', ${aIdx})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
-              </td>
-            </tr>
-          `);
-        });
-      }
-    });
-
-    tbody.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada penugasan guru.</td></tr>`;
-  } catch (err) {
-    console.error(err);
+function populateClassOptions(classes) {
+  const filterSelect = document.getElementById('filterUserClass');
+  if (filterSelect) {
+    filterSelect.innerHTML = `<option value="">Semua Kelas</option>` + classes.map(c => `<option value="${c.code}">${c.code}</option>`).join('');
   }
-};
-
-window.removeTeacherAssignment = async function(teacherId, assignIndex) {
-  if (confirm("Hapus penugasan ini?")) {
-    const teacherRef = doc(db, "users", teacherId);
-    const teacherSnap = await getDoc(teacherRef);
-    if (teacherSnap.exists()) {
-      let assignments = teacherSnap.data().teacherAssignments || [];
-      assignments.splice(assignIndex, 1);
-      await updateDoc(teacherRef, { teacherAssignments: assignments });
-      window.renderTeacherAssignmentUI();
-    }
-  }
-};
+}
 
 // -------------------------------------------------------------
-// CETAK KARTU UJIAN
+// CETAK KARTU UJIAN FORMAT TATA LETAK A4 (6-8 KARTU/HALAMAN)
 // -------------------------------------------------------------
 
 window.renderExamCards = async function() {
@@ -615,71 +384,55 @@ window.renderExamCards = async function() {
   const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "siswa")));
   const students = usersSnap.docs.map(d => d.data()).filter(s => !selectedClass || s.class === selectedClass);
 
-  const settingsDoc = await getDoc(doc(db, "settings", "academic"));
-  const settings = settingsDoc.exists() ? settingsDoc.data() : {};
+  const settingsDoc = await getDoc(doc(doc(db, "settings", "academic")));
+  const s = settingsDoc.exists() ? settingsDoc.data() : {};
 
   if (!students.length) {
-    grid.innerHTML = `<p class="text-xs text-slate-400 p-4">Tidak ada kartu peserta siswa untuk ditampilkan.</p>`;
+    grid.innerHTML = `<p class="text-xs text-slate-400 p-4">Tidak ada kartu peserta siswa untuk kelas ini.</p>`;
     return;
   }
 
-  grid.innerHTML = students.map(s => `
-    <div class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs">
-      <div class="text-center border-b pb-1">
-        <strong class="uppercase text-[11px] block font-bold text-blue-950">${settings.schoolName || 'SMP Qur\'an Al Wahdah'}</strong>
-        <span class="text-[9px] text-slate-500 uppercase font-bold">KARTU PESERTA UJIAN CBT ${settings.academicYear || '2026/2027'}</span>
-      </div>
-      <div class="space-y-0.5">
-        <div><strong>Nama:</strong> ${s.name || s.username}</div>
-        <div><strong>NISN / Kelas:</strong> ${s.nisn || '-'} / ${s.class || '-'}</div>
-        <div><strong>Username:</strong> <code class="font-bold text-blue-900">${s.username}</code></div>
-        <div><strong>Password:</strong> <code class="font-bold text-rose-700">${s.password || '123456'}</code></div>
-      </div>
+  grid.innerHTML = `
+    <div class="col-span-full mb-3 flex justify-between items-center bg-slate-100 p-2.5 rounded-lg">
+      <span class="text-xs text-slate-600 font-bold">Total Kartu: ${students.length} Peserta</span>
+      <button onclick="window.print()" class="bg-blue-800 text-white text-xs px-3 py-1 rounded font-bold">
+        <i class="fa-solid fa-print mr-1"></i> Cetak Kartu A4
+      </button>
     </div>
-  `).join('');
+    <div class="grid grid-cols-2 gap-4 col-span-full">
+      ${students.map(st => `
+        <div class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs relative">
+          <div class="text-center border-b pb-1">
+            <strong class="uppercase text-[11px] block font-bold text-blue-950">${s.schoolName || 'SMP QUR\'AN AL WAHDAH'}</strong>
+            <span class="text-[9px] text-slate-500 uppercase font-bold">KARTU PESERTA UJIAN CBT T.A ${s.academicYear || '2026/2027'} (${s.semester || 'GANJIL'})</span>
+          </div>
+          <div class="space-y-1 text-[11px]">
+            <div><strong>Nama:</strong> ${st.name || st.username}</div>
+            <div><strong>NISN / Kelas:</strong> ${st.nisn || '-'} / ${st.class || '-'}</div>
+            <div><strong>Username:</strong> <code class="font-bold text-blue-900">${st.username}</code></div>
+            <div><strong>Password:</strong> <em class="text-slate-500 text-[10px]">*Gunakan password sementara saat dibuat/direset</em></div>
+          </div>
+          <div class="border-t pt-1 text-[9px] text-slate-400 text-center font-bold uppercase">
+            Harap Jaga Kerahasiaan Kartu Ujian Ini
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 };
 
 // -------------------------------------------------------------
-// LOG AKTIVITAS & PENGATURAN SYSTEM
+// PENGATURAN SISTEM & HEADER REAL-TIME
 // -------------------------------------------------------------
 
-async function logActivity(eventText) {
-  if (!currentUserSession) return;
-  try {
-    await addDoc(collection(db, "logs"), {
-      time: new Date().toLocaleString('id-ID'),
-      timestamp: Date.now(),
-      user: currentUserSession.name || 'System',
-      event: eventText
-    });
-  } catch (e) { console.error(e); }
-}
-
-function listenToLogs() {
-  onSnapshot(collection(db, "logs"), (snapshot) => {
-    const logs = snapshot.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp);
-    const tbody = document.getElementById('adminLogsTableBody');
-    if (!tbody) return;
-
-    tbody.innerHTML = logs.length ? logs.map(l => `
-      <tr class="border-b text-xs">
-        <td class="p-2 font-mono text-[10px] text-slate-500">${l.time}</td>
-        <td class="p-2 font-bold">${l.user}</td>
-        <td class="p-2">${l.event}</td>
-      </tr>
-    `).join('') : `<tr><td colspan="3" class="p-4 text-center text-slate-400">Belum ada log aktivitas.</td></tr>`;
+function initSettingsListener() {
+  onSnapshot(doc(db, "settings", "academic"), (docSnap) => {
+    if (docSnap.exists()) {
+      const s = docSnap.data();
+      if (document.getElementById('headerSchoolName')) document.getElementById('headerSchoolName').innerText = s.schoolName || "SMP Qur'an Al Wahdah";
+      if (document.getElementById('headerSubTitle')) document.getElementById('headerSubTitle').innerText = `Sistem CBT - Tahun Ajaran ${s.academicYear || '2026/2027'} (${s.semester || 'Ganjil'})`;
+    }
   });
-}
-
-async function loadSettingsForm() {
-  const settingsDoc = await getDoc(doc(db, "settings", "academic"));
-  if (settingsDoc.exists()) {
-    const s = settingsDoc.data();
-    if (document.getElementById('settingSchoolName')) document.getElementById('settingSchoolName').value = s.schoolName || '';
-    if (document.getElementById('settingNPSN')) document.getElementById('settingNPSN').value = s.npsn || '';
-    if (document.getElementById('settingYear')) document.getElementById('settingYear').value = s.academicYear || '2026/2027';
-    if (document.getElementById('settingSemester')) document.getElementById('settingSemester').value = s.semester || 'Ganjil';
-  }
 }
 
 window.handleSaveSettings = async function(e) {
@@ -688,138 +441,16 @@ window.handleSaveSettings = async function(e) {
     schoolName: document.getElementById('settingSchoolName').value.trim(),
     npsn: document.getElementById('settingNPSN').value.trim(),
     academicYear: document.getElementById('settingYear').value.trim(),
-    semester: document.getElementById('settingSemester').value
+    semester: document.getElementById('settingSemester').value,
+    principalName: document.getElementById('settingPrincipal')?.value.trim() || '',
+    updatedAt: Date.now()
   };
 
   try {
     await setDoc(doc(db, "settings", "academic"), settingsData);
-    alert("Pengaturan sekolah berhasil disimpan!");
-    logActivity(`Memperbarui pengaturan sekolah`);
+    alert("Pengaturan Sekolah berhasil disimpan dan diperbarui di seluruh sistem!");
+    logActivity(`Memperbarui Pengaturan Sekolah & Akademik`);
   } catch (err) {
     alert("Gagal menyimpan pengaturan: " + err.message);
   }
 };
-
-// -------------------------------------------------------------
-// LISTENERS REAL-TIME MASTER DATA
-// -------------------------------------------------------------
-
-function listenToMasterData() {
-  onSnapshot(collection(db, "classes"), (snapshot) => {
-    const classes = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderClassTable(classes);
-    populateClassOptions(classes);
-  });
-
-  onSnapshot(collection(db, "subjects"), (snapshot) => {
-    const subjects = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderSubjectTable(subjects);
-  });
-
-  onSnapshot(collection(db, "users"), (snapshot) => {
-    const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderUserTable(users);
-  });
-}
-
-function renderClassTable(classes) {
-  const tbody = document.getElementById('classTableBody');
-  if (!tbody) return;
-
-  tbody.innerHTML = classes.length ? classes.map(c => `
-    <tr class="border-b text-xs">
-      <td class="p-2.5 font-bold text-blue-900">${c.code}</td>
-      <td class="p-2.5">Tingkat ${c.level}</td>
-      <td class="p-2.5">${c.homeroom || '-'}</td>
-      <td class="p-2.5">-</td>
-      <td class="p-2.5 text-center space-x-1">
-        <button onclick="deleteClass('${c.code}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
-      </td>
-    </tr>
-  `).join('') : `<tr><td colspan="5" class="p-4 text-center text-slate-400">Belum ada kelas.</td></tr>`;
-}
-
-function renderSubjectTable(subjects) {
-  const tbody = document.getElementById('subjectTableBody');
-  if (!tbody) return;
-
-  tbody.innerHTML = subjects.length ? subjects.map(s => `
-    <tr class="border-b text-xs">
-      <td class="p-2.5 font-bold">${s.code}</td>
-      <td class="p-2.5">${s.name}</td>
-      <td class="p-2.5 text-center">
-        <button onclick="deleteSubject('${s.code}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">Hapus</button>
-      </td>
-    </tr>
-  `).join('') : `<tr><td colspan="3" class="p-4 text-center text-slate-400">Belum ada mapel.</td></tr>`;
-}
-
-function renderUserTable(users) {
-  const tbody = document.getElementById('userTableBody');
-  if (!tbody) return;
-
-  tbody.innerHTML = users.length ? users.map((u, i) => {
-    const isAdminMain = u.username === 'admin';
-    const passInputId = `userPass_${i}`;
-    const userPass = u.password || '123456';
-
-    return `
-      <tr class="border-b text-xs">
-        <td class="p-2.5">
-          <strong class="text-slate-800 block">${u.name || u.username}</strong>
-          <span class="text-[10px] text-slate-500">Username: <code class="font-bold text-blue-900">${u.username}</code></span>
-          <div class="flex items-center gap-1 mt-1">
-            <span class="text-[10px] text-slate-400">Pass:</span>
-            <input type="password" id="${passInputId}" value="${userPass}" readonly class="bg-slate-100 border px-1 py-0.5 rounded text-[10px] w-20 font-mono outline-none">
-            <button onclick="togglePasswordVisibility('${passInputId}')" title="Lihat Password" class="text-slate-500 hover:text-blue-800 text-[11px] px-1">
-              <i class="fa-solid fa-eye"></i>
-            </button>
-          </div>
-        </td>
-
-        <td class="p-2.5">
-          <span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase text-[10px]">${u.role || 'siswa'}</span>
-          ${u.class ? `<span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] ml-1 font-semibold">${u.class}</span>` : ''}
-        </td>
-
-        <td class="p-2.5">
-          <button 
-            onclick="toggleUserActive('${u.id}', ${u.active !== false}, '${u.username}')" 
-            class="px-2 py-0.5 rounded text-[10px] font-bold transition ${u.active !== false ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-rose-100 text-rose-800 hover:bg-rose-200'}"
-            ${isAdminMain ? 'disabled title="Admin utama selalu aktif"' : ''}>
-            ${u.active !== false ? '● Aktif' : '○ Nonaktif'}
-          </button>
-        </td>
-
-        <td class="p-2.5 text-center">
-          ${isAdminMain ? `
-            <span class="text-[10px] text-slate-400 font-bold italic">Terproteksi</span>
-          ` : `
-            <button onclick="deleteUserDoc('${u.id}', '${u.username}')" class="bg-rose-600 hover:bg-rose-700 text-white px-2 py-0.5 rounded text-[10px] font-bold transition">
-              Hapus
-            </button>
-          `}
-        </td>
-      </tr>
-    `;
-  }).join('') : `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada pengguna.</td></tr>`;
-}
-
-function populateClassOptions(classes) {
-  const selects = [document.getElementById('userClass'), document.getElementById('filterUserClass'), document.getElementById('cardClassFilter')];
-  selects.forEach(s => {
-    if (s) {
-      s.innerHTML = classes.map(c => `<option value="${c.code}">${c.code}</option>`).join('');
-    }
-  });
-}
-
-function initSettingsListener() {
-  onSnapshot(doc(db, "settings", "academic"), (docSnap) => {
-    if (docSnap.exists()) {
-      const s = docSnap.data();
-      if (document.getElementById('headerSchoolName')) document.getElementById('headerSchoolName').innerText = s.schoolName || "SMP Qur'an Al Wahdah";
-      if (document.getElementById('headerSubTitle')) document.getElementById('headerSubTitle').innerText = `CBT System - Tahun Ajaran ${s.academicYear || '2026/2027'} (${s.semester || 'Ganjil'})`;
-    }
-  });
-}
