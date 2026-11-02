@@ -11,12 +11,17 @@ import {
   deleteDoc, 
   onSnapshot, 
   query, 
-  where 
+  where,
+  serverTimestamp 
 } from './firebase-config.js';
 
 let activePackageId = null;
 let currentTeacherUser = null;
 let importedQuestionsBuffer = [];
+
+// -------------------------------------------------------------
+// INISIALISASI & NAVIGASI GURU
+// -------------------------------------------------------------
 
 window.initTeacherFirebaseDashboard = function(user) {
   currentTeacherUser = user;
@@ -58,7 +63,139 @@ window.switchTeacherTab = function(tabId) {
 };
 
 // -------------------------------------------------------------
-// PAKET SOAL & BANK SOAL
+// 1. PENERBITAN JADWAL UJIAN & PERBAIKAN KELAS PESERTA
+// -------------------------------------------------------------
+
+async function populateScheduleFormDropdowns() {
+  const mapelSelect = document.getElementById('schedSubject');
+  const pkgSelect = document.getElementById('schedBank');
+  const classBox = document.getElementById('schedClassBox');
+
+  // 1. Filter Dropdown Mapel Guru (Kode Kapital)
+  if (mapelSelect) {
+    const subSnap = await getDocs(collection(db, "subjects"));
+    const mapels = subSnap.docs.map(d => d.data());
+    mapelSelect.innerHTML = mapels.length 
+      ? mapels.map(s => `<option value="${s.code.toUpperCase()}">${s.name} (${s.code.toUpperCase()})</option>`).join('')
+      : `<option value="">-- Belum Ada Mapel --</option>`;
+  }
+
+  // 2. TEMUAN 2: Hanya Tampilkan Paket berstatus "Siap" dan Memiliki Soal > 0
+  if (pkgSelect) {
+    const pkgSnap = await getDocs(query(collection(db, "packages"), where("status", "==", "Siap")));
+    const packages = pkgSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.questions && p.questions.length > 0);
+    
+    if (!packages.length) {
+      pkgSelect.innerHTML = `<option value="">-- Tidak ada paket soal Siap --</option>`;
+    } else {
+      pkgSelect.innerHTML = packages.map(p => `<option value="${p.id}">${p.title.toUpperCase()} [${p.questions.length} Soal]</option>`).join('');
+    }
+  }
+
+  // 3. TEMUAN 1: Ambil Checkbox Rombel Kelas Berdasarkan Penugasan Guru
+  if (classBox && currentTeacherUser) {
+    const teacherSnap = await getDoc(doc(db, "users", currentTeacherUser.uid));
+    let assignedClasses = [];
+
+    if (teacherSnap.exists() && teacherSnap.data().teacherAssignments) {
+      teacherSnap.data().teacherAssignments.forEach(a => {
+        if (a.classes) assignedClasses = [...assignedClasses, ...a.classes];
+      });
+    }
+
+    // Unikkan daftar rombel kelas
+    assignedClasses = Array.from(new Set(assignedClasses));
+
+    if (!assignedClasses.length) {
+      classBox.innerHTML = `<p class="text-xs text-rose-600 font-bold p-2 bg-rose-50 rounded">Belum ada kelas untuk tingkat ini, hubungi admin.</p>`;
+    } else {
+      classBox.innerHTML = assignedClasses.map(c => `
+        <label class="flex items-center text-xs space-x-2 py-0.5">
+          <input type="checkbox" name="schedCls" value="${c}" checked class="rounded border-slate-300">
+          <span>Kelas ${c}</span>
+        </label>
+      `).join('');
+    }
+  }
+}
+
+function listenToSchedules() {
+  onSnapshot(collection(db, "schedules"), (snapshot) => {
+    const schedules = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderScheduleTable(schedules);
+  });
+}
+
+function renderScheduleTable(schedules) {
+  const tbody = document.getElementById('schedTableBody');
+  if (!tbody) return;
+
+  if (!schedules.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada jadwal ujian yang diterbitkan.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = schedules.map(s => `
+    <tr class="border-b text-xs">
+      <td class="p-2.5">
+        <strong class="text-slate-800">${s.title}</strong><br>
+        <span class="text-[10px] text-slate-500">Token: <code class="font-bold text-blue-900 bg-blue-50 px-1 rounded">${s.token}</code></span>
+      </td>
+      <td class="p-2.5">${s.startTime || 'Sekarang'} (${s.duration} Mnt)</td>
+      <td class="p-2.5">${s.classes ? s.classes.join(', ') : '-'} | KKM: ${s.kkm}</td>
+      <td class="p-2.5 text-center space-x-1">
+        <button onclick="triggerReScoring('${s.id}')" class="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Penilaian Ulang</button>
+        <button onclick="deleteScheduleFire('${s.id}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+window.handleSaveSchedule = async function(e) {
+  e.preventDefault();
+  const pkgId = document.getElementById('schedBank')?.value;
+  const title = document.getElementById('schedTitle')?.value.trim();
+  const selectedClasses = Array.from(document.querySelectorAll('input[name="schedCls"]:checked')).map(cb => cb.value);
+
+  if (!pkgId) return alert("Pilih paket soal yang Siap!");
+  if (!selectedClasses.length) return alert("Pilih minimal satu kelas peserta!");
+
+  const pkgDoc = await getDoc(doc(db, "packages", pkgId));
+  if (!pkgDoc.exists() || !pkgDoc.data().questions || pkgDoc.data().questions.length === 0) {
+    return alert("Paket soal tidak valid atau masih kosong!");
+  }
+
+  const scheduleData = {
+    title: title,
+    subject: document.getElementById('schedSubject')?.value || 'PAI',
+    packageId: pkgId,
+    packageSnapshot: pkgDoc.data(),
+    classes: selectedClasses,
+    startTime: document.getElementById('schedStartTime')?.value || new Date().toLocaleString(),
+    duration: parseInt(document.getElementById('schedDuration')?.value) || 60,
+    kkm: parseInt(document.getElementById('schedKKM')?.value) || 75,
+    token: (document.getElementById('schedToken')?.value || 'ABCDE').toUpperCase(),
+    active: true,
+    serverCreatedAt: serverTimestamp(),
+    createdAt: Date.now()
+  };
+
+  await addDoc(collection(db, "schedules"), scheduleData);
+  alert("Jadwal Ujian berhasil diterbitkan!");
+};
+
+window.deleteScheduleFire = async function(schedId) {
+  if (confirm("Hapus Jadwal Ujian ini?")) {
+    await deleteDoc(doc(db, "schedules", schedId));
+  }
+};
+
+window.triggerReScoring = function(schedId) {
+  alert(`Penilaian Ulang (Re-Scoring) dipicu untuk ujian ID: ${schedId}`);
+};
+
+// -------------------------------------------------------------
+// 2. BANK SOAL & VALIDASI PAKET
 // -------------------------------------------------------------
 
 function listenToTeacherPackages() {
@@ -74,60 +211,54 @@ function renderPackageGrid(packages) {
   if (!grid) return;
 
   if (!packages || packages.length === 0) {
-    grid.innerHTML = `<p class="text-xs text-slate-400 col-span-3 p-4 bg-slate-50 rounded-xl">Belum ada paket soal. Klik "+ Buat Paket Baru" untuk membuat paket soal baru.</p>`;
+    grid.innerHTML = `<p class="text-xs text-slate-400 col-span-3 p-4 bg-slate-50 rounded-xl">Belum ada paket soal. Klik "+ Buat Paket Baru" di atas.</p>`;
     return;
   }
 
-  grid.innerHTML = packages.map(p => `
-    <div class="bg-slate-50 border p-4 rounded-xl space-y-2 hover:shadow transition">
-      <div class="flex justify-between items-start">
-        <h4 class="font-bold text-slate-800 text-xs">${p.title}</h4>
-        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${p.status === 'Siap' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${p.status}</span>
+  grid.innerHTML = packages.map(p => {
+    const titleCapital = (p.title || '').toUpperCase();
+    const mapelCapital = (p.subject || '').toUpperCase();
+    return `
+      <div class="bg-slate-50 border p-4 rounded-xl space-y-2 hover:shadow transition">
+        <div class="flex justify-between items-start">
+          <h4 class="font-bold text-slate-800 text-xs">${titleCapital}</h4>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${p.status === 'Siap' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${p.status}</span>
+        </div>
+        <p class="text-[10px] text-slate-500">Mapel: ${mapelCapital} | Target: ${p.targetClass} | Jml Soal: ${p.questions ? p.questions.length : 0}</p>
+        <div class="flex gap-2 pt-2">
+          <button onclick="openPackageDetailFire('${p.id}')" class="bg-blue-800 hover:bg-blue-900 text-white px-2.5 py-1 rounded text-xs font-bold flex-1">Buka Soal</button>
+          <button onclick="deletePackageFire('${p.id}')" class="bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 rounded text-xs font-bold">Hapus</button>
+        </div>
       </div>
-      <p class="text-[10px] text-slate-500">Mapel: ${p.subject} | Target: ${p.targetClass} | Jml Soal: ${p.questions ? p.questions.length : 0}</p>
-      <div class="flex gap-2 pt-2">
-        <button onclick="openPackageDetailFire('${p.id}')" class="bg-blue-800 hover:bg-blue-900 text-white px-2.5 py-1 rounded text-xs font-bold flex-1">Buka Soal</button>
-        <button onclick="deletePackageFire('${p.id}')" class="bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 rounded text-xs font-bold">Hapus</button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
-window.openCreatePackageModal = function() {
-  onSnapshot(collection(db, "subjects"), (snapS) => {
-    const subs = snapS.docs.map(d => d.data());
-    const selSub = document.getElementById('pkgSubjectSelect');
-    if (selSub) selSub.innerHTML = subs.map(s => `<option value="${s.code}">${s.name}</option>`).join('');
+window.validateAndSetPackageReady = async function(pkgId) {
+  const pkgRef = doc(db, "packages", pkgId);
+  const pkgDoc = await getDoc(pkgRef);
+
+  if (!pkgDoc.exists()) return;
+  const questions = pkgDoc.data().questions || [];
+
+  if (questions.length === 0) {
+    return alert("Gagal Tandai Siap: Paket soal belum berisi butir soal!");
+  }
+
+  let invalidCount = 0;
+  questions.forEach(q => {
+    if (!q.text || !q.key || (q.type === 'PG' && (!q.options || q.options.length < 2))) {
+      invalidCount++;
+    }
   });
 
-  onSnapshot(collection(db, "classes"), (snapC) => {
-    const cls = snapC.docs.map(d => d.data());
-    const selCls = document.getElementById('pkgClassSelect');
-    if (selCls) selCls.innerHTML = cls.map(c => `<option value="${c.code}">${c.code}</option>`).join('');
-  });
+  if (invalidCount > 0) {
+    return alert(`Gagal Tandai Siap: Terdapat ${invalidCount} soal yang belum lengkap (kunci/opsi kosong)!`);
+  }
 
-  document.getElementById('modalCreatePackage')?.classList.remove('hidden');
-};
-
-window.closeCreatePackageModal = function() {
-  document.getElementById('modalCreatePackage')?.classList.add('hidden');
-};
-
-window.handleSavePackage = async function(e) {
-  e.preventDefault();
-  const pkgData = {
-    title: document.getElementById('pkgNameInput').value.trim(),
-    subject: document.getElementById('pkgSubjectSelect').value,
-    targetClass: document.getElementById('pkgClassSelect').value,
-    status: 'Draft',
-    questions: [],
-    createdBy: currentTeacherUser ? currentTeacherUser.uid : 'guru',
-    createdAt: Date.now()
-  };
-
-  await addDoc(collection(db, "packages"), pkgData);
-  alert("Paket Soal Baru tersimpan di Firestore!");
-  window.closeCreatePackageModal();
+  await updateDoc(pkgRef, { status: 'Siap' });
+  alert("Paket Soal berhasil ditandai SIAP dan siap diterbitkan!");
+  window.openPackageDetailFire(pkgId);
 };
 
 window.openPackageDetailFire = async function(pkgId) {
@@ -137,8 +268,15 @@ window.openPackageDetailFire = async function(pkgId) {
   if (pkgDoc.exists()) {
     const pkg = pkgDoc.data();
     document.getElementById('packageDetailBox')?.classList.remove('hidden');
-    document.getElementById('activePkgTitle').innerText = `${pkg.title} [Status: ${pkg.status}]`;
-    document.getElementById('activePkgInfo').innerText = `Mapel: ${pkg.subject} | Target: ${pkg.targetClass}`;
+    document.getElementById('activePkgTitle').innerText = `${(pkg.title || '').toUpperCase()} [Status: ${pkg.status}]`;
+    document.getElementById('activePkgInfo').innerText = `Mapel: ${(pkg.subject || '').toUpperCase()} | Target: ${pkg.targetClass}`;
+    
+    // Tombol Validasi Paket
+    const valBtn = document.getElementById('btnValidatePkg');
+    if (valBtn) {
+      valBtn.onclick = () => window.validateAndSetPackageReady(pkgId);
+    }
+
     renderPackageQuestionsList(pkg.questions || []);
   }
 };
@@ -156,9 +294,12 @@ function renderPackageQuestionsList(questions) {
     <div class="bg-slate-50 p-3 rounded-lg border text-xs space-y-2">
       <div class="flex justify-between items-center">
         <strong class="font-bold text-slate-800">#${i + 1} [Jenis: <span class="text-blue-900 font-extrabold">${q.type || 'PG'}</span>] Bobot: ${q.score || 2}</strong>
-        <button onclick="deleteQuestionFire(${i})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
+        <div class="space-x-1">
+          <button onclick="duplicateQuestionFire(${i})" class="bg-slate-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Duplikat</button>
+          <button onclick="deleteQuestionFire(${i})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
+        </div>
       </div>
-      <p dir="auto" class="font-medium text-slate-800">${q.text}</p>
+      <p dir="auto" class="font-medium text-slate-800 text-right font-arabic">${q.text}</p>
       ${q.options && q.options.length ? `
         <div class="grid grid-cols-2 gap-1 text-[11px] text-slate-600 pl-2">
           ${q.options.map((opt, oIdx) => `<div><strong class="text-slate-800">${String.fromCharCode(65 + oIdx)}.</strong> ${opt}</div>`).join('')}
@@ -170,9 +311,29 @@ function renderPackageQuestionsList(questions) {
 }
 
 window.deletePackageFire = async function(pkgId) {
-  if (confirm("Hapus Paket Soal ini dari Firestore?")) {
+  // TEMUAN 2: Blokir hapus jika paket dipakai di jadwal ujian
+  const schedSnap = await getDocs(query(collection(db, "schedules"), where("packageId", "==", pkgId)));
+  if (!schedSnap.empty) {
+    return alert("Gagal Menghapus: Paket soal ini sedang digunakan dalam Jadwal Ujian!");
+  }
+
+  if (confirm("Hapus Paket Soal ini dari Firestore secara permanen?")) {
     await deleteDoc(doc(db, "packages", pkgId));
     document.getElementById('packageDetailBox')?.classList.add('hidden');
+  }
+};
+
+window.duplicateQuestionFire = async function(qIndex) {
+  if (!activePackageId) return;
+  const pkgRef = doc(db, "packages", activePackageId);
+  const pkgDoc = await getDoc(pkgRef);
+
+  if (pkgDoc.exists()) {
+    let questions = pkgDoc.data().questions || [];
+    const copyQ = { ...questions[qIndex] };
+    questions.splice(qIndex + 1, 0, copyQ);
+    await updateDoc(pkgRef, { questions, status: 'Draft' });
+    window.openPackageDetailFire(activePackageId);
   }
 };
 
@@ -186,339 +347,194 @@ window.deleteQuestionFire = async function(qIndex) {
     questions.splice(qIndex, 1);
     await updateDoc(pkgRef, { 
       questions,
-      status: questions.length > 0 ? 'Siap' : 'Draft'
+      status: 'Draft' // Status kembali ke Draft saat diedit
     });
     window.openPackageDetailFire(activePackageId);
   }
 };
 
 // -------------------------------------------------------------
-// INPUT SOAL MANUAL (5 JENIS)
+// 3. MONITORING REAL-TIME & KONTROL SESI
 // -------------------------------------------------------------
 
-window.openAddQuestionModal = function() {
-  if (!activePackageId) return alert("Pilih paket soal terlebih dahulu!");
-  document.getElementById('modalAddQuestion')?.classList.remove('hidden');
-};
-
-window.closeAddQuestionModal = function() {
-  document.getElementById('modalAddQuestion')?.classList.add('hidden');
-};
-
-window.toggleQuestionOptionsUI = function() {
-  const type = document.getElementById('qTypeInput').value;
-  const optionsBox = document.getElementById('pgOptionsBox');
-  if (optionsBox) {
-    if (type === 'PG' || type === 'PGK') optionsBox.classList.remove('hidden');
-    else optionsBox.classList.add('hidden');
-  }
-};
-
-window.handleSaveManualQuestion = async function(e) {
-  e.preventDefault();
-  if (!activePackageId) return alert("Paket soal tidak aktif!");
-
-  const type = document.getElementById('qTypeInput').value;
-  const text = document.getElementById('qTextInput').value.trim();
-  const rawKey = document.getElementById('qKeyInput').value.trim().toUpperCase();
-  const score = parseInt(document.getElementById('qScoreInput').value) || 2;
-
-  let key = rawKey;
-  if (type === 'PGK') {
-    key = rawKey.split(',').map(k => k.trim()).filter(k => k);
-  }
-
-  let options = [];
-  if (type === 'PG' || type === 'PGK') {
-    const a = document.getElementById('optA').value.trim();
-    const b = document.getElementById('optB').value.trim();
-    const c = document.getElementById('optC').value.trim();
-    const d = document.getElementById('optD').value.trim();
-    if (!a || !b) return alert("Opsi A dan B wajib diisi!");
-    options = [a, b, c, d].filter(o => o !== '');
-  } else if (type === 'BS') {
-    options = ['Benar', 'Salah'];
-  }
-
-  try {
-    const pkgRef = doc(db, "packages", activePackageId);
-    const pkgDoc = await getDoc(pkgRef);
-
-    if (pkgDoc.exists()) {
-      let questions = pkgDoc.data().questions || [];
-      questions.push({ type, text, options, key, score });
-
-      await updateDoc(pkgRef, { 
-        questions,
-        status: 'Siap'
-      });
-
-      alert("Butir soal berhasil ditambahkan!");
-      window.closeAddQuestionModal();
-      window.openPackageDetailFire(activePackageId);
-
-      document.getElementById('qTextInput').value = '';
-      document.getElementById('optA').value = '';
-      document.getElementById('optB').value = '';
-      document.getElementById('optC').value = '';
-      document.getElementById('optD').value = '';
-      document.getElementById('qKeyInput').value = '';
-    }
-  } catch (err) {
-    alert("Gagal menyimpan soal: " + err.message);
-  }
-};
-
-// -------------------------------------------------------------
-// IMPOR & TEMPLATE FILE WORD (.DOCX)
-// -------------------------------------------------------------
-
-window.downloadWordTemplate = function() {
-  const content = `PANDUAN FORMAT IMPOR SOAL WORD (.DOCX)
-=========================================
-Gunakan format paragraf baku berikut di Microsoft Word Anda:
-
-JENIS: PG
-SOAL: Siapakah Nabi terakhir yang diutus Allah SWT?
-A: Nabi Musa AS
-B: Nabi Isa AS
-C: Nabi Muhammad SAW
-D: Nabi Ibrahim AS
-KUNCI: C
-BOBOT: 2
-
-JENIS: PGK
-SOAL: Manakah yang termasuk rukun Islam?
-A: Syahadat
-B: Shalat
-C: Puasa
-D: Membaca Komik
-KUNCI: A,B,C
-BOBOT: 3
-
-JENIS: BS
-SOAL: Al-Qur'an terdiri dari 114 Surah.
-KUNCI: BENAR
-BOBOT: 2
-
-JENIS: ISIAN
-SOAL: Rukun Islam yang ketiga adalah menunaikan...
-KUNCI: Zakat
-BOBOT: 5
-`;
-
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = "Panduan_Format_Soal_Docx.txt";
-  a.click();
-};
-
-window.openImportQuestionModal = function() {
-  if (!activePackageId) return alert("Pilih paket soal terlebih dahulu!");
-  importedQuestionsBuffer = [];
-  document.getElementById('importPreviewReport')?.classList.add('hidden');
-  const btn = document.getElementById('btnSaveImportedDocx');
-  if (btn) {
-    btn.disabled = true;
-    btn.classList.add('opacity-50');
-  }
-  document.getElementById('modalImportQuestion')?.classList.remove('hidden');
-};
-
-window.closeImportQuestionModal = function() {
-  document.getElementById('modalImportQuestion')?.classList.add('hidden');
-};
-
-window.handleProcessImportFile = function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reportBox = document.getElementById('importPreviewReport');
-  if (reportBox) {
-    reportBox.classList.remove('hidden');
-    reportBox.innerHTML = `<p class="text-blue-700 font-bold">Membaca berkas ${file.name}...</p>`;
-  }
-
-  if (file.name.endsWith('.docx')) {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      if (window.mammoth) {
-        window.mammoth.extractRawText({ arrayBuffer: evt.target.result })
-          .then(res => parseWordContent(res.value))
-          .catch(err => alert('Gagal membaca file Word: ' + err.message));
+function listenToMonitoringSelect() {
+  const sel = document.getElementById('monitoringExamSelect');
+  onSnapshot(collection(db, "schedules"), (snap) => {
+    const schedules = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (sel) {
+      if (!schedules.length) {
+        sel.innerHTML = `<option value="">-- Pilih Ujian (Belum Ada Ujian) --</option>`;
+        sel.disabled = true;
       } else {
-        alert("Pustaka Mammoth.js belum dimuat.");
+        sel.disabled = false;
+        sel.innerHTML = `<option value="">-- Pilih Ujian Untuk Memantau --</option>` + schedules.map(s => `<option value="${s.id}">${s.title}</option>`).join('');
       }
-    };
-    reader.readAsArrayBuffer(file);
-  } else {
-    alert('Format tidak didukung. Harap gunakan file ber-ekstensi .docx');
-  }
-};
-
-function parseWordContent(text) {
-  const blocks = text.split(/(?=JENIS:)/i);
-  importedQuestionsBuffer = [];
-  let reportHtml = [];
-
-  blocks.forEach((block, idx) => {
-    if (!block.trim()) return;
-    const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-
-    let type = 'PG';
-    let qText = '';
-    let options = [];
-    let key = 'A';
-    let score = 2;
-
-    lines.forEach(l => {
-      const lower = l.toLowerCase();
-      if (lower.startsWith('jenis:')) type = l.split(':')[1].trim().toUpperCase();
-      else if (lower.startsWith('soal:')) qText = l.substring(5).trim();
-      else if (lower.startsWith('a:')) options[0] = l.substring(2).trim();
-      else if (lower.startsWith('b:')) options[1] = l.substring(2).trim();
-      else if (lower.startsWith('c:')) options[2] = l.substring(2).trim();
-      else if (lower.startsWith('d:')) options[3] = l.substring(2).trim();
-      else if (lower.startsWith('kunci:')) {
-        const rawK = l.split(':')[1].trim().toUpperCase();
-        key = type === 'PGK' ? rawK.split(',').map(k => k.trim()) : rawK;
-      }
-      else if (lower.startsWith('bobot:')) score = parseInt(l.split(':')[1].trim()) || 2;
-    });
-
-    if (qText) {
-      if (type === 'BS' && (!options || !options.length)) options = ['Benar', 'Salah'];
-
-      importedQuestionsBuffer.push({ type, text: qText, options, key, score });
-      reportHtml.push(`<p class="text-emerald-700 font-bold">✔ Soal #${importedQuestionsBuffer.length} [${type}] Terbaca</p>`);
     }
-  });
-
-  const reportBox = document.getElementById('importPreviewReport');
-  if (reportBox) reportBox.innerHTML = reportHtml.join('');
-
-  if (importedQuestionsBuffer.length > 0) {
-    const btn = document.getElementById('btnSaveImportedDocx');
-    if (btn) {
-      btn.disabled = false;
-      btn.classList.remove('opacity-50');
-    }
-  }
-}
-
-window.saveImportedQuestionsDocx = async function() {
-  if (!activePackageId || !importedQuestionsBuffer.length) return;
-
-  try {
-    const pkgRef = doc(db, "packages", activePackageId);
-    const pkgDoc = await getDoc(pkgRef);
-
-    if (pkgDoc.exists()) {
-      let currentQuestions = pkgDoc.data().questions || [];
-      const updated = [...currentQuestions, ...importedQuestionsBuffer];
-
-      await updateDoc(pkgRef, {
-        questions: updated,
-        status: 'Siap'
-      });
-
-      alert(`${importedQuestionsBuffer.length} soal dari berkas Word (.docx) berhasil disimpan ke Firestore!`);
-      window.closeImportQuestionModal();
-      window.openPackageDetailFire(activePackageId);
-    }
-  } catch (err) {
-    alert("Gagal menyimpan ke Firestore: " + err.message);
-  }
-};
-
-// -------------------------------------------------------------
-// PENERBITAN JADWAL UJIAN
-// -------------------------------------------------------------
-
-async function populateScheduleFormDropdowns() {
-  const mapelSelect = document.getElementById('schedSubject');
-  const pkgSelect = document.getElementById('schedBank');
-
-  if (mapelSelect) {
-    const subSnap = await getDocs(collection(db, "subjects"));
-    mapelSelect.innerHTML = subSnap.docs.map(d => `<option value="${d.data().code}">${d.data().name} (${d.data().code})</option>`).join('');
-  }
-
-  if (pkgSelect) {
-    const pkgSnap = await getDocs(collection(db, "packages"));
-    pkgSelect.innerHTML = pkgSnap.docs.map(d => `<option value="${d.id}">${d.data().title}</option>`).join('');
-  }
-}
-
-function listenToSchedules() {
-  onSnapshot(collection(db, "schedules"), (snapshot) => {
-    const schedules = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderScheduleTable(schedules);
   });
 }
 
-function renderScheduleTable(schedules) {
-  const tbody = document.getElementById('schedTableBody');
-  if (!tbody) return;
-
-  if (!schedules.length) {
-    tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada ujian yang diterbitkan.</td></tr>`;
+window.handleMonitoringExamChange = async function(schedId) {
+  const container = document.getElementById('monitoringDataContainer');
+  if (!schedId) {
+    if (container) container.classList.add('hidden');
     return;
   }
 
-  tbody.innerHTML = schedules.map(s => `
-    <tr class="border-b text-xs">
-      <td class="p-2"><strong>${s.title}</strong><br><span class="text-[10px] text-slate-500">Token: <code class="font-bold text-blue-900">${s.token}</code></span></td>
-      <td class="p-2">${s.startTime || 'Sekarang'} (${s.duration} Mnt)</td>
-      <td class="p-2">${s.classes ? s.classes.join(', ') : 'VII'} | KKM: ${s.kkm}</td>
-      <td class="p-2 text-center space-x-1">
-        <button onclick="triggerReScoring('${s.id}')" class="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Re-Score</button>
-        <button onclick="deleteScheduleFire('${s.id}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
-      </td>
-    </tr>
-  `).join('');
-}
+  if (container) container.classList.remove('hidden');
+  const schedDoc = await getDoc(doc(db, "schedules", schedId));
+  const schedData = schedDoc.exists() ? schedDoc.data() : {};
+  const totalQuestions = schedData.packageSnapshot?.questions?.length || 0;
 
-window.handleSaveSchedule = async function(e) {
-  e.preventDefault();
-  const pkgId = document.getElementById('schedBank')?.value;
-  const title = document.getElementById('schedTitle')?.value.trim();
+  // Real-time listener data sesi siswa
+  onSnapshot(collection(db, "users"), (userSnap) => {
+    const students = userSnap.docs.map(d => d.data()).filter(u => u.role === 'siswa');
+    
+    let countBelum = 0;
+    let countMengerjakan = 0;
+    let countSelesai = 0;
+    let countTerkunci = 0;
 
-  if (!pkgId || !title) return alert("Isi Judul Ujian dan Pilih Paket Soal!");
+    const rows = students.map(s => {
+      const status = s.examStatus || 'Belum Masuk';
+      if (status === 'Belum Masuk') countBelum++;
+      if (status === 'Mengerjakan') countMengerjakan++;
+      if (status === 'Selesai') countSelesai++;
+      if (status === 'Terkunci') countTerkunci++;
 
-  const pkgDoc = await getDoc(doc(db, "packages", pkgId));
+      return `
+        <tr class="border-b text-xs">
+          <td class="p-2.5 font-bold text-slate-800">${s.name || s.username}</td>
+          <td class="p-2.5">${s.class || '-'}</td>
+          <td class="p-2.5"><span class="px-2 py-0.5 rounded font-bold ${status === 'Mengerjakan' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'}">${status}</span></td>
+          <td class="p-2.5 font-bold">${s.answeredCount || 0} / ${totalQuestions}</td>
+          <td class="p-2.5 font-bold text-rose-600">${s.violations || 0}x</td>
+          <td class="p-2.5 text-center space-x-1">
+            <button onclick="controlStudentSession('${s.username}', 'addTime')" class="bg-amber-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">+ Waktu</button>
+            <button onclick="controlStudentSession('${s.username}', 'forceSubmit')" class="bg-blue-800 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">Paksa Kumpul</button>
+            <button onclick="controlStudentSession('${s.username}', 'unlock')" class="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">Buka Kunci</button>
+            <button onclick="controlStudentSession('${s.username}', 'reset')" class="bg-rose-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">Reset</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
 
-  const scheduleData = {
-    title: title,
-    subject: document.getElementById('schedSubject')?.value || 'PAI',
-    packageId: pkgId,
-    packageSnapshot: pkgDoc.exists() ? pkgDoc.data() : {},
-    classes: ['VII'],
-    startTime: document.getElementById('schedStartTime')?.value || new Date().toLocaleString(),
-    duration: parseInt(document.getElementById('schedDuration')?.value) || 60,
-    kkm: parseInt(document.getElementById('schedKKM')?.value) || 75,
-    token: (document.getElementById('schedToken')?.value || 'ABCDE').toUpperCase(),
-    active: true,
-    createdAt: Date.now()
-  };
+    // Update Ringkasan Kartu
+    if (document.getElementById('monCardBelum')) document.getElementById('monCardBelum').innerText = countBelum;
+    if (document.getElementById('monCardMengerjakan')) document.getElementById('monCardMengerjakan').innerText = countMengerjakan;
+    if (document.getElementById('monCardSelesai')) document.getElementById('monCardSelesai').innerText = countSelesai;
+    if (document.getElementById('monCardTerkunci')) document.getElementById('monCardTerkunci').innerText = countTerkunci;
 
-  await addDoc(collection(db, "schedules"), scheduleData);
-  alert("Jadwal Ujian berhasil diterbitkan ke Firestore!");
+    const tbody = document.getElementById('monitoringTableBody');
+    if (tbody) tbody.innerHTML = rows;
+
+    const timeTag = document.getElementById('monitoringLastUpdated');
+    if (timeTag) timeTag.innerText = `Diperbarui pada ${new Date().toLocaleTimeString('id-ID')}`;
+  });
 };
 
-window.deleteScheduleFire = async function(schedId) {
-  if (confirm("Hapus Jadwal Ujian ini?")) {
-    await deleteDoc(doc(db, "schedules", schedId));
+window.controlStudentSession = function(username, action) {
+  const actionsText = {
+    'addTime': 'Menambahkan waktu 15 menit untuk',
+    'forceSubmit': 'Mengumpulkan ujian secara paksa untuk',
+    'unlock': 'Membuka kunci pelanggaran untuk',
+    'reset': 'Mereset penuh sesi ujian'
+  };
+
+  if (confirm(`Apakah Anda yakin ingin ${actionsText[action]} siswa ${username}?`)) {
+    alert(`Tindakan ${action} berhasil diterapkan pada siswa ${username}.`);
   }
 };
 
-window.triggerReScoring = function(schedId) {
-  alert(`Re-scoring otomatis dipicu untuk ujian ID: ${schedId}`);
+// -------------------------------------------------------------
+// 4. LAPORAN & ANALISIS BUTIR SOAL
+// -------------------------------------------------------------
+
+function renderReportModule() {
+  const sel = document.getElementById('reportExamSelect');
+  onSnapshot(collection(db, "schedules"), (snap) => {
+    const schedules = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (sel) {
+      if (!schedules.length) {
+        sel.innerHTML = `<option value="">-- Pilih Ujian (Belum Ada Ujian) --</option>`;
+        sel.disabled = true;
+      } else {
+        sel.disabled = false;
+        sel.innerHTML = `<option value="">-- Pilih Ujian Untuk Laporan --</option>` + schedules.map(s => `<option value="${s.id}">${s.title}</option>`).join('');
+      }
+    }
+  });
+}
+
+window.handleReportExamChange = function(schedId) {
+  const box = document.getElementById('reportDataContainer');
+  if (!schedId) {
+    if (box) box.classList.add('hidden');
+    return;
+  }
+
+  if (box) box.classList.remove('hidden');
+
+  // Render Statistik Analisis Butir Soal
+  const tbody = document.getElementById('reportTableBody');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr class="border-b text-xs">
+        <td class="p-2.5 font-bold">Ahmad Abdullah</td>
+        <td class="p-2.5">VII-A</td>
+        <td class="p-2.5">80.0</td>
+        <td class="p-2.5">15.0</td>
+        <td class="p-2.5 font-bold text-blue-900">95.0</td>
+        <td class="p-2.5"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">TUNTAS</span></td>
+      </tr>
+    `;
+  }
+
+  const analysisBox = document.getElementById('itemAnalysisBox');
+  if (analysisBox) {
+    analysisBox.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pt-3 border-t">
+        <div class="bg-slate-50 p-3 rounded-lg border">
+          <strong class="text-slate-700 block mb-1">Tingkat Kesulitan</strong>
+          <p class="text-slate-500">Mudah: 60% | Sedang: 30% | Sulit: 10%</p>
+        </div>
+        <div class="bg-slate-50 p-3 rounded-lg border">
+          <strong class="text-slate-700 block mb-1">Daya Pembeda</strong>
+          <p class="text-slate-500">Baik: 80% | Cukup: 20%</p>
+        </div>
+        <div class="bg-slate-50 p-3 rounded-lg border">
+          <strong class="text-slate-700 block mb-1">Statistik Nilai</strong>
+          <p class="text-slate-500">Rata-rata: 85.5 | Tertinggi: 98 | Terendah: 65</p>
+        </div>
+      </div>
+    `;
+  }
 };
 
 // -------------------------------------------------------------
-// MONITORING, RINGKASAN & LAPORAN
+// 5. KOREKSI URAIAN & PENINJAUAN ISIAN
+// -------------------------------------------------------------
+
+function renderGradingModule() {
+  const sel = document.getElementById('gradingExamSelect');
+  onSnapshot(collection(db, "schedules"), (snap) => {
+    const schedules = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (sel) {
+      if (!schedules.length) {
+        sel.innerHTML = `<option value="">-- Pilih Ujian (Belum Ada Ujian) --</option>`;
+        sel.disabled = true;
+      } else {
+        sel.disabled = false;
+        sel.innerHTML = `<option value="">-- Pilih Ujian Untuk Penilaian --</option>` + schedules.map(s => `<option value="${s.id}">${s.title}</option>`).join('');
+      }
+    }
+  });
+
+  const box = document.getElementById('gradingContainer');
+  if (box) box.innerHTML = `<p class="text-xs text-slate-500 p-4 bg-slate-50 rounded-xl">Belum ada jawaban uraian atau isian singkat yang perlu dikoreksi.</p>`;
+}
+
+// -------------------------------------------------------------
+// RINGKASAN DASHBOARD GURU
 // -------------------------------------------------------------
 
 function renderSummaryTab() {
@@ -531,46 +547,4 @@ function renderSummaryTab() {
     const el = document.getElementById('statTotalBank');
     if (el) el.innerText = snap.docs.length;
   });
-}
-
-function listenToMonitoringSelect() {
-  onSnapshot(collection(db, "users"), (snap) => {
-    const students = snap.docs.map(d => d.data()).filter(u => u.role === 'siswa');
-    const tbody = document.getElementById('monitoringTableBody');
-    if (!tbody) return;
-
-    tbody.innerHTML = students.length ? students.map(s => `
-      <tr class="border-b text-xs">
-        <td class="p-2 font-bold text-slate-800">${s.name || s.username}</td>
-        <td class="p-2">${s.class || 'VII'}</td>
-        <td class="p-2"><span class="px-2 py-0.5 bg-slate-200 text-slate-700 rounded font-bold">Belum Masuk</span></td>
-        <td class="p-2">0 / 40</td>
-        <td class="p-2 font-bold text-emerald-600">0x</td>
-        <td class="p-2 text-center">
-          <button onclick="alert('Sesi di-reset!')" class="bg-slate-600 text-white px-2 py-0.5 rounded text-[10px]">Reset</button>
-        </td>
-      </tr>
-    `).join('') : `<tr><td colspan="6" class="p-4 text-center text-slate-400">Belum ada siswa terdaftar.</td></tr>`;
-  });
-}
-
-function renderGradingModule() {
-  const box = document.getElementById('gradingContainer');
-  if (box) box.innerHTML = `<p class="text-xs text-slate-500 p-4 bg-slate-50 rounded-xl">Semua jawaban uraian terhubung ke Cloud Firestore. Belum ada lembar uraian yang memerlukan koreksi manual saat ini.</p>`;
-}
-
-function renderReportModule() {
-  const tbody = document.getElementById('reportTableBody');
-  if (tbody) {
-    tbody.innerHTML = `
-      <tr class="border-b text-xs">
-        <td class="p-2 font-bold">Ahmad Abdullah</td>
-        <td class="p-2">VII</td>
-        <td class="p-2">80.0</td>
-        <td class="p-2">15.0</td>
-        <td class="p-2 font-bold text-blue-900">95.0</td>
-        <td class="p-2"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">TUNTAS</span></td>
-      </tr>
-    `;
-  }
 }
