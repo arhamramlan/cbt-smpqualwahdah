@@ -1,5 +1,5 @@
 // firebase-config.js
-import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { 
   getFirestore, 
   collection, 
@@ -13,13 +13,13 @@ import {
   onSnapshot, 
   query, 
   where 
-} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged 
-} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 // Masukkan konfigurasi dari Firebase Console Anda di sini
 const firebaseConfig = {
