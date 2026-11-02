@@ -1,23 +1,58 @@
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
+// firebase-config.js
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  onSnapshot, 
+  query, 
+  where 
+} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyDbx_lwgCB1s1YeTotCNjZHI1Bzpo_qyyc",
-    authDomain: "cbt-smpqualwahdah.firebaseapp.com",
-    projectId: "cbt-smpqualwahdah",
-    storageBucket: "cbt-smpqualwahdah.firebasestorage.app",
-    messagingSenderId: "141237385778",
-    appId: "1:141237385778:web:2328bfe0e0d42f833bda2b",
-    measurementId: "G-WRPQ1WLR2J"
-  };
+// Masukkan konfigurasi dari Firebase Console Anda di sini
+const firebaseConfig = {
+  apiKey: "AIzaSyDbx_lwgCB1s1YeTotCNjZHI1Bzpo_qyyc",
+  authDomain: "cbt-smpqualwahdah.firebaseapp.com",
+  projectId: "cbt-smpqualwahdah",
+  storageBucket: "cbt-smpqualwahdah.firebasestorage.app",
+  messagingSenderId: "141237385778",
+  appId: "1:141237385778:web:2328bfe0e0d42f833bda2b",
+  measurementId: "G-WRPQ1WLR2J"
+};
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
+// Inisialisasi Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// Ekspor instance dan helper fungsi Firestore agar bisa dipakai di seluruh modul
+export { 
+  db, 
+  auth, 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  onSnapshot, 
+  query, 
+  where,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+};
