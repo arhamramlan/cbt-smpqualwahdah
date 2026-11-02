@@ -53,10 +53,6 @@ window.switchTeacherTab = function(tabId) {
   if (tabId === 'tabReports') renderReportModule();
 };
 
-// -------------------------------------------------------------
-// PAKET SOAL & ENGINE MULTI-JENIS
-// -------------------------------------------------------------
-
 function listenToTeacherPackages() {
   const q = query(collection(db, "packages"));
   onSnapshot(q, (snapshot) => {
@@ -175,7 +171,6 @@ window.deleteQuestionFire = async function(qIndex) {
   }
 };
 
-// MANAJEMEN IMPOR WORD/EXCEL TO FIRESTORE
 window.openImportModal = function() {
   importedQuestionsBuffer = [];
   document.getElementById('importPreviewReport')?.classList.add('hidden');
@@ -198,15 +193,19 @@ window.handleProcessImportFile = function(e) {
   const reportBox = document.getElementById('importPreviewReport');
   if (reportBox) {
     reportBox.classList.remove('hidden');
-    reportBox.innerHTML = `<p class="text-xs text-blue-700 font-bold">Membaca file ${file.name}...`</p>;
+    reportBox.innerHTML = `<p class="text-xs text-blue-700 font-bold">Membaca file ${file.name}...</p>`;
   }
 
   if (file.name.endsWith('.docx')) {
     const reader = new FileReader();
     reader.onload = function(evt) {
-      window.mammoth.extractRawText({ arrayBuffer: evt.target.result })
-        .then(res => parseWordContent(res.value))
-        .catch(err => alert('Gagal membaca Word: ' + err.message));
+      if (window.mammoth) {
+        window.mammoth.extractRawText({ arrayBuffer: evt.target.result })
+          .then(res => parseWordContent(res.value))
+          .catch(err => alert('Gagal membaca Word: ' + err.message));
+      } else {
+        alert("Pustaka Mammoth belum dimuat.");
+      }
     };
     reader.readAsArrayBuffer(file);
   } else {
@@ -269,10 +268,6 @@ window.saveImportedQuestions = async function() {
   }
 };
 
-// -------------------------------------------------------------
-// TERBIT JADWAL UJIAN & SNAPSHOT FIRESTORE
-// -------------------------------------------------------------
-
 function listenToSchedules() {
   onSnapshot(collection(db, "schedules"), (snapshot) => {
     const schedules = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -322,16 +317,13 @@ window.handleSaveSchedule = async function(e) {
 };
 
 window.triggerReScoring = function(schedId) {
-  alert(`Re-scoring penilaian otomatis telah dipicu di Firestore untuk jadwal ID: ${schedId}`);
+  alert(`Re-scoring penilaian otomatis telah dipicu untuk jadwal ID: ${schedId}`);
 };
-
-// -------------------------------------------------------------
-// MONITORING & ANALYTICS
-// -------------------------------------------------------------
 
 function renderSummaryTab() {
   onSnapshot(collection(db, "schedules"), (snap) => {
-    document.getElementById('statActiveExams').innerText = snap.docs.length;
+    const el = document.getElementById('statActiveExams');
+    if (el) el.innerText = snap.docs.length;
   });
 }
 
