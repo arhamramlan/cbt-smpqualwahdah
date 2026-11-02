@@ -16,7 +16,6 @@ import {
 
 let activePackageId = null;
 let currentTeacherUser = null;
-let importedQuestionsBuffer = [];
 
 window.initTeacherFirebaseDashboard = function(user) {
   currentTeacherUser = user;
@@ -74,7 +73,7 @@ function renderPackageGrid(packages) {
   if (!grid) return;
 
   if (!packages || packages.length === 0) {
-    grid.innerHTML = `<p class="text-xs text-slate-400 col-span-3 p-4 bg-slate-50 rounded-xl">Belum ada paket soal yang dibuat. Klik tombol "+ Buat Paket Baru" di atas.</p>`;
+    grid.innerHTML = `<p class="text-xs text-slate-400 col-span-3 p-4 bg-slate-50 rounded-xl">Belum ada paket soal. Klik "+ Buat Paket Baru" untuk membuat paket soal baru.</p>`;
     return;
   }
 
@@ -86,8 +85,8 @@ function renderPackageGrid(packages) {
       </div>
       <p class="text-[10px] text-slate-500">Mapel: ${p.subject} | Target: ${p.targetClass} | Jml Soal: ${p.questions ? p.questions.length : 0}</p>
       <div class="flex gap-2 pt-2">
-        <button onclick="openPackageDetailFire('${p.id}')" class="bg-blue-800 text-white px-2.5 py-1 rounded text-xs font-bold flex-1">Buka Soal</button>
-        <button onclick="deletePackageFire('${p.id}')" class="bg-rose-600 text-white px-2 py-1 rounded text-xs font-bold">Hapus</button>
+        <button onclick="openPackageDetailFire('${p.id}')" class="bg-blue-800 hover:bg-blue-900 text-white px-2.5 py-1 rounded text-xs font-bold flex-1">Buka Soal</button>
+        <button onclick="deletePackageFire('${p.id}')" class="bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 rounded text-xs font-bold">Hapus</button>
       </div>
     </div>
   `).join('');
@@ -147,19 +146,24 @@ function renderPackageQuestionsList(questions) {
   const list = document.getElementById('packageQuestionsList');
   if (!list) return;
 
-  if (!questions.length) {
-    list.innerHTML = `<p class="text-xs text-slate-400 p-4 bg-slate-50 rounded">Belum ada butir soal dalam paket ini.</p>`;
+  if (!questions || !questions.length) {
+    list.innerHTML = `<p class="text-xs text-slate-400 p-4 bg-slate-50 rounded">Belum ada butir soal dalam paket ini. Silakan tambahkan soal manual atau upload via file Excel.</p>`;
     return;
   }
 
   list.innerHTML = questions.map((q, i) => `
     <div class="bg-slate-50 p-3 rounded-lg border text-xs space-y-2">
-      <div class="flex justify-between">
-        <strong class="font-bold text-slate-800">#${i + 1} [${q.type}] Bobot: ${q.score}</strong>
-        <button onclick="deleteQuestionFire(${i})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">Hapus</button>
+      <div class="flex justify-between items-center">
+        <strong class="font-bold text-slate-800">#${i + 1} [Jenis: ${q.type || 'PG'}] Bobot: ${q.score || 2}</strong>
+        <button onclick="deleteQuestionFire(${i})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
       </div>
       <p dir="auto" class="font-medium text-slate-800">${q.text}</p>
-      <div class="text-[11px] text-slate-600"><strong>Kunci:</strong> <code class="font-bold text-blue-900">${Array.isArray(q.key) ? q.key.join(', ') : q.key}</code></div>
+      ${q.options && q.options.length ? `
+        <div class="grid grid-cols-2 gap-1 text-[11px] text-slate-600 pl-2">
+          ${q.options.map((opt, oIdx) => `<div><strong class="text-slate-800">${String.fromCharCode(65 + oIdx)}.</strong> ${opt}</div>`).join('')}
+        </div>
+      ` : ''}
+      <div class="text-[11px] text-slate-600 pt-1 border-t"><strong>Kunci Jawaban:</strong> <code class="font-bold text-blue-900 bg-blue-100 px-1.5 py-0.5 rounded">${q.key}</code></div>
     </div>
   `).join('');
 }
@@ -179,9 +183,209 @@ window.deleteQuestionFire = async function(qIndex) {
   if (pkgDoc.exists()) {
     let questions = pkgDoc.data().questions || [];
     questions.splice(qIndex, 1);
-    await updateDoc(pkgRef, { questions });
+    await updateDoc(pkgRef, { 
+      questions,
+      status: questions.length > 0 ? 'Siap' : 'Draft'
+    });
     window.openPackageDetailFire(activePackageId);
   }
+};
+
+// -------------------------------------------------------------
+// INPUT SOAL MANUAL
+// -------------------------------------------------------------
+
+window.openAddQuestionModal = function() {
+  if (!activePackageId) return alert("Pilih paket soal terlebih dahulu!");
+  document.getElementById('modalAddQuestion')?.classList.remove('hidden');
+};
+
+window.closeAddQuestionModal = function() {
+  document.getElementById('modalAddQuestion')?.classList.add('hidden');
+};
+
+window.toggleQuestionOptionsUI = function() {
+  const type = document.getElementById('qTypeInput').value;
+  const optionsBox = document.getElementById('pgOptionsBox');
+  if (optionsBox) {
+    if (type === 'PG') optionsBox.classList.remove('hidden');
+    else optionsBox.classList.add('hidden');
+  }
+};
+
+window.handleSaveManualQuestion = async function(e) {
+  e.preventDefault();
+  if (!activePackageId) return alert("Paket soal tidak aktif!");
+
+  const type = document.getElementById('qTypeInput').value;
+  const text = document.getElementById('qTextInput').value.trim();
+  const key = document.getElementById('qKeyInput').value.trim().toUpperCase();
+  const score = parseInt(document.getElementById('qScoreInput').value) || 2;
+
+  let options = [];
+  if (type === 'PG') {
+    const a = document.getElementById('optA').value.trim();
+    const b = document.getElementById('optB').value.trim();
+    const c = document.getElementById('optC').value.trim();
+    const d = document.getElementById('optD').value.trim();
+    if (!a || !b) return alert("Opsi A dan B wajib diisi untuk Pilihan Ganda!");
+    options = [a, b, c, d].filter(o => o !== '');
+  }
+
+  try {
+    const pkgRef = doc(db, "packages", activePackageId);
+    const pkgDoc = await getDoc(pkgRef);
+
+    if (pkgDoc.exists()) {
+      let questions = pkgDoc.data().questions || [];
+      questions.push({ type, text, options, key, score });
+
+      await updateDoc(pkgRef, { 
+        questions,
+        status: 'Siap'
+      });
+
+      alert("Butir soal berhasil ditambahkan ke paket!");
+      window.closeAddQuestionModal();
+      window.openPackageDetailFire(activePackageId);
+
+      // Reset form
+      document.getElementById('qTextInput').value = '';
+      document.getElementById('optA').value = '';
+      document.getElementById('optB').value = '';
+      document.getElementById('optC').value = '';
+      document.getElementById('optD').value = '';
+      document.getElementById('qKeyInput').value = '';
+    }
+  } catch (err) {
+    alert("Gagal menyimpan soal: " + err.message);
+  }
+};
+
+// -------------------------------------------------------------
+// TEMPLATE & UPLOAD EXCEL SOAL
+// -------------------------------------------------------------
+
+window.downloadQuestionTemplate = function() {
+  if (typeof XLSX === 'undefined') {
+    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
+  }
+
+  const templateData = [
+    {
+      "Jenis": "PG",
+      "Pertanyaan": "Siapakah Nabi terakhir yang diutus oleh Allah SWT?",
+      "Opsi A": "Nabi Musa AS",
+      "Opsi B": "Nabi Isa AS",
+      "Opsi C": "Nabi Muhammad SAW",
+      "Opsi D": "Nabi Ibrahim AS",
+      "Kunci Jawaban": "C",
+      "Bobot": 2
+    },
+    {
+      "Jenis": "ISIAN",
+      "Pertanyaan": "Rukun Islam yang ketiga adalah menunaikan...",
+      "Opsi A": "",
+      "Opsi B": "",
+      "Opsi C": "",
+      "Opsi D": "",
+      "Kunci Jawaban": "Zakat",
+      "Bobot": 5
+    }
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(templateData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Template Soal");
+
+  worksheet['!cols'] = [
+    { wch: 10 },
+    { wch: 45 },
+    { wch: 20 },
+    { wch: 20 },
+    { wch: 20 },
+    { wch: 20 },
+    { wch: 15 },
+    { wch: 10 }
+  ];
+
+  XLSX.writeFile(workbook, "Template_Upload_Soal_CBT.xlsx");
+};
+
+window.openImportQuestionModal = function() {
+  if (!activePackageId) return alert("Pilih paket soal terlebih dahulu!");
+  document.getElementById('importQuestionsReport')?.classList.add('hidden');
+  document.getElementById('modalImportQuestion')?.classList.remove('hidden');
+};
+
+window.closeImportQuestionModal = function() {
+  document.getElementById('modalImportQuestion')?.classList.add('hidden');
+};
+
+window.processUploadQuestionsExcel = function() {
+  const fileInput = document.getElementById('excelQuestionFile');
+  const file = fileInput?.files[0];
+  if (!file) return alert("Pilih file Excel soal terlebih dahulu!");
+
+  if (typeof XLSX === 'undefined') {
+    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
+  }
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet);
+
+      if (!json || json.length === 0) return alert("File Excel kosong!");
+
+      let importedQuestions = [];
+      json.forEach(row => {
+        const type = row["Jenis"] ? String(row["Jenis"]).trim().toUpperCase() : "PG";
+        const text = row["Pertanyaan"] ? String(row["Pertanyaan"]).trim() : "";
+        const key = row["Kunci Jawaban"] ? String(row["Kunci Jawaban"]).trim().toUpperCase() : "A";
+        const score = parseInt(row["Bobot"]) || 2;
+
+        let options = [];
+        if (type === 'PG') {
+          if (row["Opsi A"]) options.push(String(row["Opsi A"]).trim());
+          if (row["Opsi B"]) options.push(String(row["Opsi B"]).trim());
+          if (row["Opsi C"]) options.push(String(row["Opsi C"]).trim());
+          if (row["Opsi D"]) options.push(String(row["Opsi D"]).trim());
+        }
+
+        if (text) {
+          importedQuestions.push({ type, text, options, key, score });
+        }
+      });
+
+      if (importedQuestions.length > 0 && activePackageId) {
+        const pkgRef = doc(db, "packages", activePackageId);
+        const pkgDoc = await getDoc(pkgRef);
+
+        if (pkgDoc.exists()) {
+          let currentQuestions = pkgDoc.data().questions || [];
+          const updated = [...currentQuestions, ...importedQuestions];
+
+          await updateDoc(pkgRef, {
+            questions: updated,
+            status: 'Siap'
+          });
+
+          alert(`${importedQuestions.length} soal berhasil dimuat dari Excel ke Firestore!`);
+          window.closeImportQuestionModal();
+          window.openPackageDetailFire(activePackageId);
+          fileInput.value = '';
+        }
+      }
+    } catch (err) {
+      alert("Gagal memproses file Excel: " + err.message);
+    }
+  };
+
+  reader.readAsArrayBuffer(file);
 };
 
 // -------------------------------------------------------------
