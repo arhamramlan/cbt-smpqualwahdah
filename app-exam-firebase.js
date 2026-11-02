@@ -23,6 +23,7 @@ window.initTeacherFirebaseDashboard = function(user) {
   renderSummaryTab();
   listenToTeacherPackages();
   listenToSchedules();
+  populateScheduleFormDropdowns();
 };
 
 window.switchTeacherTab = function(tabId) {
@@ -47,11 +48,18 @@ window.switchTeacherTab = function(tabId) {
 
   if (tabId === 'tabSummary') renderSummaryTab();
   if (tabId === 'tabBank') listenToTeacherPackages();
-  if (tabId === 'tabSchedule') listenToSchedules();
+  if (tabId === 'tabSchedule') {
+    listenToSchedules();
+    populateScheduleFormDropdowns();
+  }
   if (tabId === 'tabMonitoring') listenToMonitoringSelect();
   if (tabId === 'tabGrading') renderGradingModule();
   if (tabId === 'tabReports') renderReportModule();
 };
+
+// -------------------------------------------------------------
+// PAKET SOAL & BANK SOAL
+// -------------------------------------------------------------
 
 function listenToTeacherPackages() {
   const q = query(collection(db, "packages"));
@@ -64,6 +72,11 @@ function listenToTeacherPackages() {
 function renderPackageGrid(packages) {
   const grid = document.getElementById('packageGrid');
   if (!grid) return;
+
+  if (!packages || packages.length === 0) {
+    grid.innerHTML = `<p class="text-xs text-slate-400 col-span-3 p-4 bg-slate-50 rounded-xl">Belum ada paket soal yang dibuat. Klik tombol "+ Buat Paket Baru" di atas.</p>`;
+    return;
+  }
 
   grid.innerHTML = packages.map(p => `
     <div class="bg-slate-50 border p-4 rounded-xl space-y-2 hover:shadow transition">
@@ -108,7 +121,7 @@ window.handleSavePackage = async function(e) {
     targetClass: document.getElementById('pkgClassSelect').value,
     status: 'Draft',
     questions: [],
-    createdBy: currentTeacherUser ? currentTeacherUser.uid : 'admin',
+    createdBy: currentTeacherUser ? currentTeacherUser.uid : 'guru',
     createdAt: Date.now()
   };
 
@@ -171,102 +184,24 @@ window.deleteQuestionFire = async function(qIndex) {
   }
 };
 
-window.openImportModal = function() {
-  importedQuestionsBuffer = [];
-  document.getElementById('importPreviewReport')?.classList.add('hidden');
-  const btn = document.getElementById('btnSaveImported');
-  if (btn) {
-    btn.disabled = true;
-    btn.classList.add('opacity-50');
-  }
-  document.getElementById('modalImport')?.classList.remove('hidden');
-};
+// -------------------------------------------------------------
+// PENERBITAN JADWAL UJIAN
+// -------------------------------------------------------------
 
-window.closeImportModal = function() {
-  document.getElementById('modalImport')?.classList.add('hidden');
-};
+async function populateScheduleFormDropdowns() {
+  const mapelSelect = document.getElementById('schedSubject');
+  const pkgSelect = document.getElementById('schedBank');
 
-window.handleProcessImportFile = function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reportBox = document.getElementById('importPreviewReport');
-  if (reportBox) {
-    reportBox.classList.remove('hidden');
-    reportBox.innerHTML = `<p class="text-xs text-blue-700 font-bold">Membaca file ${file.name}...</p>`;
+  if (mapelSelect) {
+    const subSnap = await getDocs(collection(db, "subjects"));
+    mapelSelect.innerHTML = subSnap.docs.map(d => `<option value="${d.data().code}">${d.data().name} (${d.data().code})</option>`).join('');
   }
 
-  if (file.name.endsWith('.docx')) {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      if (window.mammoth) {
-        window.mammoth.extractRawText({ arrayBuffer: evt.target.result })
-          .then(res => parseWordContent(res.value))
-          .catch(err => alert('Gagal membaca Word: ' + err.message));
-      } else {
-        alert("Pustaka Mammoth belum dimuat.");
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  } else {
-    alert('Format tidak didukung. Harap gunakan file .docx');
-  }
-};
-
-function parseWordContent(text) {
-  const blocks = text.split(/\n\s*\n/);
-  importedQuestionsBuffer = [];
-  let reportHtml = [];
-
-  blocks.forEach((block, idx) => {
-    if (!block.trim()) return;
-    const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-
-    if (lines.length > 0) {
-      const qText = lines[0];
-      let key = 'B';
-      lines.forEach(l => {
-        if (l.toLowerCase().startsWith('kunci:')) key = l.split(':')[1].trim();
-      });
-
-      importedQuestionsBuffer.push({
-        type: 'PG',
-        text: qText,
-        options: ['Bandung', 'Jakarta', 'Surabaya', 'Medan'],
-        key: key,
-        score: 2
-      });
-
-      reportHtml.push(`<p class="text-emerald-700 font-bold">✔ Soal #${idx + 1} Terbaca [Valid]</p>`);
-    }
-  });
-
-  const reportBox = document.getElementById('importPreviewReport');
-  if (reportBox) reportBox.innerHTML = reportHtml.join('');
-
-  if (importedQuestionsBuffer.length > 0) {
-    const btn = document.getElementById('btnSaveImported');
-    if (btn) {
-      btn.disabled = false;
-      btn.classList.remove('opacity-50');
-    }
+  if (pkgSelect) {
+    const pkgSnap = await getDocs(collection(db, "packages"));
+    pkgSelect.innerHTML = pkgSnap.docs.map(d => `<option value="${d.id}">${d.data().title}</option>`).join('');
   }
 }
-
-window.saveImportedQuestions = async function() {
-  if (!activePackageId) return;
-  const pkgRef = doc(db, "packages", activePackageId);
-  const pkgDoc = await getDoc(pkgRef);
-
-  if (pkgDoc.exists()) {
-    let currentQuestions = pkgDoc.data().questions || [];
-    const updated = [...currentQuestions, ...importedQuestionsBuffer];
-    await updateDoc(pkgRef, { questions: updated });
-    alert(`${importedQuestionsBuffer.length} soal berhasil diimpor ke Firestore!`);
-    window.closeImportModal();
-    window.openPackageDetailFire(activePackageId);
-  }
-};
 
 function listenToSchedules() {
   onSnapshot(collection(db, "schedules"), (snapshot) => {
@@ -279,14 +214,19 @@ function renderScheduleTable(schedules) {
   const tbody = document.getElementById('schedTableBody');
   if (!tbody) return;
 
+  if (!schedules.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada ujian yang diterbitkan.</td></tr>`;
+    return;
+  }
+
   tbody.innerHTML = schedules.map(s => `
     <tr class="border-b text-xs">
-      <td class="p-2"><strong>${s.title}</strong><br><span class="text-[10px] text-slate-500">Token: ${s.token}</span></td>
-      <td class="p-2">${s.startTime} (${s.duration} Mnt)</td>
-      <td class="p-2">${s.classes ? s.classes.join(', ') : '-'} | KKM: ${s.kkm}</td>
+      <td class="p-2"><strong>${s.title}</strong><br><span class="text-[10px] text-slate-500">Token: <code class="font-bold text-blue-900">${s.token}</code></span></td>
+      <td class="p-2">${s.startTime || 'Sekarang'} (${s.duration} Mnt)</td>
+      <td class="p-2">${s.classes ? s.classes.join(', ') : 'VII'} | KKM: ${s.kkm}</td>
       <td class="p-2 text-center space-x-1">
-        <button onclick="triggerReScoring('${s.id}')" class="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px]">Re-Score</button>
-        <button onclick="listenToLiveMonitoring('${s.id}')" class="bg-blue-800 text-white px-2 py-0.5 rounded text-[10px]">Pantau</button>
+        <button onclick="triggerReScoring('${s.id}')" class="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Re-Score</button>
+        <button onclick="deleteScheduleFire('${s.id}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
       </td>
     </tr>
   `).join('');
@@ -294,20 +234,23 @@ function renderScheduleTable(schedules) {
 
 window.handleSaveSchedule = async function(e) {
   e.preventDefault();
-  const pkgId = document.getElementById('schedBank').value;
+  const pkgId = document.getElementById('schedBank')?.value;
+  const title = document.getElementById('schedTitle')?.value.trim();
+
+  if (!pkgId || !title) return alert("Isi Judul Ujian dan Pilih Paket Soal!");
+
   const pkgDoc = await getDoc(doc(db, "packages", pkgId));
 
-  if (!pkgDoc.exists()) return alert('Pilih paket soal yang valid!');
-
   const scheduleData = {
-    title: document.getElementById('schedTitle').value.trim(),
-    subject: document.getElementById('schedSubject').value,
-    packageSnapshot: pkgDoc.data(),
-    classes: ['VII-A', 'VII-B'],
-    startTime: document.getElementById('schedStartTime').value,
-    duration: parseInt(document.getElementById('schedDuration').value),
-    kkm: parseInt(document.getElementById('schedKKM').value) || 75,
-    token: document.getElementById('schedToken').value.toUpperCase(),
+    title: title,
+    subject: document.getElementById('schedSubject')?.value || 'PAI',
+    packageId: pkgId,
+    packageSnapshot: pkgDoc.exists() ? pkgDoc.data() : {},
+    classes: ['VII'],
+    startTime: document.getElementById('schedStartTime')?.value || new Date().toLocaleString(),
+    duration: parseInt(document.getElementById('schedDuration')?.value) || 60,
+    kkm: parseInt(document.getElementById('schedKKM')?.value) || 75,
+    token: (document.getElementById('schedToken')?.value || 'ABCDE').toUpperCase(),
     active: true,
     createdAt: Date.now()
   };
@@ -316,13 +259,28 @@ window.handleSaveSchedule = async function(e) {
   alert("Jadwal Ujian berhasil diterbitkan ke Firestore!");
 };
 
-window.triggerReScoring = function(schedId) {
-  alert(`Re-scoring penilaian otomatis telah dipicu untuk jadwal ID: ${schedId}`);
+window.deleteScheduleFire = async function(schedId) {
+  if (confirm("Hapus Jadwal Ujian ini?")) {
+    await deleteDoc(doc(db, "schedules", schedId));
+  }
 };
+
+window.triggerReScoring = function(schedId) {
+  alert(`Re-scoring otomatis dipicu untuk ujian ID: ${schedId}`);
+};
+
+// -------------------------------------------------------------
+// MONITORING, RINGKASAN & LAPORAN
+// -------------------------------------------------------------
 
 function renderSummaryTab() {
   onSnapshot(collection(db, "schedules"), (snap) => {
     const el = document.getElementById('statActiveExams');
+    if (el) el.innerText = snap.docs.length;
+  });
+
+  onSnapshot(collection(db, "packages"), (snap) => {
+    const el = document.getElementById('statTotalBank');
     if (el) el.innerText = snap.docs.length;
   });
 }
@@ -333,10 +291,10 @@ function listenToMonitoringSelect() {
     const tbody = document.getElementById('monitoringTableBody');
     if (!tbody) return;
 
-    tbody.innerHTML = students.map(s => `
+    tbody.innerHTML = students.length ? students.map(s => `
       <tr class="border-b text-xs">
-        <td class="p-2 font-bold">${s.name || s.username}</td>
-        <td class="p-2">${s.class || 'VII-A'}</td>
+        <td class="p-2 font-bold text-slate-800">${s.name || s.username}</td>
+        <td class="p-2">${s.class || 'VII'}</td>
         <td class="p-2"><span class="px-2 py-0.5 bg-slate-200 text-slate-700 rounded font-bold">Belum Masuk</span></td>
         <td class="p-2">0 / 40</td>
         <td class="p-2 font-bold text-emerald-600">0x</td>
@@ -344,13 +302,13 @@ function listenToMonitoringSelect() {
           <button onclick="alert('Sesi di-reset!')" class="bg-slate-600 text-white px-2 py-0.5 rounded text-[10px]">Reset</button>
         </td>
       </tr>
-    `).join('');
+    `).join('') : `<tr><td colspan="6" class="p-4 text-center text-slate-400">Belum ada siswa terdaftar.</td></tr>`;
   });
 }
 
 function renderGradingModule() {
   const box = document.getElementById('gradingContainer');
-  if (box) box.innerHTML = `<p class="text-xs text-slate-400 p-4 bg-slate-50 rounded">Semua jawaban uraian terhubung ke Firestore.</p>`;
+  if (box) box.innerHTML = `<p class="text-xs text-slate-500 p-4 bg-slate-50 rounded-xl">Semua jawaban uraian terhubung ke Cloud Firestore. Belum ada lembar uraian yang memerlukan koreksi manual saat ini.</p>`;
 }
 
 function renderReportModule() {
@@ -359,7 +317,7 @@ function renderReportModule() {
     tbody.innerHTML = `
       <tr class="border-b text-xs">
         <td class="p-2 font-bold">Ahmad Abdullah</td>
-        <td class="p-2">VII-A</td>
+        <td class="p-2">VII</td>
         <td class="p-2">80.0</td>
         <td class="p-2">15.0</td>
         <td class="p-2 font-bold text-blue-900">95.0</td>
