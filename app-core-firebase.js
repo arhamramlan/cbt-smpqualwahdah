@@ -711,31 +711,25 @@ function initSettingsListener() {
 // 1. Fungsi Unduh Template Excel
 window.downloadUserTemplate = function() {
   if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat. Pastikan terhubung ke internet.");
+    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
   }
 
-  // Data contoh template baku
   const templateData = [
     {
       "Nama Lengkap": "Ahmad Abdullah",
       "Username": "ahmad01",
       "Role": "siswa",
       "NISN": "0012345678",
-      "Kelas": "VII"
+      "Kelas": "VII",
+      "Password": "123"
     },
     {
-      "Nama Lengkap": "Siti Aminah",
-      "Username": "siti01",
-      "Role": "siswa",
-      "NISN": "0087654321",
-      "Kelas": "VII"
-    },
-    {
-      "Nama Lengkap": "Ustadz Muhammad, S.Pd.",
-      "Username": "guru_mtk",
+      "Nama Lengkap": "Arham Ramlan",
+      "Username": "arham",
       "Role": "guru",
       "NISN": "",
-      "Kelas": ""
+      "Kelas": "",
+      "Password": "guru123"
     }
   ];
 
@@ -743,13 +737,13 @@ window.downloadUserTemplate = function() {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Template Pengguna");
 
-  // Atur lebar kolom
   worksheet['!cols'] = [
-    { wch: 30 }, // Nama Lengkap
+    { wch: 30 }, // Nama
     { wch: 18 }, // Username
     { wch: 12 }, // Role
     { wch: 15 }, // NISN
-    { wch: 10 }  // Kelas
+    { wch: 10 }, // Kelas
+    { wch: 15 }  // Password
   ];
 
   XLSX.writeFile(workbook, "Template_Import_Pengguna_CBT.xlsx");
