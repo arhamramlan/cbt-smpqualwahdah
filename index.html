@@ -445,18 +445,112 @@
           <div id="packageGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
 
           <!-- Modul Editor / Detail Paket Soal -->
-          <div id="packageDetailBox" class="hidden border-t pt-4 space-y-4">
-            <div class="flex justify-between items-center bg-slate-100 p-3 rounded-xl border">
+          <!-- AREA DETAIL PAKET SOAL -->
+          <div id="packageDetailBox" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 hidden">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b pb-3">
               <div>
-                <h4 class="font-bold text-slate-800 text-sm" id="activePkgTitle">Detail Paket</h4>
-                <p class="text-xs text-slate-500" id="activePkgInfo">PAI - Kelas VII-A</p>
+                <h3 class="font-bold text-slate-800 text-sm" id="activePkgTitle">Detail Paket Soal</h3>
+                <p class="text-xs text-slate-500" id="activePkgInfo">Mapel: - | Target: -</p>
               </div>
-              <div class="flex gap-2">
-                <button onclick="validateActivePackage()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded text-xs font-bold"><i class="fa-solid fa-check-double mr-1"></i>Cek Validasi Paket</button>
-                <button onclick="openImportModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded text-xs font-bold"><i class="fa-solid fa-file-import mr-1"></i>Impor Docx / Excel</button>
-                <button onclick="openAddQuestionModal()" class="bg-blue-800 hover:bg-blue-900 text-white px-3 py-1 rounded text-xs font-bold"><i class="fa-solid fa-plus mr-1"></i>Tambah Soal</button>
+              
+              <!-- Tombol Aksi Soal -->
+              <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                <button onclick="downloadQuestionTemplate()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1">
+                  <i class="fa-solid fa-file-excel"></i> Template Excel Soal
+                </button>
+                <button onclick="openImportQuestionModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1">
+                  <i class="fa-solid fa-file-import"></i> Upload Excel Soal
+                </button>
+                <button onclick="openAddQuestionModal()" class="bg-blue-800 hover:bg-blue-900 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1">
+                  <i class="fa-solid fa-plus-circle"></i> + Tambah Soal Manual
+                </button>
               </div>
             </div>
+          
+            <div id="packageQuestionsList" class="space-y-3"></div>
+          </div>
+          
+          <!-- MODAL TAMBAH SOAL MANUAL -->
+          <div id="modalAddQuestion" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+            <div class="bg-white w-full max-w-2xl rounded-xl p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+              <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="font-bold text-slate-800"><i class="fa-solid fa-pen-to-square text-blue-600 mr-2"></i>Tambah Butir Soal Baru</h3>
+                <button onclick="closeAddQuestionModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+              </div>
+              <form onsubmit="handleSaveManualQuestion(event)" class="space-y-3 text-xs">
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">Jenis Soal</label>
+                  <select id="qTypeInput" onchange="toggleQuestionOptionsUI()" class="w-full px-3 py-2 border rounded-lg bg-slate-50 font-bold">
+                    <option value="PG">Pilihan Ganda (PG)</option>
+                    <option value="ISIAN">Isian Singkat</option>
+                    <option value="URAIAN">Uraian / Essay</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">Pertanyaan / Teks Soal</label>
+                  <textarea id="qTextInput" rows="3" required placeholder="Tuliskan pertanyaan soal di sini..." class="w-full p-2.5 border rounded-lg"></textarea>
+                </div>
+          
+                <!-- OPSI PILIHAN GANDA -->
+                <div id="pgOptionsBox" class="space-y-2 border-t pt-2">
+                  <label class="block font-bold text-slate-700">Opsi Jawaban & Kunci</label>
+                  <div class="grid grid-cols-1 gap-2">
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold w-4 text-center">A</span>
+                      <input type="text" id="optA" placeholder="Pilihan A" class="flex-1 px-2.5 py-1.5 border rounded-lg">
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold w-4 text-center">B</span>
+                      <input type="text" id="optB" placeholder="Pilihan B" class="flex-1 px-2.5 py-1.5 border rounded-lg">
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold w-4 text-center">C</span>
+                      <input type="text" id="optC" placeholder="Pilihan C" class="flex-1 px-2.5 py-1.5 border rounded-lg">
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold w-4 text-center">D</span>
+                      <input type="text" id="optD" placeholder="Pilihan D" class="flex-1 px-2.5 py-1.5 border rounded-lg">
+                    </div>
+                  </div>
+                </div>
+          
+                <div class="grid grid-cols-2 gap-3 pt-2">
+                  <div>
+                    <label class="block font-bold text-slate-700 mb-1">Kunci Jawaban</label>
+                    <input type="text" id="qKeyInput" required placeholder="Contoh: B (untuk PG) atau teks kunci" class="w-full px-3 py-1.5 border rounded-lg font-bold uppercase">
+                  </div>
+                  <div>
+                    <label class="block font-bold text-slate-700 mb-1">Bobot / Skor</label>
+                    <input type="number" id="qScoreInput" value="2" required class="w-full px-3 py-1.5 border rounded-lg font-bold">
+                  </div>
+                </div>
+          
+                <div class="flex gap-2 pt-3 border-t">
+                  <button type="button" onclick="closeAddQuestionModal()" class="w-1/3 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg">Batal</button>
+                  <button type="submit" class="flex-1 bg-blue-800 text-white font-bold py-2 rounded-lg">Simpan Soal ke Firestore</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          
+          <!-- MODAL IMPOR EXCEL SOAL -->
+          <div id="modalImportQuestion" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+            <div class="bg-white w-full max-w-md rounded-xl p-6 shadow-xl space-y-4">
+              <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="font-bold text-slate-800"><i class="fa-solid fa-file-excel text-emerald-600 mr-2"></i>Upload Excel Soal</h3>
+                <button onclick="closeImportQuestionModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+              </div>
+              <div class="space-y-3 text-xs">
+                <p class="text-slate-600">Pilih file Excel (.xlsx) yang sudah diisi sesuai template baku.</p>
+                <input type="file" id="excelQuestionFile" accept=".xlsx, .xls" class="w-full p-2 border rounded-lg text-xs bg-slate-50">
+                <div id="importQuestionsReport" class="p-2.5 bg-slate-100 rounded-lg max-h-36 overflow-y-auto hidden space-y-1 font-mono"></div>
+                <div class="flex gap-2 pt-2 border-t">
+                  <button onclick="closeImportQuestionModal()" class="w-1/3 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg">Batal</button>
+                  <button onclick="processUploadQuestionsExcel()" class="flex-1 bg-emerald-600 text-white font-bold py-2 rounded-lg">Proses Upload</button>
+                </div>
+              </div>
+            </div>
+          </div>
 
             <!-- List Soal dalam Paket -->
             <div id="packageQuestionsList" class="space-y-3"></div>
