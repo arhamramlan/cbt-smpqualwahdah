@@ -16,6 +16,7 @@ import {
 
 let activePackageId = null;
 let currentTeacherUser = null;
+let importedQuestionsBuffer = [];
 
 window.initTeacherFirebaseDashboard = function(user) {
   currentTeacherUser = user;
@@ -147,14 +148,14 @@ function renderPackageQuestionsList(questions) {
   if (!list) return;
 
   if (!questions || !questions.length) {
-    list.innerHTML = `<p class="text-xs text-slate-400 p-4 bg-slate-50 rounded">Belum ada butir soal dalam paket ini. Silakan tambahkan soal manual atau upload via file Excel.</p>`;
+    list.innerHTML = `<p class="text-xs text-slate-400 p-4 bg-slate-50 rounded">Belum ada butir soal dalam paket ini. Tambahkan soal manual atau upload file Word (.docx).</p>`;
     return;
   }
 
   list.innerHTML = questions.map((q, i) => `
     <div class="bg-slate-50 p-3 rounded-lg border text-xs space-y-2">
       <div class="flex justify-between items-center">
-        <strong class="font-bold text-slate-800">#${i + 1} [Jenis: ${q.type || 'PG'}] Bobot: ${q.score || 2}</strong>
+        <strong class="font-bold text-slate-800">#${i + 1} [Jenis: <span class="text-blue-900 font-extrabold">${q.type || 'PG'}</span>] Bobot: ${q.score || 2}</strong>
         <button onclick="deleteQuestionFire(${i})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
       </div>
       <p dir="auto" class="font-medium text-slate-800">${q.text}</p>
@@ -163,7 +164,7 @@ function renderPackageQuestionsList(questions) {
           ${q.options.map((opt, oIdx) => `<div><strong class="text-slate-800">${String.fromCharCode(65 + oIdx)}.</strong> ${opt}</div>`).join('')}
         </div>
       ` : ''}
-      <div class="text-[11px] text-slate-600 pt-1 border-t"><strong>Kunci Jawaban:</strong> <code class="font-bold text-blue-900 bg-blue-100 px-1.5 py-0.5 rounded">${q.key}</code></div>
+      <div class="text-[11px] text-slate-600 pt-1 border-t"><strong>Kunci Jawaban:</strong> <code class="font-bold text-blue-900 bg-blue-100 px-1.5 py-0.5 rounded">${Array.isArray(q.key) ? q.key.join(', ') : q.key}</code></div>
     </div>
   `).join('');
 }
@@ -192,7 +193,7 @@ window.deleteQuestionFire = async function(qIndex) {
 };
 
 // -------------------------------------------------------------
-// INPUT SOAL MANUAL
+// INPUT SOAL MANUAL (5 JENIS)
 // -------------------------------------------------------------
 
 window.openAddQuestionModal = function() {
@@ -208,7 +209,7 @@ window.toggleQuestionOptionsUI = function() {
   const type = document.getElementById('qTypeInput').value;
   const optionsBox = document.getElementById('pgOptionsBox');
   if (optionsBox) {
-    if (type === 'PG') optionsBox.classList.remove('hidden');
+    if (type === 'PG' || type === 'PGK') optionsBox.classList.remove('hidden');
     else optionsBox.classList.add('hidden');
   }
 };
@@ -219,17 +220,24 @@ window.handleSaveManualQuestion = async function(e) {
 
   const type = document.getElementById('qTypeInput').value;
   const text = document.getElementById('qTextInput').value.trim();
-  const key = document.getElementById('qKeyInput').value.trim().toUpperCase();
+  const rawKey = document.getElementById('qKeyInput').value.trim().toUpperCase();
   const score = parseInt(document.getElementById('qScoreInput').value) || 2;
 
+  let key = rawKey;
+  if (type === 'PGK') {
+    key = rawKey.split(',').map(k => k.trim()).filter(k => k);
+  }
+
   let options = [];
-  if (type === 'PG') {
+  if (type === 'PG' || type === 'PGK') {
     const a = document.getElementById('optA').value.trim();
     const b = document.getElementById('optB').value.trim();
     const c = document.getElementById('optC').value.trim();
     const d = document.getElementById('optD').value.trim();
-    if (!a || !b) return alert("Opsi A dan B wajib diisi untuk Pilihan Ganda!");
+    if (!a || !b) return alert("Opsi A dan B wajib diisi!");
     options = [a, b, c, d].filter(o => o !== '');
+  } else if (type === 'BS') {
+    options = ['Benar', 'Salah'];
   }
 
   try {
@@ -245,11 +253,10 @@ window.handleSaveManualQuestion = async function(e) {
         status: 'Siap'
       });
 
-      alert("Butir soal berhasil ditambahkan ke paket!");
+      alert("Butir soal berhasil ditambahkan!");
       window.closeAddQuestionModal();
       window.openPackageDetailFire(activePackageId);
 
-      // Reset form
       document.getElementById('qTextInput').value = '';
       document.getElementById('optA').value = '';
       document.getElementById('optB').value = '';
@@ -263,58 +270,59 @@ window.handleSaveManualQuestion = async function(e) {
 };
 
 // -------------------------------------------------------------
-// TEMPLATE & UPLOAD EXCEL SOAL
+// IMPOR & TEMPLATE FILE WORD (.DOCX)
 // -------------------------------------------------------------
 
-window.downloadQuestionTemplate = function() {
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
-  }
+window.downloadWordTemplate = function() {
+  const content = `PANDUAN FORMAT IMPOR SOAL WORD (.DOCX)
+=========================================
+Gunakan format paragraf baku berikut di Microsoft Word Anda:
 
-  const templateData = [
-    {
-      "Jenis": "PG",
-      "Pertanyaan": "Siapakah Nabi terakhir yang diutus oleh Allah SWT?",
-      "Opsi A": "Nabi Musa AS",
-      "Opsi B": "Nabi Isa AS",
-      "Opsi C": "Nabi Muhammad SAW",
-      "Opsi D": "Nabi Ibrahim AS",
-      "Kunci Jawaban": "C",
-      "Bobot": 2
-    },
-    {
-      "Jenis": "ISIAN",
-      "Pertanyaan": "Rukun Islam yang ketiga adalah menunaikan...",
-      "Opsi A": "",
-      "Opsi B": "",
-      "Opsi C": "",
-      "Opsi D": "",
-      "Kunci Jawaban": "Zakat",
-      "Bobot": 5
-    }
-  ];
+JENIS: PG
+SOAL: Siapakah Nabi terakhir yang diutus Allah SWT?
+A: Nabi Musa AS
+B: Nabi Isa AS
+C: Nabi Muhammad SAW
+D: Nabi Ibrahim AS
+KUNCI: C
+BOBOT: 2
 
-  const worksheet = XLSX.utils.json_to_sheet(templateData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Template Soal");
+JENIS: PGK
+SOAL: Manakah yang termasuk rukun Islam?
+A: Syahadat
+B: Shalat
+C: Puasa
+D: Membaca Komik
+KUNCI: A,B,C
+BOBOT: 3
 
-  worksheet['!cols'] = [
-    { wch: 10 },
-    { wch: 45 },
-    { wch: 20 },
-    { wch: 20 },
-    { wch: 20 },
-    { wch: 20 },
-    { wch: 15 },
-    { wch: 10 }
-  ];
+JENIS: BS
+SOAL: Al-Qur'an terdiri dari 114 Surah.
+KUNCI: BENAR
+BOBOT: 2
 
-  XLSX.writeFile(workbook, "Template_Upload_Soal_CBT.xlsx");
+JENIS: ISIAN
+SOAL: Rukun Islam yang ketiga adalah menunaikan...
+KUNCI: Zakat
+BOBOT: 5
+`;
+
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = "Panduan_Format_Soal_Docx.txt";
+  a.click();
 };
 
 window.openImportQuestionModal = function() {
   if (!activePackageId) return alert("Pilih paket soal terlebih dahulu!");
-  document.getElementById('importQuestionsReport')?.classList.add('hidden');
+  importedQuestionsBuffer = [];
+  document.getElementById('importPreviewReport')?.classList.add('hidden');
+  const btn = document.getElementById('btnSaveImportedDocx');
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-50');
+  }
   document.getElementById('modalImportQuestion')?.classList.remove('hidden');
 };
 
@@ -322,70 +330,106 @@ window.closeImportQuestionModal = function() {
   document.getElementById('modalImportQuestion')?.classList.add('hidden');
 };
 
-window.processUploadQuestionsExcel = function() {
-  const fileInput = document.getElementById('excelQuestionFile');
-  const file = fileInput?.files[0];
-  if (!file) return alert("Pilih file Excel soal terlebih dahulu!");
+window.handleProcessImportFile = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
 
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
+  const reportBox = document.getElementById('importPreviewReport');
+  if (reportBox) {
+    reportBox.classList.remove('hidden');
+    reportBox.innerHTML = `<p class="text-blue-700 font-bold">Membaca berkas ${file.name}...</p>`;
   }
 
-  const reader = new FileReader();
-  reader.onload = async function(e) {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet);
+  if (file.name.endsWith('.docx')) {
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      if (window.mammoth) {
+        window.mammoth.extractRawText({ arrayBuffer: evt.target.result })
+          .then(res => parseWordContent(res.value))
+          .catch(err => alert('Gagal membaca file Word: ' + err.message));
+      } else {
+        alert("Pustaka Mammoth.js belum dimuat.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    alert('Format tidak didukung. Harap gunakan file ber-ekstensi .docx');
+  }
+};
 
-      if (!json || json.length === 0) return alert("File Excel kosong!");
+function parseWordContent(text) {
+  const blocks = text.split(/(?=JENIS:)/i);
+  importedQuestionsBuffer = [];
+  let reportHtml = [];
 
-      let importedQuestions = [];
-      json.forEach(row => {
-        const type = row["Jenis"] ? String(row["Jenis"]).trim().toUpperCase() : "PG";
-        const text = row["Pertanyaan"] ? String(row["Pertanyaan"]).trim() : "";
-        const key = row["Kunci Jawaban"] ? String(row["Kunci Jawaban"]).trim().toUpperCase() : "A";
-        const score = parseInt(row["Bobot"]) || 2;
+  blocks.forEach((block, idx) => {
+    if (!block.trim()) return;
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l);
 
-        let options = [];
-        if (type === 'PG') {
-          if (row["Opsi A"]) options.push(String(row["Opsi A"]).trim());
-          if (row["Opsi B"]) options.push(String(row["Opsi B"]).trim());
-          if (row["Opsi C"]) options.push(String(row["Opsi C"]).trim());
-          if (row["Opsi D"]) options.push(String(row["Opsi D"]).trim());
-        }
+    let type = 'PG';
+    let qText = '';
+    let options = [];
+    let key = 'A';
+    let score = 2;
 
-        if (text) {
-          importedQuestions.push({ type, text, options, key, score });
-        }
+    lines.forEach(l => {
+      const lower = l.toLowerCase();
+      if (lower.startsWith('jenis:')) type = l.split(':')[1].trim().toUpperCase();
+      else if (lower.startsWith('soal:')) qText = l.substring(5).trim();
+      else if (lower.startsWith('a:')) options[0] = l.substring(2).trim();
+      else if (lower.startsWith('b:')) options[1] = l.substring(2).trim();
+      else if (lower.startsWith('c:')) options[2] = l.substring(2).trim();
+      else if (lower.startsWith('d:')) options[3] = l.substring(2).trim();
+      else if (lower.startsWith('kunci:')) {
+        const rawK = l.split(':')[1].trim().toUpperCase();
+        key = type === 'PGK' ? rawK.split(',').map(k => k.trim()) : rawK;
+      }
+      else if (lower.startsWith('bobot:')) score = parseInt(l.split(':')[1].trim()) || 2;
+    });
+
+    if (qText) {
+      if (type === 'BS' && (!options || !options.length)) options = ['Benar', 'Salah'];
+
+      importedQuestionsBuffer.push({ type, text: qText, options, key, score });
+      reportHtml.push(`<p class="text-emerald-700 font-bold">✔ Soal #${importedQuestionsBuffer.length} [${type}] Terbaca</p>`);
+    }
+  });
+
+  const reportBox = document.getElementById('importPreviewReport');
+  if (reportBox) reportBox.innerHTML = reportHtml.join('');
+
+  if (importedQuestionsBuffer.length > 0) {
+    const btn = document.getElementById('btnSaveImportedDocx');
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-50');
+    }
+  }
+}
+
+window.saveImportedQuestionsDocx = async function() {
+  if (!activePackageId || !importedQuestionsBuffer.length) return;
+
+  try {
+    const pkgRef = doc(db, "packages", activePackageId);
+    const pkgDoc = await getDoc(pkgRef);
+
+    if (pkgDoc.exists()) {
+      let currentQuestions = pkgDoc.data().questions || [];
+      const updated = [...currentQuestions, ...importedQuestionsBuffer];
+
+      await updateDoc(pkgRef, {
+        questions: updated,
+        status: 'Siap'
       });
 
-      if (importedQuestions.length > 0 && activePackageId) {
-        const pkgRef = doc(db, "packages", activePackageId);
-        const pkgDoc = await getDoc(pkgRef);
-
-        if (pkgDoc.exists()) {
-          let currentQuestions = pkgDoc.data().questions || [];
-          const updated = [...currentQuestions, ...importedQuestions];
-
-          await updateDoc(pkgRef, {
-            questions: updated,
-            status: 'Siap'
-          });
-
-          alert(`${importedQuestions.length} soal berhasil dimuat dari Excel ke Firestore!`);
-          window.closeImportQuestionModal();
-          window.openPackageDetailFire(activePackageId);
-          fileInput.value = '';
-        }
-      }
-    } catch (err) {
-      alert("Gagal memproses file Excel: " + err.message);
+      alert(`${importedQuestionsBuffer.length} soal dari berkas Word (.docx) berhasil disimpan ke Firestore!`);
+      window.closeImportQuestionModal();
+      window.openPackageDetailFire(activePackageId);
     }
-  };
-
-  reader.readAsArrayBuffer(file);
+  } catch (err) {
+    alert("Gagal menyimpan ke Firestore: " + err.message);
+  }
 };
 
 // -------------------------------------------------------------
