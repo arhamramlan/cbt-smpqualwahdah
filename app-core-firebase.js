@@ -81,7 +81,7 @@ function renderUserInterface() {
 }
 
 // -------------------------------------------------------------
-// NAVIGASI TAB ADMIN
+// NAVIGASI TAB ADMIN & AUTH
 // -------------------------------------------------------------
 
 window.switchAdminTab = function(tabId) {
@@ -131,11 +131,10 @@ window.handleLogout = async function() {
   location.reload();
 };
 
-// =============================================================
-// MANAJEMEN PENGGUNA (USERS) FIRESTORE
-// =============================================================
+// -------------------------------------------------------------
+// MANAJEMEN PENGGUNA (USERS)
+// -------------------------------------------------------------
 
-// 1. Simpan Pengguna Manual (Termasuk Menyimpan Password)
 window.handleSaveUser = async function(e) {
   e.preventDefault();
   const name = document.getElementById('userName').value.trim();
@@ -155,7 +154,7 @@ window.handleSaveUser = async function(e) {
       role,
       nisn,
       class: userClass,
-      password, // Password disimpan agar bisa dilihat Admin
+      password,
       active: true,
       createdAt: Date.now()
     });
@@ -167,7 +166,27 @@ window.handleSaveUser = async function(e) {
   }
 };
 
-// 2. Toggle Status Aktif / Nonaktif Pengguna
+window.resetUserForm = function() {
+  document.getElementById('editUserId').value = '';
+  document.getElementById('userName').value = '';
+  document.getElementById('userUsername').value = '';
+  document.getElementById('userPassword').value = '';
+  if (document.getElementById('userNisn')) document.getElementById('userNisn').value = '';
+};
+
+window.toggleRoleFields = function() {
+  const role = document.getElementById('userRole').value;
+  const fieldSiswa = document.getElementById('fieldSiswa');
+  if (fieldSiswa) {
+    if (role === 'siswa') fieldSiswa.classList.remove('hidden');
+    else fieldSiswa.classList.add('hidden');
+  }
+};
+
+window.generateAutoPassword = function() {
+  document.getElementById('userPassword').value = Math.random().toString(36).substring(2, 8);
+};
+
 window.toggleUserActive = async function(userId, currentStatus, username) {
   if (username === 'admin') {
     return alert("Akun Admin Utama tidak bisa dinonaktifkan!");
@@ -183,7 +202,6 @@ window.toggleUserActive = async function(userId, currentStatus, username) {
   }
 };
 
-// 3. Hapus Dokumen Pengguna dari Firestore
 window.deleteUserDoc = async function(userId, username) {
   if (username === 'admin') {
     return alert("Akun Admin Utama tidak bisa dihapus!");
@@ -200,79 +218,57 @@ window.deleteUserDoc = async function(userId, username) {
   }
 };
 
-// 4. Toggle Tampilan Password di Tabel
 window.togglePasswordVisibility = function(elementId) {
   const el = document.getElementById(elementId);
   if (el) {
-    if (el.type === "password") {
-      el.type = "text";
-    } else {
-      el.type = "password";
-    }
+    el.type = el.type === "password" ? "text" : "password";
   }
 };
 
-// 5. Render Tabel Pengguna Real-Time dengan Fitur Baru
-function renderUserTable(users) {
-  const tbody = document.getElementById('userTableBody');
-  if (!tbody) return;
+// -------------------------------------------------------------
+// IMPOR & TEMPLATE EXCEL PENGGUNA
+// -------------------------------------------------------------
 
-  if (!users || users.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada pengguna.</td></tr>`;
-    return;
+window.downloadUserTemplate = function() {
+  if (typeof XLSX === 'undefined') {
+    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
   }
 
-  tbody.innerHTML = users.map((u, i) => {
-    const isAdminMain = u.username === 'admin';
-    const passInputId = `userPass_${i}`;
-    const userPass = u.password || '123456';
+  const templateData = [
+    {
+      "Nama Lengkap": "Ahmad Abdullah",
+      "Username": "ahmad01",
+      "Role": "siswa",
+      "NISN": "0012345678",
+      "Kelas": "VII",
+      "Password": "123"
+    },
+    {
+      "Nama Lengkap": "Arham Ramlan",
+      "Username": "arham",
+      "Role": "guru",
+      "NISN": "",
+      "Kelas": "",
+      "Password": "guru123"
+    }
+  ];
 
-    return `
-      <tr class="border-b text-xs">
-        <td class="p-2.5">
-          <strong class="text-slate-800 block">${u.name || u.username}</strong>
-          <span class="text-[10px] text-slate-500">Username: <code class="font-bold text-blue-900">${u.username}</code></span>
-          <!-- Fitur Lihat Password -->
-          <div class="flex items-center gap-1 mt-1">
-            <span class="text-[10px] text-slate-400">Pass:</span>
-            <input type="password" id="${passInputId}" value="${userPass}" readonly class="bg-slate-100 border px-1 py-0.5 rounded text-[10px] w-20 font-mono outline-none">
-            <button onclick="togglePasswordVisibility('${passInputId}')" title="Lihat Password" class="text-slate-500 hover:text-blue-800 text-[11px] px-1">
-              <i class="fa-solid fa-eye"></i>
-            </button>
-          </div>
-        </td>
+  const worksheet = XLSX.utils.json_to_sheet(templateData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Template Pengguna");
 
-        <td class="p-2.5">
-          <span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase text-[10px]">${u.role || 'siswa'}</span>
-          ${u.class ? `<span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] ml-1 font-semibold">${u.class}</span>` : ''}
-        </td>
+  worksheet['!cols'] = [
+    { wch: 30 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 15 },
+    { wch: 10 },
+    { wch: 15 }
+  ];
 
-        <td class="p-2.5">
-          <!-- Tombol Ubah Status Aktif / Nonaktif -->
-          <button 
-            onclick="toggleUserActive('${u.id}', ${u.active !== false}, '${u.username}')" 
-            class="px-2 py-0.5 rounded text-[10px] font-bold transition ${u.active !== false ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-rose-100 text-rose-800 hover:bg-rose-200'}"
-            ${isAdminMain ? 'disabled title="Admin utama selalu aktif"' : ''}>
-            ${u.active !== false ? '● Aktif' : '○ Nonaktif'}
-          </button>
-        </td>
+  XLSX.writeFile(workbook, "Template_Import_Pengguna_CBT.xlsx");
+};
 
-        <td class="p-2.5 text-center">
-          <!-- Tombol Hapus dengan Proteksi Admin Utama -->
-          ${isAdminMain ? `
-            <span class="text-[10px] text-slate-400 font-bold italic">Terproteksi</span>
-          ` : `
-            <button onclick="deleteUserDoc('${u.id}', '${u.username}')" class="bg-rose-600 hover:bg-rose-700 text-white px-2 py-0.5 rounded text-[10px] font-bold transition">
-              Hapus
-            </button>
-          `}
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
-
-// 6. Penyesuaian Impor Excel Agar Menyimpan Password
 window.handleImportUsersExcel = function(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -332,6 +328,23 @@ window.handleImportUsersExcel = function(e) {
 
   reader.readAsArrayBuffer(file);
 };
+
+window.filterUserTableUI = function() {
+  const search = (document.getElementById('searchUser')?.value || '').toLowerCase();
+  const roleFilter = document.getElementById('filterRole')?.value || '';
+  const classFilter = document.getElementById('filterUserClass')?.value || '';
+
+  const rows = document.querySelectorAll('#userTableBody tr');
+  rows.forEach(row => {
+    const text = row.innerText.toLowerCase();
+    const matchesSearch = text.includes(search);
+    const matchesRole = !roleFilter || text.includes(roleFilter);
+    const matchesClass = !classFilter || text.includes(classFilter.toLowerCase());
+
+    row.style.display = (matchesSearch && matchesRole && matchesClass) ? '' : 'none';
+  });
+};
+
 // -------------------------------------------------------------
 // MASTER KELAS & MAPEL FIRESTORE
 // -------------------------------------------------------------
@@ -670,19 +683,51 @@ function renderUserTable(users) {
   const tbody = document.getElementById('userTableBody');
   if (!tbody) return;
 
-  tbody.innerHTML = users.map(u => `
-    <tr class="border-b text-xs">
-      <td class="p-2.5">
-        <strong class="text-slate-800">${u.name || u.username}</strong>
-        <p class="text-[10px] text-slate-500">Username: ${u.username}</p>
-      </td>
-      <td class="p-2.5"><span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase text-[10px]">${u.role}</span></td>
-      <td class="p-2.5"><span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">${u.active ? 'Aktif' : 'Nonaktif'}</span></td>
-      <td class="p-2.5 text-center">
-        <button onclick="deleteUserDoc('${u.id}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">Hapus</button>
-      </td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = users.length ? users.map((u, i) => {
+    const isAdminMain = u.username === 'admin';
+    const passInputId = `userPass_${i}`;
+    const userPass = u.password || '123456';
+
+    return `
+      <tr class="border-b text-xs">
+        <td class="p-2.5">
+          <strong class="text-slate-800 block">${u.name || u.username}</strong>
+          <span class="text-[10px] text-slate-500">Username: <code class="font-bold text-blue-900">${u.username}</code></span>
+          <div class="flex items-center gap-1 mt-1">
+            <span class="text-[10px] text-slate-400">Pass:</span>
+            <input type="password" id="${passInputId}" value="${userPass}" readonly class="bg-slate-100 border px-1 py-0.5 rounded text-[10px] w-20 font-mono outline-none">
+            <button onclick="togglePasswordVisibility('${passInputId}')" title="Lihat Password" class="text-slate-500 hover:text-blue-800 text-[11px] px-1">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </td>
+
+        <td class="p-2.5">
+          <span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase text-[10px]">${u.role || 'siswa'}</span>
+          ${u.class ? `<span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] ml-1 font-semibold">${u.class}</span>` : ''}
+        </td>
+
+        <td class="p-2.5">
+          <button 
+            onclick="toggleUserActive('${u.id}', ${u.active !== false}, '${u.username}')" 
+            class="px-2 py-0.5 rounded text-[10px] font-bold transition ${u.active !== false ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-rose-100 text-rose-800 hover:bg-rose-200'}"
+            ${isAdminMain ? 'disabled title="Admin utama selalu aktif"' : ''}>
+            ${u.active !== false ? '● Aktif' : '○ Nonaktif'}
+          </button>
+        </td>
+
+        <td class="p-2.5 text-center">
+          ${isAdminMain ? `
+            <span class="text-[10px] text-slate-400 font-bold italic">Terproteksi</span>
+          ` : `
+            <button onclick="deleteUserDoc('${u.id}', '${u.username}')" class="bg-rose-600 hover:bg-rose-700 text-white px-2 py-0.5 rounded text-[10px] font-bold transition">
+              Hapus
+            </button>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join('') : `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada pengguna.</td></tr>`;
 }
 
 function populateClassOptions(classes) {
@@ -703,132 +748,3 @@ function initSettingsListener() {
     }
   });
 }
-
-// =============================================================
-// FITUR TEMPLATE & IMPOR PENGGUNA VIA EXCEL (.XLSX)
-// =============================================================
-
-// 1. Fungsi Unduh Template Excel
-window.downloadUserTemplate = function() {
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
-  }
-
-  const templateData = [
-    {
-      "Nama Lengkap": "Ahmad Abdullah",
-      "Username": "ahmad01",
-      "Role": "siswa",
-      "NISN": "0012345678",
-      "Kelas": "VII",
-      "Password": "123"
-    },
-    {
-      "Nama Lengkap": "Arham Ramlan",
-      "Username": "arham",
-      "Role": "guru",
-      "NISN": "",
-      "Kelas": "",
-      "Password": "guru123"
-    }
-  ];
-
-  const worksheet = XLSX.utils.json_to_sheet(templateData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Template Pengguna");
-
-  worksheet['!cols'] = [
-    { wch: 30 }, // Nama
-    { wch: 18 }, // Username
-    { wch: 12 }, // Role
-    { wch: 15 }, // NISN
-    { wch: 10 }, // Kelas
-    { wch: 15 }  // Password
-  ];
-
-  XLSX.writeFile(workbook, "Template_Import_Pengguna_CBT.xlsx");
-};
-
-// 2. Fungsi Impor Excel ke Firestore
-window.handleImportUsersExcel = function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
-  }
-
-  const reader = new FileReader();
-  reader.onload = async function(evt) {
-    try {
-      const data = new Uint8Array(evt.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      
-      // Konversi sheet ke JSON
-      const jsonUsers = XLSX.utils.sheet_to_json(worksheet);
-
-      if (!jsonUsers || jsonUsers.length === 0) {
-        return alert("File Excel kosong atau format tidak sesuai!");
-      }
-
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const row of jsonUsers) {
-        const name = row["Nama Lengkap"] ? String(row["Nama Lengkap"]).trim() : "";
-        const username = row["Username"] ? String(row["Username"]).trim() : "";
-        const role = row["Role"] ? String(row["Role"]).trim().toLowerCase() : "siswa";
-        const nisn = row["NISN"] ? String(row["NISN"]).trim() : "";
-        const userClass = row["Kelas"] ? String(row["Kelas"]).trim().toUpperCase() : "";
-
-        if (name && username) {
-          const newDocRef = doc(collection(db, "users"));
-          await setDoc(newDocRef, {
-            name: name,
-            username: username,
-            role: role,
-            nisn: nisn,
-            class: userClass,
-            active: true,
-            createdAt: Date.now()
-          });
-          successCount++;
-        } else {
-          failCount++;
-        }
-      }
-
-      alert(`Proses Impor Selesai!\n✔ ${successCount} Pengguna Berhasil Ditambahkan ke Firestore.\n${failCount > 0 ? `✖ ${failCount} Baris Gagal (Nama/Username kosong).` : ''}`);
-      
-      // Reset input file
-      e.target.value = '';
-    } catch (err) {
-      alert("Gagal memproses file Excel: " + err.message);
-    }
-  };
-
-  reader.readAsArrayBuffer(file);
-};
-
-// Helper Filter Tabel Pengguna
-window.filterUserTableUI = function() {
-  const search = (document.getElementById('searchUser')?.value || '').toLowerCase();
-  const roleFilter = document.getElementById('filterRole')?.value || '';
-  const classFilter = document.getElementById('filterUserClass')?.value || '';
-
-  const rows = document.querySelectorAll('#userTableBody tr');
-  rows.forEach(row => {
-    const text = row.innerText.toLowerCase();
-    const matchesSearch = text.includes(search);
-    const matchesRole = !roleFilter || text.includes(roleFilter);
-    const matchesClass = !classFilter || text.includes(classFilter.toLowerCase());
-
-    if (matchesSearch && matchesRole && matchesClass) {
-      row.style.display = '';
-    } else {
-      row.style.display = 'none';
-    }
-  });
-};
