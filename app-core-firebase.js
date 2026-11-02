@@ -29,23 +29,24 @@ document.addEventListener('DOMContentLoaded', () => {
 function initAuthObserver() {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
-      // Ambil profil user dari koleksi Firestore 'users'
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        currentUserSession = { 
-          uid: user.uid, 
-          name: data.name || data.username || 'Admin', // Mencegah undefined
-          role: data.role || 'admin',
-          ...data 
-        };
-        localStorage.setItem('cbt_session', JSON.stringify(currentUserSession));
-        renderUserInterface();
-      } else {
-        // Jika dokumen di Firestore belum ada, buatkan profil default
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          currentUserSession = { 
+            uid: user.uid, 
+            name: data.name || data.username || 'Admin',
+            role: data.role || 'admin',
+            ...data 
+          };
+        } else {
+          currentUserSession = { uid: user.uid, name: 'Administrator', role: 'admin', username: 'admin' };
+        }
+      } catch (e) {
         currentUserSession = { uid: user.uid, name: 'Administrator', role: 'admin', username: 'admin' };
-        renderUserInterface();
       }
+      localStorage.setItem('cbt_session', JSON.stringify(currentUserSession));
+      renderUserInterface();
     } else {
       currentUserSession = null;
       localStorage.removeItem('cbt_session');
@@ -66,7 +67,8 @@ function renderUserInterface() {
   }
 
   document.getElementById('navUserArea')?.classList.remove('hidden');
-  document.getElementById('navUserInfo').innerText = `${currentUserSession.name} (${currentUserSession.role.toUpperCase()})`;
+  const navInfo = document.getElementById('navUserInfo');
+  if (navInfo) navInfo.innerText = `${currentUserSession.name} (${currentUserSession.role.toUpperCase()})`;
 
   if (currentUserSession.role === 'admin') {
     document.getElementById('viewAdmin')?.classList.remove('hidden');
@@ -80,7 +82,7 @@ function renderUserInterface() {
 }
 
 // -------------------------------------------------------------
-// EKSPOR FUNGSI KE WINDOW AGAR EVENT ONCLICK HTML BERFUNGSI
+// GLOBAL WINDOW FUNCTIONS FOR HTML EVENTS
 // -------------------------------------------------------------
 
 window.switchAdminTab = function(tabId) {
@@ -100,8 +102,8 @@ window.switchAdminTab = function(tabId) {
     'adminTabSettings': 'btnAdminSettings'
   };
 
-  if (btnMap[tabId]) {
-    document.getElementById(btnMap[tabId])?.classList.add('active-tab');
+  if (btnMap[tabId] && document.getElementById(btnMap[tabId])) {
+    document.getElementById(btnMap[tabId]).classList.add('active-tab');
   }
 };
 
@@ -167,8 +169,76 @@ window.generateAutoPassword = function() {
 };
 
 window.deleteUserDoc = async function(userId) {
-  if (confirm("Apakah Anda yakin ingin menghapus pengguna ini dari Firestore?")) {
+  if (confirm("Hapus pengguna ini dari Firestore?")) {
     await deleteDoc(doc(db, "users", userId));
+  }
+};
+
+// MASTER KELAS FIRESTORE
+window.handleSaveClass = async function(e) {
+  e.preventDefault();
+  const code = document.getElementById('classNameInput').value.trim().toUpperCase();
+  const level = document.getElementById('classLevelInput').value;
+  const homeroom = document.getElementById('classHomeroomInput').value.trim() || '-';
+
+  if (!code) return alert("Kode kelas wajib diisi!");
+
+  try {
+    await setDoc(doc(db, "classes", code), {
+      code,
+      level,
+      homeroom,
+      updatedAt: Date.now()
+    });
+    alert(`Kelas ${code} berhasil disimpan!`);
+    document.getElementById('classNameInput').value = '';
+    document.getElementById('classHomeroomInput').value = '';
+  } catch (err) {
+    alert("Gagal menyimpan kelas: " + err.message);
+  }
+};
+
+window.editClass = async function(code) {
+  try {
+    const classDoc = await getDoc(doc(db, "classes", code));
+    if (classDoc.exists()) {
+      const data = classDoc.data();
+      document.getElementById('classNameInput').value = data.code;
+      document.getElementById('classLevelInput').value = data.level;
+      document.getElementById('classHomeroomInput').value = data.homeroom || '';
+    }
+  } catch (err) {
+    alert("Error: " + err.message);
+  }
+};
+
+window.deleteClass = async function(code) {
+  if (confirm(`Hapus kelas ${code}?`)) {
+    await deleteDoc(doc(db, "classes", code));
+  }
+};
+
+// MASTER MAPEL FIRESTORE
+window.handleSaveSubject = async function(e) {
+  e.preventDefault();
+  const code = document.getElementById('subjectCodeInput').value.trim().toUpperCase();
+  const name = document.getElementById('subjectNameInput').value.trim();
+
+  if (!code || !name) return alert("Kode dan nama mapel wajib diisi!");
+
+  try {
+    await setDoc(doc(db, "subjects", code), { code, name, updatedAt: Date.now() });
+    alert(`Mapel ${name} berhasil disimpan!`);
+    document.getElementById('subjectCodeInput').value = '';
+    document.getElementById('subjectNameInput').value = '';
+  } catch (err) {
+    alert("Gagal menyimpan mapel: " + err.message);
+  }
+};
+
+window.deleteSubject = async function(code) {
+  if (confirm(`Hapus mapel ${code}?`)) {
+    await deleteDoc(doc(db, "subjects", code));
   }
 };
 
@@ -191,39 +261,24 @@ function listenToMasterData() {
   });
 }
 
-function renderUserTable(users) {
-  const tbody = document.getElementById('userTableBody');
-  if (!tbody) return;
-  
-  tbody.innerHTML = users.map(u => `
-    <tr class="border-b">
-      <td class="p-2.5">
-        <strong class="text-slate-800">${u.name || u.username || 'Tanpa Nama'}</strong>
-        <p class="text-[10px] text-slate-500">Username: ${u.username || '-'}</p>
-      </td>
-      <td class="p-2.5">
-        <span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase text-[10px]">${u.role || 'siswa'}</span>
-      </td>
-      <td class="p-2.5">
-        <span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">${u.active ? 'Aktif' : 'Nonaktif'}</span>
-      </td>
-      <td class="p-2.5 text-center">
-        <button onclick="deleteUserDoc('${u.id}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">Hapus</button>
-      </td>
-    </tr>
-  `).join('');
-}
-
 function renderClassTable(classes) {
   const tbody = document.getElementById('classTableBody');
   if (!tbody) return;
+
+  if (!classes || classes.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Belum ada master kelas di database.</td></tr>`;
+    return;
+  }
+
   tbody.innerHTML = classes.map(c => `
     <tr class="border-b">
-      <td class="p-2.5 font-bold">${c.code}</td>
+      <td class="p-2.5 font-bold text-blue-900">${c.code}</td>
       <td class="p-2.5">Tingkat ${c.level}</td>
       <td class="p-2.5">${c.homeroom || '-'}</td>
-      <td class="p-2.5 text-center">
-        <button onclick="deleteClass('${c.code}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">Hapus</button>
+      <td class="p-2.5">-</td>
+      <td class="p-2.5 text-center space-x-1">
+        <button onclick="editClass('${c.code}')" class="bg-amber-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">Edit</button>
+        <button onclick="deleteClass('${c.code}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
       </td>
     </tr>
   `).join('');
@@ -238,6 +293,24 @@ function renderSubjectTable(subjects) {
       <td class="p-2.5">${s.name}</td>
       <td class="p-2.5 text-center">
         <button onclick="deleteSubject('${s.code}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">Hapus</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderUserTable(users) {
+  const tbody = document.getElementById('userTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = users.map(u => `
+    <tr class="border-b">
+      <td class="p-2.5">
+        <strong class="text-slate-800">${u.name || u.username || 'Tanpa Nama'}</strong>
+        <p class="text-[10px] text-slate-500">Username: ${u.username || '-'}</p>
+      </td>
+      <td class="p-2.5"><span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase text-[10px]">${u.role || 'siswa'}</span></td>
+      <td class="p-2.5"><span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">${u.active ? 'Aktif' : 'Nonaktif'}</span></td>
+      <td class="p-2.5 text-center">
+        <button onclick="deleteUserDoc('${u.id}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">Hapus</button>
       </td>
     </tr>
   `).join('');
@@ -260,90 +333,4 @@ function initSettingsListener() {
       if (document.getElementById('headerSubTitle')) document.getElementById('headerSubTitle').innerText = `CBT System - Tahun Ajaran ${s.academicYear || ''} (${s.semester || ''})`;
     }
   });
-}
-
-// =============================================================
-// MANAJEMEN MASTER KELAS FIRESTORE
-// =============================================================
-
-// 1. Simpan / Edit Kelas ke Firestore
-window.handleSaveClass = async function(e) {
-  e.preventDefault();
-  const oldCode = document.getElementById('editClassOldCode')?.value;
-  const code = document.getElementById('classNameInput').value.trim().toUpperCase();
-  const level = document.getElementById('classLevelInput').value;
-  const homeroom = document.getElementById('classHomeroomInput').value.trim() || '-';
-
-  if (!code) return alert("Kode kelas tidak boleh kosong!");
-
-  try {
-    // Simpan ke Firestore koleksi 'classes' dengan Dokumen ID = Kode Kelas
-    await setDoc(doc(db, "classes", code), {
-      code: code,
-      level: level,
-      homeroom: homeroom,
-      updatedAt: Date.now()
-    });
-
-    alert(`Kelas ${code} berhasil disimpan ke Firestore!`);
-    
-    // Reset Form
-    if (document.getElementById('editClassOldCode')) document.getElementById('editClassOldCode').value = '';
-    document.getElementById('classNameInput').value = '';
-    document.getElementById('classHomeroomInput').value = '';
-  } catch (err) {
-    alert("Gagal menyimpan kelas: " + err.message);
-  }
-};
-
-// 2. Edit Kelas (Isi kembali form)
-window.editClass = async function(code) {
-  try {
-    const classDoc = await getDoc(doc(db, "classes", code));
-    if (classDoc.exists()) {
-      const data = classDoc.data();
-      if (document.getElementById('editClassOldCode')) document.getElementById('editClassOldCode').value = data.code;
-      document.getElementById('classNameInput').value = data.code;
-      document.getElementById('classLevelInput').value = data.level;
-      document.getElementById('classHomeroomInput').value = data.homeroom || '';
-    }
-  } catch (err) {
-    alert("Gagal mengambil data kelas: " + err.message);
-  }
-};
-
-// 3. Hapus Kelas dari Firestore
-window.deleteClass = async function(code) {
-  if (confirm(`Apakah Anda yakin ingin menghapus kelas ${code} dari Firestore?`)) {
-    try {
-      await deleteDoc(doc(db, "classes", code));
-      alert(`Kelas ${code} berhasil dihapus.`);
-    } catch (err) {
-      alert("Gagal menghapus kelas: " + err.message);
-    }
-  }
-};
-
-// 4. Render Tabel Kelas Real-Time
-function renderClassTable(classes) {
-  const tbody = document.getElementById('classTableBody');
-  if (!tbody) return;
-
-  if (!classes || classes.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Belum ada master kelas di database. Tambahkan di form samping.</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = classes.map(c => `
-    <tr class="border-b">
-      <td class="p-2.5 font-bold text-blue-900">${c.code}</td>
-      <td class="p-2.5">Tingkat ${c.level}</td>
-      <td class="p-2.5">${c.homeroom || '-'}</td>
-      <td class="p-2.5">-</td>
-      <td class="p-2.5 text-center space-x-1">
-        <button onclick="editClass('${c.code}')" class="bg-amber-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">Edit</button>
-        <button onclick="deleteClass('${c.code}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
-      </td>
-    </tr>
-  `).join('');
 }
