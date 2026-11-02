@@ -261,3 +261,89 @@ function initSettingsListener() {
     }
   });
 }
+
+// =============================================================
+// MANAJEMEN MASTER KELAS FIRESTORE
+// =============================================================
+
+// 1. Simpan / Edit Kelas ke Firestore
+window.handleSaveClass = async function(e) {
+  e.preventDefault();
+  const oldCode = document.getElementById('editClassOldCode')?.value;
+  const code = document.getElementById('classNameInput').value.trim().toUpperCase();
+  const level = document.getElementById('classLevelInput').value;
+  const homeroom = document.getElementById('classHomeroomInput').value.trim() || '-';
+
+  if (!code) return alert("Kode kelas tidak boleh kosong!");
+
+  try {
+    // Simpan ke Firestore koleksi 'classes' dengan Dokumen ID = Kode Kelas
+    await setDoc(doc(db, "classes", code), {
+      code: code,
+      level: level,
+      homeroom: homeroom,
+      updatedAt: Date.now()
+    });
+
+    alert(`Kelas ${code} berhasil disimpan ke Firestore!`);
+    
+    // Reset Form
+    if (document.getElementById('editClassOldCode')) document.getElementById('editClassOldCode').value = '';
+    document.getElementById('classNameInput').value = '';
+    document.getElementById('classHomeroomInput').value = '';
+  } catch (err) {
+    alert("Gagal menyimpan kelas: " + err.message);
+  }
+};
+
+// 2. Edit Kelas (Isi kembali form)
+window.editClass = async function(code) {
+  try {
+    const classDoc = await getDoc(doc(db, "classes", code));
+    if (classDoc.exists()) {
+      const data = classDoc.data();
+      if (document.getElementById('editClassOldCode')) document.getElementById('editClassOldCode').value = data.code;
+      document.getElementById('classNameInput').value = data.code;
+      document.getElementById('classLevelInput').value = data.level;
+      document.getElementById('classHomeroomInput').value = data.homeroom || '';
+    }
+  } catch (err) {
+    alert("Gagal mengambil data kelas: " + err.message);
+  }
+};
+
+// 3. Hapus Kelas dari Firestore
+window.deleteClass = async function(code) {
+  if (confirm(`Apakah Anda yakin ingin menghapus kelas ${code} dari Firestore?`)) {
+    try {
+      await deleteDoc(doc(db, "classes", code));
+      alert(`Kelas ${code} berhasil dihapus.`);
+    } catch (err) {
+      alert("Gagal menghapus kelas: " + err.message);
+    }
+  }
+};
+
+// 4. Render Tabel Kelas Real-Time
+function renderClassTable(classes) {
+  const tbody = document.getElementById('classTableBody');
+  if (!tbody) return;
+
+  if (!classes || classes.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Belum ada master kelas di database. Tambahkan di form samping.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = classes.map(c => `
+    <tr class="border-b">
+      <td class="p-2.5 font-bold text-blue-900">${c.code}</td>
+      <td class="p-2.5">Tingkat ${c.level}</td>
+      <td class="p-2.5">${c.homeroom || '-'}</td>
+      <td class="p-2.5">-</td>
+      <td class="p-2.5 text-center space-x-1">
+        <button onclick="editClass('${c.code}')" class="bg-amber-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">Edit</button>
+        <button onclick="deleteClass('${c.code}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
+      </td>
+    </tr>
+  `).join('');
+}
