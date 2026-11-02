@@ -20,8 +20,23 @@ import {
 
 let currentUserSession = null;
 
+// Inisialisasi Aplikasi saat DOM Siap
 document.addEventListener('DOMContentLoaded', () => {
-  initAuthObserver();
+  // Cek Sesi Pengguna dari LocalStorage
+  const savedSession = localStorage.getItem('cbt_session');
+  if (savedSession) {
+    try {
+      currentUserSession = JSON.parse(savedSession);
+      renderUserInterface();
+    } catch (e) {
+      localStorage.removeItem('cbt_session');
+      renderUserInterface();
+    }
+  } else {
+    renderUserInterface();
+  }
+
+  // Muat Pengaturan Header Publik
   initSettingsListener();
 });
 
