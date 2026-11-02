@@ -105,6 +105,11 @@ window.switchAdminTab = function(tabId) {
   if (btnMap[tabId] && document.getElementById(btnMap[tabId])) {
     document.getElementById(btnMap[tabId]).classList.add('active-tab');
   }
+
+  // PANGGUL PENGISI FORM OTOMATIS SAAT TAB PENUGASAN DIKLIK
+  if (tabId === 'adminTabAssign') {
+    window.populateAssignTab();
+  }
 };
 
 window.handleLogin = async function(e) {
@@ -334,3 +339,146 @@ function initSettingsListener() {
     }
   });
 }
+
+// =============================================================
+// MODUL PENUGASAN GURU FIRESTORE
+// =============================================================
+
+// Fungsi untuk memuat data Guru, Mapel, dan Kelas ke dalam form Penugasan
+window.populateAssignTab = async function() {
+  try {
+    // 1. Ambil Data Guru dari Firestore
+    const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "guru")));
+    const teachers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    const teacherSelect = document.getElementById('assignTeacherSelect');
+    if (teacherSelect) {
+      if (teachers.length === 0) {
+        teacherSelect.innerHTML = `<option value="">-- Belum Ada Pengguna Guru --</option>`;
+      } else {
+        teacherSelect.innerHTML = teachers.map(g => `<option value="${g.id}">${g.name || g.username}</option>`).join('');
+      }
+    }
+
+    // 2. Ambil Data Mapel dari Firestore
+    const subjectsSnap = await getDocs(collection(db, "subjects"));
+    const subjects = subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    const subSelect = document.getElementById('assignSubjectSelect');
+    if (subSelect) {
+      if (subjects.length === 0) {
+        subSelect.innerHTML = `<option value="">-- Belum Ada Master Mapel --</option>`;
+      } else {
+        subSelect.innerHTML = subjects.map(s => `<option value="${s.code}">${s.name} (${s.code})</option>`).join('');
+      }
+    }
+
+    // 3. Ambil Data Kelas dari Firestore
+    const classesSnap = await getDocs(collection(db, "classes"));
+    const classes = classesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    const classBox = document.getElementById('assignClassesBox');
+    if (classBox) {
+      if (classes.length === 0) {
+        classBox.innerHTML = `<p class="text-xs text-slate-400">Belum ada master kelas.</p>`;
+      } else {
+        classBox.innerHTML = classes.map(c => `
+          <label class="flex items-center text-xs space-x-2 py-0.5">
+            <input type="checkbox" name="assignCls" value="${c.code}" class="rounded border-slate-300">
+            <span>Kelas ${c.code}</span>
+          </label>
+        `).join('');
+      }
+    }
+
+    // Render ulang tabel ringkasan penugasan
+    window.renderTeacherAssignmentUI();
+  } catch (err) {
+    console.error("Gagal memuat form penugasan:", err);
+  }
+};
+
+// Simpan penugasan guru ke Firestore
+window.addTeacherAssignment = async function() {
+  const teacherId = document.getElementById('assignTeacherSelect')?.value;
+  const subjectCode = document.getElementById('assignSubjectSelect')?.value;
+  const selectedClasses = Array.from(document.querySelectorAll('input[name="assignCls"]:checked')).map(cb => cb.value);
+
+  if (!teacherId) return alert('Pilih guru terlebih dahulu!');
+  if (!subjectCode) return alert('Pilih mata pelajaran terlebih dahulu!');
+  if (!selectedClasses.length) return alert('Pilih minimal satu kelas!');
+
+  try {
+    const teacherRef = doc(db, "users", teacherId);
+    const teacherSnap = await getDoc(teacherRef);
+
+    if (teacherSnap.exists()) {
+      let assignments = teacherSnap.data().teacherAssignments || [];
+      const existingIndex = assignments.findIndex(a => a.subject === subjectCode);
+
+      if (existingIndex > -1) {
+        // Gabungkan kelas tanpa duplikat
+        assignments[existingIndex].classes = Array.from(new Set([...assignments[existingIndex].classes, ...selectedClasses]));
+      } else {
+        assignments.push({ subject: subjectCode, classes: selectedClasses });
+      }
+
+      await updateDoc(teacherRef, { teacherAssignments: assignments });
+      alert("Penugasan guru berhasil disimpan ke Firestore!");
+      window.renderTeacherAssignmentUI();
+    }
+  } catch (err) {
+    alert("Gagal menyimpan penugasan: " + err.message);
+  }
+};
+
+// Render tabel ringkasan penugasan guru
+window.renderTeacherAssignmentUI = async function() {
+  const tbody = document.getElementById('teacherAssignmentTableBody');
+  if (!tbody) return;
+
+  try {
+    const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "guru")));
+    const teachers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let rows = [];
+
+    teachers.forEach(g => {
+      if (g.teacherAssignments && g.teacherAssignments.length > 0) {
+        g.teacherAssignments.forEach((a, aIdx) => {
+          rows.push(`
+            <tr class="border-b text-xs">
+              <td class="p-2.5 font-bold text-slate-800">${g.name || g.username}</td>
+              <td class="p-2.5 font-semibold text-blue-900">${a.subject}</td>
+              <td class="p-2.5">${a.classes ? a.classes.join(', ') : '-'}</td>
+              <td class="p-2.5 text-center">
+                <button onclick="removeTeacherAssignment('${g.id}', ${aIdx})" class="bg-rose-600 hover:bg-rose-700 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
+              </td>
+            </tr>
+          `);
+        });
+      }
+    });
+
+    tbody.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada penugasan guru yang tercatat.</td></tr>`;
+  } catch (err) {
+    console.error("Gagal render tabel penugasan:", err);
+  }
+};
+
+// Hapus penugasan tertentu
+window.removeTeacherAssignment = async function(teacherId, assignIndex) {
+  if (confirm("Hapus penugasan ini?")) {
+    try {
+      const teacherRef = doc(db, "users", teacherId);
+      const teacherSnap = await getDoc(teacherRef);
+      if (teacherSnap.exists()) {
+        let assignments = teacherSnap.data().teacherAssignments || [];
+        assignments.splice(assignIndex, 1);
+        await updateDoc(teacherRef, { teacherAssignments: assignments });
+        window.renderTeacherAssignmentUI();
+      }
+    } catch (err) {
+      alert("Gagal menghapus penugasan: " + err.message);
+    }
+  }
+};
