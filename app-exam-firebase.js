@@ -11,8 +11,7 @@ import {
   deleteDoc, 
   onSnapshot, 
   query, 
-  where,
-  serverTimestamp 
+  where 
 } from './firebase-config.js';
 
 let activePackageId = null;
@@ -63,7 +62,7 @@ window.switchTeacherTab = function(tabId) {
 };
 
 // -------------------------------------------------------------
-// 1. PENERBITAN JADWAL UJIAN & PERBAIKAN KELAS PESERTA
+// 1. PENERBITAN JADWAL UJIAN & KELAS PESERTA
 // -------------------------------------------------------------
 
 async function populateScheduleFormDropdowns() {
@@ -80,7 +79,7 @@ async function populateScheduleFormDropdowns() {
       : `<option value="">-- Belum Ada Mapel --</option>`;
   }
 
-  // 2. TEMUAN 2: Hanya Tampilkan Paket berstatus "Siap" dan Memiliki Soal > 0
+  // 2. Hanya Tampilkan Paket berstatus "Siap" dan Memiliki Soal > 0
   if (pkgSelect) {
     const pkgSnap = await getDocs(query(collection(db, "packages"), where("status", "==", "Siap")));
     const packages = pkgSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.questions && p.questions.length > 0);
@@ -92,7 +91,7 @@ async function populateScheduleFormDropdowns() {
     }
   }
 
-  // 3. TEMUAN 1: Ambil Checkbox Rombel Kelas Berdasarkan Penugasan Guru
+  // 3. Ambil Checkbox Rombel Kelas Berdasarkan Penugasan Guru
   if (classBox && currentTeacherUser) {
     const teacherSnap = await getDoc(doc(db, "users", currentTeacherUser.uid));
     let assignedClasses = [];
@@ -103,7 +102,6 @@ async function populateScheduleFormDropdowns() {
       });
     }
 
-    // Unikkan daftar rombel kelas
     assignedClasses = Array.from(new Set(assignedClasses));
 
     if (!assignedClasses.length) {
@@ -176,7 +174,6 @@ window.handleSaveSchedule = async function(e) {
     kkm: parseInt(document.getElementById('schedKKM')?.value) || 75,
     token: (document.getElementById('schedToken')?.value || 'ABCDE').toUpperCase(),
     active: true,
-    serverCreatedAt: serverTimestamp(),
     createdAt: Date.now()
   };
 
@@ -271,7 +268,6 @@ window.openPackageDetailFire = async function(pkgId) {
     document.getElementById('activePkgTitle').innerText = `${(pkg.title || '').toUpperCase()} [Status: ${pkg.status}]`;
     document.getElementById('activePkgInfo').innerText = `Mapel: ${(pkg.subject || '').toUpperCase()} | Target: ${pkg.targetClass}`;
     
-    // Tombol Validasi Paket
     const valBtn = document.getElementById('btnValidatePkg');
     if (valBtn) {
       valBtn.onclick = () => window.validateAndSetPackageReady(pkgId);
@@ -311,7 +307,6 @@ function renderPackageQuestionsList(questions) {
 }
 
 window.deletePackageFire = async function(pkgId) {
-  // TEMUAN 2: Blokir hapus jika paket dipakai di jadwal ujian
   const schedSnap = await getDocs(query(collection(db, "schedules"), where("packageId", "==", pkgId)));
   if (!schedSnap.empty) {
     return alert("Gagal Menghapus: Paket soal ini sedang digunakan dalam Jadwal Ujian!");
@@ -347,7 +342,7 @@ window.deleteQuestionFire = async function(qIndex) {
     questions.splice(qIndex, 1);
     await updateDoc(pkgRef, { 
       questions,
-      status: 'Draft' // Status kembali ke Draft saat diedit
+      status: 'Draft'
     });
     window.openPackageDetailFire(activePackageId);
   }
@@ -385,7 +380,6 @@ window.handleMonitoringExamChange = async function(schedId) {
   const schedData = schedDoc.exists() ? schedDoc.data() : {};
   const totalQuestions = schedData.packageSnapshot?.questions?.length || 0;
 
-  // Real-time listener data sesi siswa
   onSnapshot(collection(db, "users"), (userSnap) => {
     const students = userSnap.docs.map(d => d.data()).filter(u => u.role === 'siswa');
     
@@ -418,7 +412,6 @@ window.handleMonitoringExamChange = async function(schedId) {
       `;
     }).join('');
 
-    // Update Ringkasan Kartu
     if (document.getElementById('monCardBelum')) document.getElementById('monCardBelum').innerText = countBelum;
     if (document.getElementById('monCardMengerjakan')) document.getElementById('monCardMengerjakan').innerText = countMengerjakan;
     if (document.getElementById('monCardSelesai')) document.getElementById('monCardSelesai').innerText = countSelesai;
@@ -474,7 +467,6 @@ window.handleReportExamChange = function(schedId) {
 
   if (box) box.classList.remove('hidden');
 
-  // Render Statistik Analisis Butir Soal
   const tbody = document.getElementById('reportTableBody');
   if (tbody) {
     tbody.innerHTML = `
