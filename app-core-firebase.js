@@ -111,20 +111,60 @@ window.switchAdminTab = function(tabId) {
   if (tabId === 'adminTabSettings') loadSettingsForm();
 };
 
+// Fungsi Login Langsung Cek Ke Database Firestore
 window.handleLogin = async function(e) {
   e.preventDefault();
   const u = document.getElementById('loginUsername').value.trim();
   const p = document.getElementById('loginPassword').value.trim();
 
+  if (!u || !p) return alert("Username dan Password wajib diisi!");
+
   try {
-    const email = u.includes('@') ? u : `${u}@cbt.alwahdah.sch.id`;
-    await signInWithEmailAndPassword(auth, email, p);
-    logActivity(`User ${u} berhasil login.`);
+    // 1. Cari pengguna berdasarkan username di koleksi Firestore 'users'
+    const q = query(collection(db, "users"), where("username", "==", u));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      return alert("Login Gagal: Username tidak ditemukan!");
+    }
+
+    let userData = null;
+    let userId = null;
+
+    querySnapshot.forEach((docSnap) => {
+      userData = docSnap.data();
+      userId = docSnap.id;
+    });
+
+    // 2. Cek status aktif akun
+    if (userData.active === false) {
+      return alert("Login Gagal: Akun Anda sedang dinonaktifkan oleh Admin!");
+    }
+
+    // 3. Verifikasi Password dari Firestore
+    if (userData.password && userData.password !== p) {
+      return alert("Login Gagal: Password salah!");
+    }
+
+    // 4. Simpan Sesi Pengguna
+    currentUserSession = {
+      uid: userId,
+      name: userData.name || userData.username,
+      role: userData.role || 'siswa',
+      ...userData
+    };
+
+    localStorage.setItem('cbt_session', JSON.stringify(currentUserSession));
+    alert(`Selamat datang, ${currentUserSession.name}!`);
+    
+    // 5. Render tampilan sesuai role
+    renderUserInterface();
+    logActivity(`User ${u} (${userData.role}) berhasil login.`);
+
   } catch (err) {
-    alert("Login Gagal: " + err.message);
+    alert("Gagal melakukan login: " + err.message);
   }
 };
-
 window.handleLogout = async function() {
   await logActivity(`User logout.`);
   await signOut(auth);
