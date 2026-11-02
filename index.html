@@ -22,26 +22,23 @@
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col text-sm">
 
   <!-- NAVBAR UTAMA -->
-  <header class="bg-blue-900 text-white shadow-md sticky top-0 z-50 print:hidden">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-      <div class="flex items-center space-x-3">
-        <i class="fa-solid fa-graduation-cap text-2xl text-amber-400"></i>
-        <div>
-          <h1 class="font-bold text-base leading-tight" id="headerSchoolName">SMP Qur'an Al Wahdah</h1>
-          <p class="text-xs text-blue-200" id="headerSubTitle">CBT System - Academic Engine</p>
-        </div>
-      </div>
-      <div id="navUserArea" class="hidden flex items-center space-x-3">
-        <button onclick="openProfileModal()" class="text-xs bg-blue-800 hover:bg-blue-700 px-3 py-1.5 rounded-full font-medium transition flex items-center gap-2">
-          <i class="fa-solid fa-user-gear text-amber-400"></i>
-          <span id="navUserInfo">User</span>
-        </button>
-        <button onclick="handleLogout()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-1.5 rounded-lg transition font-semibold">
-          <i class="fa-solid fa-right-from-bracket mr-1"></i>Keluar
-        </button>
-      </div>
+  <!-- HEADER UTAMA -->
+<header class="bg-blue-900 text-white p-4 shadow-md flex justify-between items-center">
+  <div class="flex items-center space-x-3">
+    <i class="fa-solid fa-graduation-cap text-3xl text-amber-400"></i>
+    <div>
+      <h1 id="headerSchoolName" class="font-bold text-lg leading-tight">SMP Qur'an Al Wahdah</h1>
+      <p id="headerSubTitle" class="text-xs text-blue-200">Sistem CBT - Tahun Ajaran 2026/2027 (Ganjil)</p>
     </div>
-  </header>
+  </div>
+
+  <div id="navUserArea" class="flex items-center space-x-3 hidden">
+    <span id="navUserInfo" class="text-xs bg-blue-800 px-3 py-1 rounded-full font-bold text-amber-300"></span>
+    <button id="btnLogoutHeader" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1">
+      <i class="fa-solid fa-right-from-bracket"></i> Keluar
+    </button>
+  </div>
+</header>
 
   <!-- MAIN CONTAINER -->
   <main class="flex-1 max-w-7xl w-full mx-auto p-3 md:p-5 print:p-0">
