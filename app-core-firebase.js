@@ -180,10 +180,30 @@ window.handleLogin = async function(e) {
     alert("Gagal melakukan login: " + err.message);
   }
 };
+// Fungsi Logout Global
 window.handleLogout = async function() {
-  await logActivity(`User logout.`);
-  await signOut(auth);
-  location.reload();
+  if (confirm("Apakah Anda yakin ingin keluar dari sistem?")) {
+    try {
+      // 1. Catat aktivitas logout jika sesi aktif
+      if (typeof logActivity === 'function') {
+        await logActivity(`User logout dari sistem.`);
+      }
+
+      // 2. Hapus sesi lokal di LocalStorage
+      localStorage.removeItem('cbt_session');
+      currentUserSession = null;
+
+      // 3. Logout dari Firebase Auth (jika terhubung)
+      if (auth) {
+        await signOut(auth);
+      }
+    } catch (err) {
+      console.warn("Logout firebase auth:", err.message);
+    } finally {
+      // 4. Bersihkan halaman dan muat ulang ke layar Login
+      location.reload();
+    }
+  }
 };
 
 // -------------------------------------------------------------
