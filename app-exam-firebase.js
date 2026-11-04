@@ -286,10 +286,29 @@ D: Nabi Ibrahim AS
 KUNCI: C
 BOBOT: 2
 
+JENIS: PGK
+SOAL: Manakah di antara berikut yang termasuk Rukun Islam?
+A: Membayar Zakat
+B: Membaca Al-Qur'an setiap hari
+C: Mengucapkan Dua Kalimat Syahadat
+D: Puasa di bulan Ramadan
+KUNCI: A, C, D 
+BOBOT: 3
+
 JENIS: BS
 SOAL: Al-Qur'an terdiri dari 114 Surah.
 KUNCI: BENAR
 BOBOT: 2
+
+JENIS: ISIAN
+SOAL: Kitab suci yang diturunkan kepada Nabi Daud AS adalah Kitab ....
+KUNCI: ZABUR
+BOBOT: 2
+
+JENIS: URAIAN
+SOAL: Jelaskan secara singkat pengertian dari sifat Jujur (Siddiq)!
+KUNCI: Jujur artinya berkata sesuai fakta...
+BOBOT: 5
 `;
 
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
