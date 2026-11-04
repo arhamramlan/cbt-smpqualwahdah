@@ -13,15 +13,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-  <!-- Pastikan CDN SheetJS XLSX dipanggil sebelum app-core-firebase.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col text-sm">
 
-  <!-- NAVBAR UTAMA -->
   <!-- HEADER UTAMA -->
 <header class="bg-blue-900 text-white p-4 shadow-md flex justify-between items-center">
   <div class="flex items-center space-x-3">
@@ -34,6 +32,7 @@
 
   <div id="navUserArea" class="flex items-center space-x-3 hidden">
     <span id="navUserInfo" class="text-xs bg-blue-800 px-3 py-1 rounded-full font-bold text-amber-300"></span>
+    <button id="btnProfileHeader" onclick="openProfileModal()" class="bg-blue-700 hover:bg-blue-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1"><i class="fa-solid fa-lock"></i> Password</button>
     <button id="btnLogoutHeader" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1">
       <i class="fa-solid fa-right-from-bracket"></i> Keluar
     </button>
@@ -43,7 +42,6 @@
   <!-- MAIN CONTAINER -->
   <main class="flex-1 max-w-7xl w-full mx-auto p-3 md:p-5 print:p-0">
 
-    <!-- VIEW 1: LOGIN -->
     <!-- VIEW LOGIN -->
     <div id="viewLogin" class="min-h-[80vh] flex items-center justify-center p-4">
       <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-8 border border-slate-100 space-y-6">
@@ -349,7 +347,7 @@
       <!-- TAB LOGS -->
       <div id="adminTabLogs" class="admin-tab-content hidden space-y-5">
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-clock-rotate-left text-blue-600 mr-2"></i>Log Aktivitas Sistem</h3>
+          <div class="flex justify-between items-center border-b pb-2"><h3 class="font-bold text-slate-800"><i class="fa-solid fa-clock-rotate-left text-blue-600 mr-2"></i>Log Aktivitas Sistem <span class="text-[10px] font-normal text-slate-400">(200 terbaru)</span></h3><div class="flex gap-2"><button onclick="loadLogs()" class="btn btn-gray">Muat Ulang</button><button onclick="clearOldLogs()" class="btn btn-red">Hapus Log &gt; 30 Hari</button></div></div>
           <div class="overflow-x-auto">
             <table class="w-full text-xs text-left text-slate-600">
               <thead class="bg-slate-100 font-bold uppercase">
@@ -406,6 +404,7 @@
       </div>
     </section>
 
+
     <!-- VIEW 3: DASHBOARD GURU -->
     <section id="viewTeacher" class="hidden space-y-5">
       <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
@@ -419,483 +418,219 @@
         </div>
       </div>
 
-      <!-- TAB RINGKASAN -->
+      <!-- RINGKASAN -->
       <div id="tabSummary" class="teacher-tab-content space-y-5">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div onclick="switchTeacherTab('tabSchedule')" class="bg-white p-4 rounded-xl border shadow-sm border-l-4 border-l-blue-600 hover:shadow-md cursor-pointer transition">
-            <p class="text-xs font-bold text-slate-500 uppercase">Ujian Aktif Hari Ini</p>
-            <h3 id="statActiveExams" class="text-2xl font-extrabold text-blue-900 mt-1">0</h3>
-          </div>
-          <div onclick="switchTeacherTab('tabBank')" class="bg-white p-4 rounded-xl border shadow-sm border-l-4 border-l-emerald-600 hover:shadow-md cursor-pointer transition">
-            <p class="text-xs font-bold text-slate-500 uppercase">Total Soal Bank Real</p>
-            <h3 id="statTotalQuestions" class="text-2xl font-extrabold text-emerald-900 mt-1">0</h3>
-          </div>
-          <div onclick="switchTeacherTab('tabGrading')" class="bg-white p-4 rounded-xl border shadow-sm border-l-4 border-l-amber-500 hover:shadow-md cursor-pointer transition">
-            <p class="text-xs font-bold text-slate-500 uppercase">Perlu Dikoreksi</p>
-            <h3 id="statPendingGrading" class="text-2xl font-extrabold text-amber-900 mt-1">0</h3>
-          </div>
-          <div onclick="switchTeacherTab('tabMonitoring')" class="bg-white p-4 rounded-xl border shadow-sm border-l-4 border-l-rose-600 hover:shadow-md cursor-pointer transition">
-            <p class="text-xs font-bold text-slate-500 uppercase">Siswa Mengerjakan</p>
-            <h3 id="statOnlineStudents" class="text-2xl font-extrabold text-rose-900 mt-1">0</h3>
-          </div>
+          <div onclick="switchTeacherTab('tabSchedule')" class="card border-l-4 border-l-blue-600 hover:shadow-md cursor-pointer"><p class="text-xs font-bold text-slate-500 uppercase">Ujian Aktif Hari Ini</p><h3 id="statActiveExams" class="text-2xl font-extrabold text-blue-900 mt-1">0</h3></div>
+          <div onclick="switchTeacherTab('tabBank')" class="card border-l-4 border-l-emerald-600 hover:shadow-md cursor-pointer"><p class="text-xs font-bold text-slate-500 uppercase">Total Soal Bank</p><h3 id="statTotalQuestions" class="text-2xl font-extrabold text-emerald-900 mt-1">0</h3></div>
+          <div onclick="switchTeacherTab('tabGrading')" class="card border-l-4 border-l-amber-500 hover:shadow-md cursor-pointer"><p class="text-xs font-bold text-slate-500 uppercase">Perlu Dikoreksi</p><h3 id="statPendingGrading" class="text-2xl font-extrabold text-amber-900 mt-1">0</h3></div>
+          <div onclick="switchTeacherTab('tabMonitoring')" class="card border-l-4 border-l-rose-600 hover:shadow-md cursor-pointer"><p class="text-xs font-bold text-slate-500 uppercase">Siswa Mengerjakan</p><h3 id="statOnlineStudents" class="text-2xl font-extrabold text-rose-900 mt-1">0</h3></div>
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div class="lg:col-span-2 bg-white p-5 rounded-xl border shadow-sm space-y-3">
-            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-clock-rotate-left text-blue-600 mr-2"></i>Ujian Berlangsung Hari Ini</h3>
-            <div id="summaryExamsList" class="space-y-2"></div>
-          </div>
-          <div class="bg-white p-5 rounded-xl border shadow-sm space-y-4">
-            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-circle-exclamation text-amber-500 mr-2"></i>Perlu Koreksi Segera</h3>
-            <div id="summaryGradingPendingList" class="space-y-2"></div>
-          </div>
+          <div class="lg:col-span-2 card space-y-3"><h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-clock-rotate-left text-blue-600 mr-2"></i>Ujian Berlangsung Hari Ini</h3><div id="summaryExamsList" class="space-y-2"></div></div>
+          <div class="card space-y-3"><h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-circle-exclamation text-amber-500 mr-2"></i>Perlu Koreksi Segera</h3><div id="summaryGradingPendingList" class="space-y-2"></div></div>
         </div>
       </div>
 
-      <!-- TAB BANK SOAL & PAKET (PENUH) -->
+      <!-- BANK SOAL -->
       <div id="tabBank" class="teacher-tab-content hidden space-y-5">
-        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div class="card space-y-4">
           <div class="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b pb-3">
-            <div>
-              <h3 class="font-bold text-slate-800"><i class="fa-solid fa-folder-open text-blue-600 mr-2"></i>Paket Soal & Modul Bank Soal</h3>
-              <p class="text-xs text-slate-500">Mata pelajaran dan kelas diampu terverifikasi.</p>
-            </div>
-            <div class="flex gap-2">
-              <button onclick="openCreatePackageModal()" class="bg-blue-800 hover:bg-blue-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">
-                <i class="fa-solid fa-plus mr-1"></i>Buat Paket Baru
-              </button>
-            </div>
+            <div><h3 class="font-bold text-slate-800"><i class="fa-solid fa-folder-open text-blue-600 mr-2"></i>Paket Soal & Modul Bank Soal</h3><p class="text-xs text-slate-500">Hanya paket milik Anda / mapel yang Anda ampu.</p></div>
+            <button onclick="openCreatePackageModal()" class="btn btn-blue"><i class="fa-solid fa-plus mr-1"></i>Buat Paket Baru</button>
           </div>
-      
-          <!-- Grid List Paket Soal -->
           <div id="packageGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
-      
-          <!-- Modul Editor / Detail Paket Soal -->
-          <div id="packageDetailBox" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 hidden">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b pb-3">
-              <div>
-                <h3 class="font-bold text-slate-800 text-sm" id="activePkgTitle">Detail Paket Soal</h3>
-                <p class="text-xs text-slate-500" id="activePkgInfo">Mapel: - | Target: -</p>
-              </div>
-              
-              <div class="flex flex-wrap gap-2 w-full md:w-auto">
-                <button id="btnValidatePkg" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1">
-                  <i class="fa-solid fa-circle-check"></i> Cek Validasi Paket
-                </button>
-                <button onclick="downloadWordTemplate()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1">
-                  <i class="fa-solid fa-file-word"></i> Template Docx
-                </button>
-                <button onclick="openImportQuestionModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1">
-                  <i class="fa-solid fa-file-import"></i> Upload Soal .Docx
-                </button>
-                <button onclick="openAddQuestionModal()" class="bg-blue-800 hover:bg-blue-900 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1">
-                  <i class="fa-solid fa-plus-circle"></i> + Tambah Soal Manual
-                </button>
-              </div>
-            </div>
-          
-            <div id="packageQuestionsList" class="space-y-3"></div>
-          </div>
-          
-          <!-- MODAL TAMBAH SOAL MANUAL (5 JENIS SOAL) -->
-          <!-- MODAL TAMBAH / EDIT SOAL MANUAL (DENGAN UPLOAD GAMBAR) -->
-          <div id="modalAddQuestion" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-            <div class="bg-white w-full max-w-2xl rounded-xl p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
-              <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="font-bold text-slate-800" id="modalQuestionTitle">
-                  <i class="fa-solid fa-pen-to-square text-blue-600 mr-2"></i>Tambah Butir Soal Baru
-                </h3>
-                <button onclick="closeAddQuestionModal()" class="text-slate-400 hover:text-slate-600">
-                  <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-              </div>
-          
-              <form onsubmit="handleSaveManualQuestion(event)" class="space-y-3 text-xs">
-                <input type="hidden" id="editQuestionIndex" value="-1">
-          
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="block font-bold text-slate-700 mb-1">Jenis Soal</label>
-                    <select id="qTypeInput" onchange="toggleQuestionOptionsUI()" class="w-full px-3 py-2 border rounded-lg bg-slate-50 font-bold">
-                      <option value="PG">Pilihan Ganda Biasa (PG)</option>
-                      <option value="PGK">Pilihan Ganda Kompleks (Multi Kunci)</option>
-                      <option value="BS">Benar / Salah</option>
-                      <option value="ISIAN">Isian Singkat</option>
-                      <option value="URAIAN">Uraian / Essay</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="block font-bold text-slate-700 mb-1">Bobot / Skor</label>
-                    <input type="number" id="qScoreInput" value="2" required class="w-full px-3 py-2 border rounded-lg font-bold">
-                  </div>
-                </div>
-          
-                <div>
-                  <label class="block font-bold text-slate-700 mb-1">Pertanyaan / Teks Soal (Mendukung Teks Arab)</label>
-                  <textarea id="qTextInput" rows="3" required dir="auto" placeholder="Tuliskan pertanyaan soal di sini..." class="w-full p-2.5 border rounded-lg font-sans"></textarea>
-                </div>
-          
-                <!-- FITUR UPLOAD GAMBAR SOAL (OPSIONAL) -->
-                <div class="border p-3 rounded-lg bg-slate-50 space-y-2">
-                  <label class="block font-bold text-slate-700">Gambar Soal (Opsional)</label>
-                  <input type="file" id="qImageFileInput" accept="image/*" onchange="handleQuestionImagePreview(event)" class="w-full p-1.5 border rounded-lg text-xs bg-white">
-                  <input type="hidden" id="qImageBase64">
-                  <div id="qImagePreviewContainer" class="hidden relative w-32 h-32 border rounded-lg overflow-hidden bg-white mt-2">
-                    <img id="qImagePreviewImg" src="" alt="Preview Gambar Soal" class="w-full h-full object-cover">
-                    <button type="button" onclick="removeQuestionImage()" class="absolute top-1 right-1 bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow">✕</button>
-                  </div>
-                </div>
-          
-                <!-- OPSI JAWABAN PILIHAN GANDA & PGK -->
-                <div id="pgOptionsBox" class="space-y-2 border-t pt-2">
-                  <label class="block font-bold text-slate-700">Opsi Jawaban</label>
-                  <div class="grid grid-cols-1 gap-2">
-                    <div class="flex items-center gap-2">
-                      <span class="font-bold w-4 text-center">A</span>
-                      <input type="text" id="optA" placeholder="Pilihan A" class="flex-1 px-2.5 py-1.5 border rounded-lg">
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <span class="font-bold w-4 text-center">B</span>
-                      <input type="text" id="optB" placeholder="Pilihan B" class="flex-1 px-2.5 py-1.5 border rounded-lg">
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <span class="font-bold w-4 text-center">C</span>
-                      <input type="text" id="optC" placeholder="Pilihan C" class="flex-1 px-2.5 py-1.5 border rounded-lg">
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <span class="font-bold w-4 text-center">D</span>
-                      <input type="text" id="optD" placeholder="Pilihan D" class="flex-1 px-2.5 py-1.5 border rounded-lg">
-                    </div>
-                  </div>
-                </div>
-          
-                <div class="grid grid-cols-2 gap-3 pt-2 border-t">
-                  <div>
-                    <label class="block font-bold text-slate-700 mb-1">Kunci Jawaban</label>
-                    <input type="text" id="qKeyInput" required placeholder="Contoh: C (PG), A,C (PGK), BENAR (BS), atau Teks Kunci" class="w-full px-3 py-1.5 border rounded-lg font-bold uppercase">
-                    <span class="text-[10px] text-slate-400 block mt-0.5">*Pisahkan koma untuk PGK (Misal: A,C)</span>
-                  </div>
-                </div>
-          
-                <div class="flex gap-2 pt-3 border-t">
-                  <button type="button" onclick="closeAddQuestionModal()" class="w-1/3 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg">Batal</button>
-                  <button type="submit" class="flex-1 bg-blue-800 hover:bg-blue-900 text-white font-bold py-2 rounded-lg transition">Simpan Soal ke Firestore</button>
-                </div>
-              </form>
+        </div>
+        <div id="packageDetailBox" class="card space-y-4 hidden">
+          <div class="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b pb-3">
+            <div><h3 class="font-bold text-slate-800 text-sm" id="activePkgTitle">Detail Paket Soal</h3><p class="text-xs text-slate-500" id="activePkgInfo"></p></div>
+            <div class="flex flex-wrap gap-2">
+              <button id="btnValidatePkg" class="btn btn-amber"><i class="fa-solid fa-circle-check mr-1"></i>Tandai Siap</button>
+              <button onclick="downloadWordTemplate()" class="btn btn-blue"><i class="fa-solid fa-download mr-1"></i>Template Impor</button>
+              <button onclick="openImportQuestionModal()" class="btn btn-green"><i class="fa-solid fa-file-word mr-1"></i>Impor Word/Excel</button>
+              <button onclick="openAddQuestionModal()" class="btn btn-blue"><i class="fa-solid fa-plus mr-1"></i>Tambah Soal</button>
             </div>
           </div>
-          
-          <!-- MODAL UPLOAD WORD (.DOCX) -->
-          <div id="modalImportQuestion" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-            <div class="bg-white w-full max-w-md rounded-xl p-6 shadow-xl space-y-4">
-              <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="font-bold text-slate-800"><i class="fa-solid fa-file-word text-blue-600 mr-2"></i>Upload Soal .Docx (Word)</h3>
-                <button onclick="closeImportQuestionModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-              </div>
-              <div class="space-y-3 text-xs">
-                <p class="text-slate-600">Pilih file Microsoft Word (<strong>.docx</strong>) yang disusun berdasarkan format baku.</p>
-                <input type="file" id="docxQuestionFile" accept=".docx" class="w-full p-2 border rounded-lg text-xs bg-slate-50" onchange="handleProcessImportFile(event)">
-                <div id="importPreviewReport" class="p-2.5 bg-slate-100 rounded-lg max-h-36 overflow-y-auto hidden space-y-1 font-mono text-[11px]"></div>
-                <div class="flex gap-2 pt-2 border-t">
-                  <button onclick="closeImportQuestionModal()" class="w-1/3 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg">Batal</button>
-                  <button id="btnSaveImportedDocx" onclick="saveImportedQuestionsDocx()" disabled class="flex-1 bg-emerald-600 text-white font-bold py-2 rounded-lg opacity-50">Simpan ke Firestore</button>
-                </div>
-              </div>
-            </div>
-          </div>
-            <!-- List Soal dalam Paket -->
-            <div id="packageQuestionsList" class="space-y-3"></div>
-          </div>
+          <div id="packageQuestionsList" class="space-y-3"></div>
         </div>
       </div>
 
-      <!-- TAB JADWAL UJIAN LENGKAP PARAMETER -->
+      <!-- JADWAL -->
       <div id="tabSchedule" class="teacher-tab-content hidden space-y-5">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div class="lg:col-span-1 bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-calendar-plus text-blue-600 mr-2"></i>Terbit Jadwal Ujian Anti-Curang</h3>
-            <form onsubmit="handleSaveSchedule(event)" class="space-y-3">
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">Judul Ujian</label>
-                <input type="text" id="schedTitle" placeholder="Misal: PAS PAI Kelas VII" required class="w-full px-3 py-1.5 border rounded-lg">
-              </div>
+          <div class="card space-y-3">
+            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-calendar-plus text-blue-600 mr-2"></i>Terbitkan Jadwal Ujian</h3>
+            <form onsubmit="handleSaveSchedule(event)" class="space-y-3 text-xs">
+              <div><label class="lbl">Judul Ujian</label><input type="text" id="schedTitle" placeholder="Misal: PAS PAI Kelas VII" required class="inp"></div>
               <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="block font-bold text-slate-700 mb-1">Mapel</label>
-                  <select id="schedSubject" onchange="filterSchedBankOptions()" class="w-full px-2 py-1.5 border rounded-lg"></select>
-                </div>
-                <div>
-                  <label class="block font-bold text-slate-700 mb-1">Paket Soal (Siap)</label>
-                  <select id="schedBank" class="w-full px-2 py-1.5 border rounded-lg"></select>
-                </div>
+                <div><label class="lbl">Mapel</label><select id="schedSubject" onchange="filterSchedBankOptions()" class="inp"></select></div>
+                <div><label class="lbl">Paket Soal (Siap)</label><select id="schedBank" class="inp"></select></div>
               </div>
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">Kelas Peserta</label>
-                <div id="schedClassesCheckbox" class="flex flex-wrap gap-2 pt-1 border p-2 rounded-lg max-h-28 overflow-y-auto"></div>
-              </div>
+              <div><label class="lbl">Kelas Peserta</label><div id="schedClassesCheckbox" class="flex flex-wrap gap-2 border p-2 rounded-lg max-h-28 overflow-y-auto"></div></div>
               <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="block font-bold text-slate-700 mb-1">Waktu Mulai</label>
-                  <input type="datetime-local" id="schedStartTime" required class="w-full px-2 py-1.5 border rounded-lg">
-                </div>
-                <div>
-                  <label class="block font-bold text-slate-700 mb-1">Durasi (Menit)</label>
-                  <input type="number" id="schedDuration" value="60" required class="w-full px-2 py-1.5 border rounded-lg">
-                </div>
+                <div><label class="lbl">Mulai</label><input type="datetime-local" id="schedStartTime" required class="inp"></div>
+                <div><label class="lbl">Durasi (menit)</label><input type="number" id="schedDuration" value="60" min="1" required class="inp"></div>
               </div>
-              <!-- PARAMETER ANTI CURANG -->
-              <div class="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg border">
-                <div>
-                  <label class="block font-bold text-slate-700 mb-1">KKM Kelulusan</label>
-                  <input type="number" id="schedKKM" value="75" class="w-full px-2 py-1 border rounded text-xs">
-                </div>
-                <div>
-                  <label class="block font-bold text-slate-700 mb-1">Max Pelanggaran</label>
-                  <input type="number" id="schedMaxViolations" value="3" class="w-full px-2 py-1 border rounded text-xs">
-                </div>
-                <div>
-                  <label class="block font-bold text-slate-700 mb-1">Toleransi Keterlambatan (Mnt)</label>
-                  <input type="number" id="schedLateTolerance" value="15" class="w-full px-2 py-1 border rounded text-xs">
-                </div>
-                <div>
-                  <label class="block font-bold text-slate-700 mb-1">Token Ujian</label>
-                  <div class="flex gap-1">
-                    <input type="text" id="schedToken" required class="w-full px-2 py-1 border rounded font-mono uppercase font-bold text-xs">
-                    <button type="button" onclick="generateRandomToken()" class="bg-slate-200 px-2 py-1 rounded text-[10px] font-bold">Auto</button>
-                  </div>
-                </div>
+              <div class="grid grid-cols-3 gap-2">
+                <div><label class="lbl">KKM</label><input type="number" id="schedKKM" value="75" class="inp"></div>
+                <div><label class="lbl">Maks Pelanggaran</label><input type="number" id="schedMaxViolations" value="3" min="1" class="inp"></div>
+                <div><label class="lbl">Toleransi Telat (mnt)</label><input type="number" id="schedLateTolerance" value="15" min="0" class="inp"></div>
               </div>
-              <div class="flex gap-4 pt-1">
-                <label class="inline-flex items-center text-xs font-bold text-slate-700">
-                  <input type="checkbox" id="schedRandomizeSoal" checked class="mr-1.5"> Acak Soal
-                </label>
-                <label class="inline-flex items-center text-xs font-bold text-slate-700">
-                  <input type="checkbox" id="schedRandomizeOpsi" checked class="mr-1.5"> Acak Opsi
-                </label>
-                <label class="inline-flex items-center text-xs font-bold text-slate-700">
-                  <input type="checkbox" id="schedShowResult" class="mr-1.5"> Tampil Nilai
-                </label>
+              <div><label class="lbl">Token Ujian</label><div class="flex gap-2"><input type="text" id="schedToken" required maxlength="8" class="inp font-mono uppercase font-bold"><button type="button" onclick="generateRandomToken()" class="btn btn-gray">Auto</button></div></div>
+              <div class="flex flex-wrap gap-x-4 gap-y-1 font-semibold text-slate-700">
+                <label><input type="checkbox" id="schedRandomizeSoal" checked class="mr-1.5">Acak Soal</label>
+                <label><input type="checkbox" id="schedRandomizeOpsi" checked class="mr-1.5">Acak Opsi</label>
+                <label><input type="checkbox" id="schedShowResult" class="mr-1.5">Tampil Nilai ke Siswa</label>
               </div>
-              <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs"><i class="fa-solid fa-paper-plane mr-1"></i>Terbitkan Ujian (Snapshot Paket)</button>
+              <button type="submit" class="btn btn-blue w-full py-2"><i class="fa-solid fa-paper-plane mr-1"></i>Terbitkan Jadwal</button>
             </form>
           </div>
-          <div class="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-list-check text-blue-600 mr-2"></i>Daftar Ujian Terbit & Fitur Re-Scoring</h3>
-            <div class="overflow-x-auto">
-              <table class="w-full text-xs text-left text-slate-600">
-                <thead class="bg-slate-100 font-bold uppercase">
-                  <tr>
-                    <th class="p-2.5">Judul & Token</th>
-                    <th class="p-2.5">Mulai & Durasi</th>
-                    <th class="p-2.5">Kelas & Parameter</th>
-                    <th class="p-2.5 text-center">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody id="schedTableBody"></tbody>
-              </table>
-            </div>
+          <div class="lg:col-span-2 card space-y-3">
+            <h3 class="font-bold text-slate-800 border-b pb-2"><i class="fa-solid fa-calendar-days text-blue-600 mr-2"></i>Daftar Jadwal Ujian</h3>
+            <div class="overflow-x-auto"><table class="w-full text-xs text-left text-slate-600">
+              <thead class="bg-slate-100 font-bold uppercase"><tr><th class="p-2.5">Ujian & Token</th><th class="p-2.5">Waktu</th><th class="p-2.5">Kelas & KKM</th><th class="p-2.5 text-center">Aksi</th></tr></thead>
+              <tbody id="schedTableBody"></tbody></table></div>
           </div>
         </div>
       </div>
 
-      <!-- TAB MONITORING REAL-TIME PENUH -->
+      <!-- MONITORING -->
       <div id="tabMonitoring" class="teacher-tab-content hidden space-y-5">
-        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <div class="flex justify-between items-center border-b pb-3">
-            <div>
-              <h3 class="font-bold text-slate-800"><i class="fa-solid fa-desktop text-blue-600 mr-2"></i>Monitoring Ujian Real-Time</h3>
-              <p class="text-xs text-slate-500">Kendalikan sesi ujian siswa secara terpusat.</p>
-            </div>
-            <div class="flex gap-2">
-              <select id="monitorExamSelect" onchange="renderMonitoringData()" class="px-3 py-1.5 border rounded-lg bg-slate-50 font-semibold text-xs"></select>
-            </div>
+        <div class="card space-y-4">
+          <div class="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b pb-3">
+            <h3 class="font-bold text-slate-800"><i class="fa-solid fa-desktop text-blue-600 mr-2"></i>Monitoring Real-Time</h3>
+            <div class="flex items-center gap-2"><span id="monitoringLastUpdated" class="text-[10px] text-slate-400"></span><select id="monitorExamSelect" onchange="renderMonitoringData()" class="inp w-auto font-semibold"></select></div>
           </div>
-
-          <div class="grid grid-cols-4 gap-3 text-center">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
             <div class="bg-slate-100 p-2 rounded-lg"><span class="block text-[10px] text-slate-500 font-bold">BELUM MASUK</span><strong id="monCountPending" class="text-base text-slate-700">0</strong></div>
             <div class="bg-blue-50 p-2 rounded-lg border border-blue-200"><span class="block text-[10px] text-blue-600 font-bold">MENGERJAKAN</span><strong id="monCountOngoing" class="text-base text-blue-800">0</strong></div>
             <div class="bg-emerald-50 p-2 rounded-lg border border-emerald-200"><span class="block text-[10px] text-emerald-600 font-bold">SELESAI</span><strong id="monCountFinished" class="text-base text-emerald-800">0</strong></div>
-            <div class="bg-rose-50 p-2 rounded-lg border border-rose-200"><span class="block text-[10px] text-rose-600 font-bold">TERKUNCI / VIOLATION</span><strong id="monCountLocked" class="text-base text-rose-800">0</strong></div>
+            <div class="bg-rose-50 p-2 rounded-lg border border-rose-200"><span class="block text-[10px] text-rose-600 font-bold">TERKUNCI</span><strong id="monCountLocked" class="text-base text-rose-800">0</strong></div>
           </div>
-
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left text-slate-600">
-              <thead class="bg-slate-100 font-bold uppercase text-[10px]">
-                <tr>
-                  <th class="p-2.5">Siswa</th>
-                  <th class="p-2.5">Kelas</th>
-                  <th class="p-2.5">Status</th>
-                  <th class="p-2.5">Progres</th>
-                  <th class="p-2.5">Pelanggaran</th>
-                  <th class="p-2.5 text-center">Kontrol Sesi</th>
-                </tr>
-              </thead>
-              <tbody id="monitoringTableBody"></tbody>
-            </table>
-          </div>
+          <div class="overflow-x-auto"><table class="w-full text-xs text-left text-slate-600">
+            <thead class="bg-slate-100 font-bold uppercase"><tr><th class="p-2.5">Siswa</th><th class="p-2.5">Kelas</th><th class="p-2.5">Status</th><th class="p-2.5">Terjawab</th><th class="p-2.5">Pelanggaran</th><th class="p-2.5 text-center">Kontrol</th></tr></thead>
+            <tbody id="monitoringTableBody"></tbody></table></div>
         </div>
       </div>
 
-      <!-- TAB KOREKSI URAIAN -->
+      <!-- KOREKSI -->
       <div id="tabGrading" class="teacher-tab-content hidden space-y-5">
-        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <div class="flex justify-between items-center border-b pb-3">
-            <h3 class="font-bold text-slate-800"><i class="fa-solid fa-pen-nib text-amber-600 mr-2"></i>Koreksi Manual Uraian & Peninjauan Isian</h3>
-            <select id="gradingExamSelect" onchange="renderGradingModule()" class="px-3 py-1.5 border rounded-lg bg-slate-50 font-semibold text-xs"></select>
-          </div>
+        <div class="card space-y-4">
+          <div class="flex justify-between items-center border-b pb-3"><h3 class="font-bold text-slate-800"><i class="fa-solid fa-pen-nib text-blue-600 mr-2"></i>Koreksi Uraian & Peninjauan Isian</h3>
+            <select id="gradingExamSelect" onchange="renderGradingModule()" class="inp w-auto font-semibold"></select></div>
           <div id="gradingContainer" class="space-y-3"></div>
         </div>
       </div>
 
-      <!-- TAB LAPORAN & ANALYTICS -->
+      <!-- LAPORAN -->
       <div id="tabReports" class="teacher-tab-content hidden space-y-5">
-        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <div class="flex justify-between items-center border-b pb-3">
-            <h3 class="font-bold text-slate-800"><i class="fa-solid fa-file-invoice text-blue-600 mr-2"></i>Laporan Rekapitulasi & Analisis Butir Soal</h3>
-            <div class="flex gap-2">
-              <select id="reportExamSelect" onchange="renderReportModule()" class="px-3 py-1 border rounded-lg bg-slate-50 text-xs font-bold"></select>
-              <button onclick="exportResultsToExcel()" class="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold"><i class="fa-solid fa-file-excel mr-1"></i>Ekspor Excel</button>
-              <button onclick="exportResultsToPDF()" class="bg-rose-600 text-white px-3 py-1 rounded text-xs font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>Cetak PDF</button>
-            </div>
+        <div class="card space-y-4">
+          <div class="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b pb-3">
+            <h3 class="font-bold text-slate-800"><i class="fa-solid fa-file-invoice text-blue-600 mr-2"></i>Laporan Nilai & Analisis Butir Soal</h3>
+            <div class="flex flex-wrap gap-2"><select id="reportExamSelect" onchange="renderReportModule()" class="inp w-auto font-bold"></select>
+              <button onclick="exportResultsToExcel()" class="btn btn-green"><i class="fa-solid fa-file-excel mr-1"></i>Ekspor Excel</button>
+              <button onclick="exportResultsToPDF()" class="btn btn-red"><i class="fa-solid fa-file-pdf mr-1"></i>Ekspor PDF</button></div>
           </div>
-
-          <div id="reportSummaryBox" class="grid grid-cols-4 gap-3 text-center"></div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left text-slate-600">
-              <thead class="bg-slate-100 font-bold uppercase">
-                <tr>
-                  <th class="p-2.5">Siswa</th>
-                  <th class="p-2.5">Kelas</th>
-                  <th class="p-2.5">PG / Kompleks</th>
-                  <th class="p-2.5">Isian & Uraian</th>
-                  <th class="p-2.5">Nilai Akhir</th>
-                  <th class="p-2.5">Status KKM</th>
-                </tr>
-              </thead>
-              <tbody id="reportTableBody"></tbody>
-            </table>
-          </div>
+          <div id="reportSummaryBox" class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center"></div>
+          <div class="overflow-x-auto"><table class="w-full text-xs text-left text-slate-600">
+            <thead class="bg-slate-100 font-bold uppercase"><tr><th class="p-2.5">Nama</th><th class="p-2.5">Kelas</th><th class="p-2.5">Skor Otomatis</th><th class="p-2.5">Skor Manual</th><th class="p-2.5">Nilai Akhir</th><th class="p-2.5">Keterangan</th></tr></thead>
+            <tbody id="reportTableBody"></tbody></table></div>
+          <div id="itemAnalysisBox"></div>
         </div>
       </div>
     </section>
 
     <!-- VIEW 4: DASHBOARD SISWA -->
     <section id="viewStudent" class="hidden space-y-6">
-      <div class="bg-blue-900 text-white p-4 rounded-xl shadow flex justify-between items-center">
-        <div>
-          <h2 class="text-lg font-bold">Ruang Ujian Siswa</h2>
-          <p class="text-xs text-blue-200">SMP Qur'an Al Wahdah</p>
-        </div>
-      </div>
-      <div id="studentTokenCard" class="max-w-md mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center space-y-4">
+      <div class="bg-blue-900 text-white p-4 rounded-xl shadow"><h2 class="text-lg font-bold">Ruang Ujian Siswa</h2><p class="text-xs text-blue-200" id="studentWelcome">SMP Qur'an Al Wahdah</p></div>
+      <div id="studentTokenCard" class="max-w-md mx-auto card p-6 text-center space-y-4">
         <i class="fa-solid fa-key text-4xl text-blue-600"></i>
         <h3 class="font-bold text-base text-slate-800">Masukkan Token Ujian</h3>
-        <input type="text" id="studentTokenInput" placeholder="TOKEN" class="w-full text-center tracking-widest text-lg font-mono font-bold uppercase px-3 py-2 border rounded-lg">
-        <button onclick="validateStudentToken()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs shadow">Konfirmasi & Mulai Ujian</button>
+        <input type="text" id="studentTokenInput" maxlength="8" placeholder="TOKEN" onkeydown="if(event.key==='Enter')validateStudentToken()" class="inp text-center tracking-widest text-lg font-mono font-bold uppercase py-2">
+        <button onclick="validateStudentToken()" class="btn btn-green w-full py-2">Konfirmasi & Mulai Ujian</button>
       </div>
     </section>
-
   </main>
 
-  <!-- MODAL: BUAT PAKET SOAL -->
-  <div id="modalCreatePackage" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white max-w-md w-full p-5 rounded-2xl shadow-2xl space-y-4">
-      <h3 class="font-bold border-b pb-2">Buat Paket Bank Soal Baru</h3>
-      <form onsubmit="handleSavePackage(event)" class="space-y-3">
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Nama Paket Soal</label>
-          <input type="text" id="pkgNameInput" placeholder="Misal: PAI Kelas 7 PTS Ganjil" required class="w-full px-3 py-2 border rounded-lg text-xs">
-        </div>
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Mata Pelajaran</label>
-          <select id="pkgSubjectSelect" class="w-full px-3 py-2 border rounded-lg text-xs"></select>
-        </div>
-        <div>
-          <label class="block font-bold text-slate-700 mb-1 text-xs">Kelas Target</label>
-          <select id="pkgClassSelect" class="w-full px-3 py-2 border rounded-lg bg-white font-bold text-xs">
-            <!-- Opsi kelas akan diisi otomatis dari Firestore -->
-          </select>
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" onclick="closeCreatePackageModal()" class="px-3 py-1.5 border rounded text-xs font-bold">Batal</button>
-          <button type="submit" class="px-3 py-1.5 bg-blue-800 text-white rounded text-xs font-bold">Simpan Paket</button>
-        </div>
-      </form>
+  <!-- RUANG UJIAN (layar penuh) -->
+  <div id="viewExam" class="hidden">
+    <div class="bg-blue-900 text-white px-4 py-2 flex justify-between items-center shadow">
+      <div><h2 id="examTitle" class="font-bold text-sm"></h2><p id="examStudentInfo" class="text-[11px] text-blue-200"></p></div>
+      <div class="flex items-center gap-3"><span id="examViolations" class="text-[11px] bg-rose-600 px-2 py-0.5 rounded font-bold hidden"></span>
+        <span id="examTimer" class="font-mono font-bold text-lg bg-blue-800 px-3 py-1 rounded">00:00:00</span></div>
     </div>
-  </div>
-
-  <!-- MODAL: TAMBAH SOAL MANUAL -->
-  <div id="modalAddQuestion" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-white max-w-2xl w-full p-5 rounded-2xl shadow-2xl space-y-4 my-8">
-      <h3 class="font-bold border-b pb-2" id="modalQTitle">Tambah Soal Manual</h3>
-      <form onsubmit="handleSaveQuestion(event)" class="space-y-3">
-        <input type="hidden" id="editQIndex" value="-1">
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Jenis Soal</label>
-            <select id="qTypeSelect" onchange="renderQuestionTypeOptions()" class="w-full px-3 py-1.5 border rounded-lg text-xs">
-              <option value="PG">Pilihan Ganda (PG Single)</option>
-              <option value="PGK">PG Kompleks (Multi Kunci)</option>
-              <option value="BS">Benar / Salah</option>
-              <option value="ISIAN">Isian Singkat</option>
-              <option value="URAIAN">Uraian / Essay</option>
-            </select>
-          </div>
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Bobot / Skor</label>
-            <input type="number" id="qScoreInput" value="2" required class="w-full px-3 py-1.5 border rounded-lg text-xs">
-          </div>
+    <div class="flex-1 overflow-y-auto p-3 md:p-5"><div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div class="lg:col-span-3 card space-y-4">
+        <div class="flex justify-between items-center border-b pb-2"><strong id="examQNo" class="text-slate-800"></strong><span id="examQMeta" class="text-[11px] text-slate-500"></span></div>
+        <div id="examQBody" class="space-y-3"></div>
+        <div class="flex justify-between items-center pt-3 border-t">
+          <button id="btnPrevQ" class="btn btn-gray"><i class="fa-solid fa-arrow-left mr-1"></i>Sebelumnya</button>
+          <button id="btnDoubt" class="btn btn-amber"><i class="fa-solid fa-flag mr-1"></i>Ragu-ragu</button>
+          <button id="btnNextQ" class="btn btn-blue">Selanjutnya<i class="fa-solid fa-arrow-right ml-1"></i></button>
         </div>
-
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Isi Teks Soal (Mendukung Teks Arab / RTL)</label>
-          <textarea id="qTextInput" rows="3" required dir="auto" placeholder="Tuliskan butir soal di sini..." class="w-full px-3 py-2 border rounded-lg text-xs font-sans"></textarea>
-        </div>
-
-        <!-- Container Opsi Dinamis -->
-        <div id="qOptionsContainer" class="space-y-2 border p-3 rounded-lg bg-slate-50"></div>
-
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" onclick="closeAddQuestionModal()" class="px-3 py-1.5 border rounded text-xs font-bold">Batal</button>
-          <button type="submit" class="px-3 py-1.5 bg-blue-800 text-white rounded text-xs font-bold">Simpan Soal</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL: IMPOR DOCX / EXCEL -->
-  <div id="modalImportQuestion" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white max-w-lg w-full p-5 rounded-2xl shadow-2xl space-y-4">
-      <h3 class="font-bold border-b pb-2"><i class="fa-solid fa-file-word text-blue-600 mr-2"></i>Impor Soal (.docx / .xlsx)</h3>
-      <p class="text-xs text-slate-500">Pilih file berformat baku Word atau Excel untuk membaca otomatis 5 jenis soal.</p>
-      
-      <div class="border-2 border-dashed border-slate-300 p-4 text-center rounded-xl space-y-2">
-        <input type="file" id="importFile" accept=".docx, .xlsx, .xls" class="hidden" onchange="handleProcessImportFile(event)">
-        <button onclick="document.getElementById('importFile').click()" class="bg-blue-800 text-white px-4 py-2 rounded-lg text-xs font-bold"><i class="fa-solid fa-folder-open mr-1"></i>Pilih File Word / Excel</button>
       </div>
+      <div class="card space-y-3 h-fit"><h4 class="font-bold text-xs text-slate-700">Navigasi Soal</h4><div id="examNav" class="flex flex-wrap gap-1.5"></div>
+        <div class="text-[10px] text-slate-500 space-y-0.5"><div><span class="inline-block w-2.5 h-2.5 bg-emerald-600 rounded-sm mr-1"></span>Terjawab</div><div><span class="inline-block w-2.5 h-2.5 bg-amber-500 rounded-sm mr-1"></span>Ragu-ragu</div></div>
+        <button id="btnFinishExam" class="btn btn-green w-full py-2"><i class="fa-solid fa-check-double mr-1"></i>Selesai & Kumpulkan</button>
+        <p id="examSaveState" class="text-[10px] text-slate-400 text-center"></p></div>
+    </div></div>
+    <!-- Layar terkunci / hasil -->
+    <div id="examOverlay" class="hidden absolute inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-4"><div id="examOverlayBox" class="bg-white max-w-sm w-full rounded-2xl p-6 text-center space-y-3"></div></div>
+  </div>
 
-      <div id="importPreviewReport" class="hidden max-h-40 overflow-y-auto border p-2 rounded text-xs space-y-1"></div>
+  <!-- MODAL: BUAT PAKET -->
+  <div id="modalCreatePackage" class="modal hidden"><div class="max-w-md">
+    <h3 class="font-bold border-b pb-2 mb-3">Buat Paket Bank Soal Baru</h3>
+    <form onsubmit="handleSavePackage(event)" class="space-y-3 text-xs">
+      <div><label class="lbl">Nama Paket Soal</label><input type="text" id="pkgNameInput" placeholder="Misal: PAI Kelas 7 PTS Ganjil" required class="inp"></div>
+      <div><label class="lbl">Mata Pelajaran</label><select id="pkgSubjectSelect" class="inp"></select></div>
+      <div><label class="lbl">Kelas Target</label><select id="pkgClassSelect" class="inp font-bold"></select></div>
+      <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="closeCreatePackageModal()" class="btn btn-gray">Batal</button><button type="submit" class="btn btn-blue">Simpan Paket</button></div>
+    </form></div></div>
 
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" onclick="closeImportModal()" class="px-3 py-1.5 border rounded text-xs font-bold">Tutup</button>
-        <button type="button" id="btnSaveImported" onclick="saveImportedQuestions()" disabled class="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-bold opacity-50">Simpan Hasil Impor Valid</button>
+  <!-- MODAL: SOAL MANUAL (tambah / edit) -->
+  <div id="modalAddQuestion" class="modal hidden"><div class="max-w-2xl">
+    <h3 class="font-bold border-b pb-2 mb-3" id="modalQuestionTitle">Tambah Soal Manual</h3>
+    <form onsubmit="handleSaveManualQuestion(event)" class="space-y-3 text-xs">
+      <input type="hidden" id="editQuestionIndex" value="-1"><input type="hidden" id="qImageBase64">
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="lbl">Jenis Soal</label><select id="qTypeInput" onchange="toggleQuestionOptionsUI()" class="inp font-bold">
+          <option value="PG">Pilihan Ganda</option><option value="PGK">PG Kompleks (Multi Kunci)</option><option value="BS">Benar / Salah</option><option value="ISIAN">Isian Singkat</option><option value="URAIAN">Uraian / Essay</option></select></div>
+        <div><label class="lbl">Bobot / Skor</label><input type="number" id="qScoreInput" value="2" min="1" required class="inp font-bold"></div>
       </div>
-    </div>
-  </div>
+      <div><label class="lbl">Teks Soal (mendukung Arab / RTL)</label><textarea id="qTextInput" rows="3" required dir="auto" class="inp"></textarea></div>
+      <div><label class="lbl">Gambar Soal (opsional, otomatis dikecilkan)</label>
+        <input type="file" id="qImageFileInput" accept="image/*" onchange="handleQuestionImagePreview(event)" class="inp">
+        <div id="qImagePreviewContainer" class="hidden relative w-32 h-32 border rounded-lg overflow-hidden bg-white mt-2"><img id="qImagePreviewImg" alt="Preview" class="w-full h-full object-cover">
+          <button type="button" onclick="removeQuestionImage()" class="absolute top-1 right-1 bg-rose-600 text-white rounded-full w-5 h-5 text-[10px] font-bold">✕</button></div></div>
+      <div id="pgOptionsBox" class="space-y-2 border-t pt-2">
+        <label class="lbl">Pilihan Jawaban</label>
+        <div id="optRows" class="space-y-2"></div>
+        <button type="button" onclick="addOptionRow()" id="btnAddOpt" class="btn btn-gray btn-sm">+ Tambah Opsi</button>
+      </div>
+      <div><label class="lbl" id="qKeyLabel">Kunci Jawaban</label><input type="text" id="qKeyInput" placeholder="" class="inp font-bold uppercase">
+        <p class="text-[10px] text-slate-400 mt-1" id="qKeyHint"></p></div>
+      <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="closeAddQuestionModal()" class="btn btn-gray">Batal</button><button type="submit" class="btn btn-blue">Simpan Soal</button></div>
+    </form></div></div>
 
-  <!-- MODAL PROFILE -->
-  <div id="modalProfile" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white max-w-sm w-full p-5 rounded-2xl shadow-2xl space-y-4">
-      <h3 class="font-bold border-b pb-2">Pengaturan Password</h3>
-      <form onsubmit="handleSaveProfile(event)" class="space-y-3">
-        <input type="password" id="profileNewPass" minlength="6" placeholder="Password Baru" required class="w-full px-3 py-2 border rounded-lg text-xs">
-        <div class="flex justify-end gap-2">
-          <button type="button" onclick="closeProfileModal()" class="px-3 py-1.5 border rounded text-xs font-bold">Batal</button>
-          <button type="submit" class="px-3 py-1.5 bg-blue-800 text-white rounded text-xs font-bold">Simpan</button>
-        </div>
-      </form>
-    </div>
-  </div>
-  
+  <!-- MODAL: IMPOR DOCX / XLSX -->
+  <div id="modalImportQuestion" class="modal hidden"><div class="max-w-lg space-y-3">
+    <h3 class="font-bold border-b pb-2"><i class="fa-solid fa-file-word text-blue-600 mr-2"></i>Impor Soal (.docx / .xlsx)</h3>
+    <p class="text-xs text-slate-500">Word: format <b>JENIS / SOAL / A-E / KUNCI / BOBOT</b> (lihat template). Excel: kolom <b>Jenis, Soal, A, B, C, D, E, Kunci, Bobot</b>.</p>
+    <input type="file" id="docxQuestionFile" accept=".docx,.xlsx,.xls" class="inp" onchange="handleProcessImportFile(event)">
+    <div id="importPreviewReport" class="hidden p-2.5 bg-slate-100 rounded-lg max-h-40 overflow-y-auto space-y-1 text-[11px]"></div>
+    <div class="flex justify-end gap-2 pt-2"><button onclick="closeImportQuestionModal()" class="btn btn-gray">Tutup</button>
+      <button id="btnSaveImportedDocx" onclick="saveImportedQuestionsDocx()" disabled class="btn btn-green">Simpan Soal Valid</button></div></div></div>
+
+  <!-- MODAL: PASSWORD -->
+  <div id="modalProfile" class="modal hidden"><div class="max-w-sm">
+    <h3 class="font-bold border-b pb-2 mb-3">Ganti Password</h3>
+    <form onsubmit="handleSaveProfile(event)" class="space-y-3">
+      <p id="profileNotice" class="text-[11px] text-amber-700 hidden">Akun Anda memakai password sementara. Mohon ganti sekarang.</p>
+      <input type="password" id="profileNewPass" minlength="6" placeholder="Password baru (min. 6 karakter)" required class="inp">
+      <div class="flex justify-end gap-2"><button type="button" onclick="closeProfileModal()" class="btn btn-gray">Batal</button><button type="submit" class="btn btn-blue">Simpan</button></div>
+    </form></div></div>
+
   <script type="module" src="firebase-config.js"></script>
   <script type="module" src="app-core-firebase.js"></script>
   <script type="module" src="app-exam-firebase.js"></script>
