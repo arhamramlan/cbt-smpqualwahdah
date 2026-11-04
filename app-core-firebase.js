@@ -310,24 +310,33 @@ window.handleSaveUser = async function(e) {
   if (role === 'siswa' && !nisn) return alert("NISN wajib diisi untuk siswa!");
 
   try {
-    const qUser = query(collection(db, "users"), where("username", "==", username));
-    const snapUser = await getDocs(qUser);
-
-    if (!editId && !snapUser.empty) {
-      return alert(`Username "${username}" sudah digunakan!`);
-    }
-
     if (editId) {
-      await updateDoc(doc(db, "users", editId), {
+      // Objek data yang akan di-update
+      const updatePayload = {
         name,
         role,
         nisn,
         class: userClass,
         updatedAt: Date.now()
-      });
-      alert(`Data pengguna ${name} berhasil diperbarui!`);
+      };
+
+      // Jika Admin mengisikan password baru pada form edit, update juga password-nya
+      if (manualPass) {
+        updatePayload.password = manualPass;
+      }
+
+      await updateDoc(doc(db, "users", editId), updatePayload);
+      alert(`Data pengguna ${name} berhasil diperbarui!${manualPass ? ' (Password diubah)' : ''}`);
       logActivity(`Memperbarui profil pengguna: ${username}`);
     } else {
+      // Tambah Pengguna Baru
+      const qUser = query(collection(db, "users"), where("username", "==", username));
+      const snapUser = await getDocs(qUser);
+
+      if (!snapUser.empty) {
+        return alert(`Username "${username}" sudah digunakan!`);
+      }
+
       const finalPassword = manualPass || generateSecureRandomPassword();
       const newDocRef = doc(collection(db, "users"));
       
@@ -357,11 +366,13 @@ window.resetPasswordUser = async function(userId, username) {
   if (confirm(`Reset password untuk pengguna ${username}? Kata sandi acak baru akan dibuat.`)) {
     const newTempPassword = generateSecureRandomPassword();
     try {
+      // PERBAIKAN: Sertakan field password yang diperbarui ke Firestore
       await updateDoc(doc(db, "users", userId), { 
         password: newTempPassword,
         mustChangePassword: true,
         updatedAt: Date.now() 
       });
+
       alert(`Password Berhasil Di-reset!\n\nUsername: ${username}\nPassword Baru Sementara: ${newTempPassword}`);
       logActivity(`Mereset kata sandi pengguna: ${username}`);
     } catch (err) {
