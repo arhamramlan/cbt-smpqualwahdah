@@ -195,6 +195,112 @@ window.triggerReScoring = function(schedId) {
 // 2. BANK SOAL & VALIDASI PAKET
 // -------------------------------------------------------------
 
+// app-exam-firebase.js
+
+// 1. SIMPAN PAKET SOAL BARU
+window.handleSavePackage = async function(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  
+  const titleInput = document.getElementById('pkgNameInput');
+  const subjectInput = document.getElementById('pkgSubjectSelect');
+  const classInput = document.getElementById('pkgClassSelect');
+
+  if (!titleInput || !titleInput.value.trim()) {
+    return alert("Silakan isi nama paket soal!");
+  }
+
+  try {
+    const pkgData = {
+      title: titleInput.value.trim(),
+      subject: subjectInput ? subjectInput.value : 'PAI',
+      targetClass: classInput ? classInput.value : 'VII',
+      status: 'Draft',
+      questions: [],
+      createdBy: currentTeacherUser ? currentTeacherUser.uid : 'guru',
+      createdAt: Date.now()
+    };
+
+    await addDoc(collection(db, "packages"), pkgData);
+    alert("Paket Soal Baru Berhasil Disimpan!");
+    
+    titleInput.value = '';
+    window.closeCreatePackageModal();
+  } catch (err) {
+    alert("Gagal menyimpan paket soal: " + err.message);
+  }
+};
+
+window.closeCreatePackageModal = function() {
+  const modal = document.getElementById('modalCreatePackage');
+  if (modal) modal.classList.add('hidden');
+};
+
+// 2. MODAL TAMBAH SOAL MANUAL
+window.openAddQuestionModal = function() {
+  if (!activePackageId) {
+    return alert("Silakan klik 'Buka Soal' pada salah satu paket soal terlebih dahulu!");
+  }
+  const modal = document.getElementById('modalAddQuestion');
+  if (modal) {
+    modal.classList.remove('hidden');
+  } else {
+    alert("Elemen modalAddQuestion tidak ditemukan.");
+  }
+};
+
+window.closeAddQuestionModal = function() {
+  const modal = document.getElementById('modalAddQuestion');
+  if (modal) modal.classList.add('hidden');
+};
+
+// 3. MODAL UPLOAD / IMPOR WORD (.DOCX)
+window.openImportQuestionModal = function() {
+  if (!activePackageId) {
+    return alert("Silakan klik 'Buka Soal' pada salah satu paket soal terlebih dahulu!");
+  }
+  importedQuestionsBuffer = [];
+  // Cek ID modalImport atau modalImportQuestion
+  const modal = document.getElementById('modalImportQuestion') || document.getElementById('modalImport');
+  if (modal) {
+    modal.classList.remove('hidden');
+  } else {
+    alert("Elemen modal impor tidak ditemukan.");
+  }
+};
+
+window.closeImportQuestionModal = function() {
+  const modal = document.getElementById('modalImportQuestion') || document.getElementById('modalImport');
+  if (modal) modal.classList.add('hidden');
+};
+
+// 4. DOWNLOAD TEMPLATE / PANDUAN WORD
+window.downloadWordTemplate = function() {
+  const content = `PANDUAN FORMAT IMPOR SOAL WORD (.DOCX)
+=========================================
+JENIS: PG
+SOAL: Siapakah Nabi terakhir yang diutus Allah SWT?
+A: Nabi Musa AS
+B: Nabi Isa AS
+C: Nabi Muhammad SAW
+D: Nabi Ibrahim AS
+KUNCI: C
+BOBOT: 2
+
+JENIS: BS
+SOAL: Al-Qur'an terdiri dari 114 Surah.
+KUNCI: BENAR
+BOBOT: 2
+`;
+
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = "Panduan_Format_Soal_Docx.txt";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
 function listenToTeacherPackages() {
   const q = query(collection(db, "packages"));
   onSnapshot(q, (snapshot) => {
