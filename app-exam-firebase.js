@@ -351,6 +351,7 @@ window.deleteQuestionFire = async function(qIndex) {
 // Tambahkan/Pastikan di app-exam-firebase.js
 
 window.openCreatePackageModal = function() {
+  // 1. Muat Opsi Mata Pelajaran
   onSnapshot(collection(db, "subjects"), (snapS) => {
     const subs = snapS.docs.map(d => d.data());
     const selSub = document.getElementById('pkgSubjectSelect');
@@ -361,14 +362,22 @@ window.openCreatePackageModal = function() {
     }
   });
 
+  // 2. Muat Opsi Kelas Target dari Master Kelas
+  onSnapshot(collection(db, "classes"), (snapC) => {
+    const classes = snapC.docs.map(d => d.data());
+    const selClass = document.getElementById('pkgClassSelect');
+    if (selClass) {
+      selClass.innerHTML = classes.length
+        ? classes.map(c => `<option value="${c.code}">${c.code}</option>`).join('')
+        : `<option value="VII">VII</option><option value="VIII">VIII</option><option value="IX">IX</option>`;
+    }
+  });
+
   const modal = document.getElementById('modalCreatePackage');
   if (modal) {
     modal.classList.remove('hidden');
-  } else {
-    alert("Elemen modalCreatePackage tidak ditemukan di HTML.");
   }
 };
-
 window.closeCreatePackageModal = function() {
   document.getElementById('modalCreatePackage')?.classList.add('hidden');
 };
