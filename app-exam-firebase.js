@@ -348,6 +348,31 @@ window.deleteQuestionFire = async function(qIndex) {
   }
 };
 
+// Tambahkan/Pastikan di app-exam-firebase.js
+
+window.openCreatePackageModal = function() {
+  onSnapshot(collection(db, "subjects"), (snapS) => {
+    const subs = snapS.docs.map(d => d.data());
+    const selSub = document.getElementById('pkgSubjectSelect');
+    if (selSub) {
+      selSub.innerHTML = subs.length 
+        ? subs.map(s => `<option value="${s.code.toUpperCase()}">${s.name} (${s.code.toUpperCase()})</option>`).join('')
+        : `<option value="PAI">PAI</option>`;
+    }
+  });
+
+  const modal = document.getElementById('modalCreatePackage');
+  if (modal) {
+    modal.classList.remove('hidden');
+  } else {
+    alert("Elemen modalCreatePackage tidak ditemukan di HTML.");
+  }
+};
+
+window.closeCreatePackageModal = function() {
+  document.getElementById('modalCreatePackage')?.classList.add('hidden');
+};
+
 // -------------------------------------------------------------
 // 3. MONITORING REAL-TIME & KONTROL SESI
 // -------------------------------------------------------------
