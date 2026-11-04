@@ -396,6 +396,70 @@ window.handleSaveUser = async function(e) {
   }
 };
 
+// FUNGSI IMPOR PENGGUNA DARI FILE EXCEL (.XLSX)
+window.handleImportUsersExcel = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (typeof XLSX === 'undefined') {
+    return alert("Pustaka SheetJS (XLSX) belum dimuat. Mohon muat ulang halaman.");
+  }
+
+  const reader = new FileReader();
+  reader.onload = async function(evt) {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonUsers = XLSX.utils.sheet_to_json(worksheet);
+
+      if (!jsonUsers || jsonUsers.length === 0) {
+        return alert("File Excel kosong atau format kolom tidak sesuai!");
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const row of jsonUsers) {
+        const name = row["Nama Lengkap"] ? String(row["Nama Lengkap"]).trim() : "";
+        const username = row["Username"] ? String(row["Username"]).trim().toLowerCase() : "";
+        const role = row["Role"] ? String(row["Role"]).trim().toLowerCase() : "siswa";
+        const nisn = row["NISN"] ? String(row["NISN"]).trim() : "";
+        const userClass = row["Kelas"] ? String(row["Kelas"]).trim().toUpperCase() : "";
+        const password = row["Password"] ? String(row["Password"]).trim() : "123456";
+
+        if (name && username) {
+          // Buat dokumen pengguna baru di koleksi 'users'
+          const newDocRef = doc(collection(db, "users"));
+          await setDoc(newDocRef, {
+            name,
+            username,
+            role,
+            nisn,
+            class: userClass,
+            password,
+            active: true,
+            mustChangePassword: true,
+            createdAt: Date.now()
+          });
+          successCount++;
+        } else {
+          failCount++;
+        }
+      }
+
+      alert(`Impor Selesai!\n✔ ${successCount} Pengguna Ditambahkan.\n${failCount > 0 ? `✖ ${failCount} Baris Gagal (Nama/Username Kosong).` : ''}`);
+      logActivity(`Mengimpor ${successCount} pengguna baru dari file Excel.`);
+      e.target.value = '';
+    } catch (err) {
+      alert("Gagal memproses file Excel: " + err.message);
+    }
+  };
+
+  reader.readAsArrayBuffer(file);
+};
+
 window.resetPasswordUser = async function(userId, username) {
   if (confirm(`Reset password untuk pengguna ${username}? Kata sandi acak baru akan dibuat.`)) {
     const newTempPassword = generateSecureRandomPassword();
