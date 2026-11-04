@@ -1,41 +1,49 @@
-body {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
+/* ===== Dasar & anti-salin ===== */
+body { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
+input, textarea, select { -webkit-user-select: text; user-select: text; }
 
+/* ===== Tab ===== */
 .admin-tab-btn, .teacher-tab-btn {
-  padding: 0.5rem 0.85rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border-radius: 0.5rem;
-  color: #475569;
-  transition: all 0.2s ease-in-out;
-  white-space: nowrap;
+  padding: .5rem .85rem; font-size: .8rem; font-weight: 600; border-radius: .5rem;
+  color: #475569; transition: all .2s ease-in-out; white-space: nowrap;
 }
-
-.admin-tab-btn:hover, .teacher-tab-btn:hover {
-  background-color: #f1f5f9;
-  color: #0f172a;
-}
-
+.admin-tab-btn:hover, .teacher-tab-btn:hover { background-color: #f1f5f9; color: #0f172a; }
 .admin-tab-btn.active-tab, .teacher-tab-btn.active-tab {
-  background-color: #1e3a8a;
-  color: #ffffff;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  background-color: #1e3a8a; color: #fff; box-shadow: 0 1px 3px 0 rgb(0 0 0 / .1);
 }
 
-textarea[dir="rtl"], input[dir="rtl"] {
-  font-family: 'Amiri', 'Traditional Arabic', 'Arial', sans-serif;
-  font-size: 1.1rem;
-}
+/* ===== Komponen yang dipakai ulang (mengurangi class berulang di HTML) ===== */
+.card { background: #fff; padding: 1.25rem; border-radius: .75rem; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgb(0 0 0 / .05); }
+.inp { width: 100%; padding: .4rem .75rem; border: 1px solid #cbd5e1; border-radius: .5rem; font-size: .75rem; background: #fff; }
+.inp:focus { outline: none; border-color: #1e40af; box-shadow: 0 0 0 1px #1e40af; }
+.lbl { display: block; font-weight: 700; color: #334155; margin-bottom: .25rem; font-size: .75rem; }
+.btn { padding: .375rem .75rem; border-radius: .5rem; font-size: .75rem; font-weight: 700; color: #fff; transition: background .15s; cursor: pointer; }
+.btn-sm { padding: .125rem .5rem; font-size: .625rem; border-radius: .25rem; }
+.btn-blue { background: #1e40af; } .btn-blue:hover { background: #1e3a8a; }
+.btn-green { background: #059669; } .btn-green:hover { background: #047857; }
+.btn-amber { background: #d97706; } .btn-amber:hover { background: #b45309; }
+.btn-red { background: #e11d48; } .btn-red:hover { background: #be123c; }
+.btn-gray { background: #e2e8f0; color: #334155; } .btn-gray:hover { background: #cbd5e1; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.modal { position: fixed; inset: 0; background: rgb(15 23 42 / .5); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 1rem; overflow-y: auto; }
+.modal.hidden { display: none; }
+.modal > div { background: #fff; width: 100%; padding: 1.25rem; border-radius: 1rem; box-shadow: 0 25px 50px -12px rgb(0 0 0 / .25); margin: 2rem 0; }
+
+/* ===== Teks Arab / RTL ===== */
+textarea[dir="rtl"], input[dir="rtl"], .font-arabic { font-family: 'Amiri', 'Traditional Arabic', 'Arial', sans-serif; font-size: 1.1rem; }
+
+/* ===== Ruang ujian siswa ===== */
+#viewExam { position: fixed; inset: 0; z-index: 40; background: #f1f5f9; display: flex; flex-direction: column; }
+#viewExam.hidden { display: none; }
+.nav-q { width: 2.25rem; height: 2.25rem; border-radius: .5rem; border: 1px solid #cbd5e1; background: #fff; font-weight: 700; font-size: .75rem; }
+.nav-q.answered { background: #059669; border-color: #059669; color: #fff; }
+.nav-q.doubt { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+.nav-q.current { outline: 3px solid #1e40af; outline-offset: 1px; }
+.opt-row { display: flex; gap: .75rem; align-items: flex-start; padding: .75rem; border: 2px solid #e2e8f0; border-radius: .75rem; background: #fff; cursor: pointer; }
+.opt-row:hover { border-color: #93c5fd; }
+.opt-row.picked { border-color: #1e40af; background: #eff6ff; }
 
 @media print {
-  header, nav, button, input, select, .print\:hidden {
-    display: none !important;
-  }
-  body {
-    background-color: #ffffff;
-  }
+  header, nav, button, input, select, .print\:hidden { display: none !important; }
+  body { background-color: #fff; }
 }
