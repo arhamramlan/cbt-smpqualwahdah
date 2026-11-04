@@ -64,7 +64,6 @@ function initAuthObserver() {
       localStorage.setItem('cbt_session', JSON.stringify(currentUserSession));
       renderUserInterface();
     } else {
-      // Jika tidak ada user SDK, cek apakah ada sesi lokal (Fallback Login)
       const savedSession = localStorage.getItem('cbt_session');
       if (savedSession) {
         try {
@@ -110,7 +109,7 @@ function renderUserInterface() {
 }
 
 // -------------------------------------------------------------
-// HELPER FORMAT TANGGAL & LOG AKTIVITAS (DEDUPLIKASI LOG)
+// HELPER FORMAT TANGGAL & LOG AKTIVITAS
 // -------------------------------------------------------------
 
 function formatIndonesiaDateTime(timestamp) {
@@ -141,7 +140,7 @@ async function logActivity(eventText) {
 }
 
 // -------------------------------------------------------------
-// FUNGSI LOGIN (FIREBASE AUTH + FALLBACK FIRESTORE)
+// FUNGSI LOGIN & LOGOUT
 // -------------------------------------------------------------
 
 window.handleLogin = async function(e) {
@@ -157,7 +156,6 @@ window.handleLogin = async function(e) {
   const email = u.includes('@') ? u : `${u.toLowerCase()}@cbt.alwahdah.sch.id`;
 
   try {
-    // 1. Coba Otentikasi via Firebase Auth SDK
     const userCredential = await signInWithEmailAndPassword(auth, email, p);
     const user = userCredential.user;
 
@@ -191,7 +189,6 @@ window.handleLogin = async function(e) {
   } catch (authErr) {
     console.warn("Firebase Auth tidak cocok, memeriksa verifikasi Firestore Direct...", authErr.message);
 
-    // 2. Fallback: Cek Langsung ke Koleksi 'users' di Firestore
     try {
       const q = query(collection(db, "users"), where("username", "==", u.toLowerCase()));
       const snap = await getDocs(q);
@@ -212,7 +209,6 @@ window.handleLogin = async function(e) {
         return alert("Login Gagal: Akun Anda sedang dinonaktifkan oleh Admin!");
       }
 
-      // Verifikasi Password Firestore
       if (userData.password && userData.password !== p) {
         return alert("Login Gagal: Username atau Kata Sandi salah!");
       }
@@ -284,7 +280,7 @@ window.switchAdminTab = function(tabId) {
 };
 
 // -------------------------------------------------------------
-// MANAJEMEN PENGGUNA (TAMBAH, EDIT, RESET PASSWORD, HAPUS)
+// MANAJEMEN PENGGUNA (TAMBAH, EDIT, RESET PASSWORD, TEMPLATE EXCEL)
 // -------------------------------------------------------------
 
 function generateSecureRandomPassword() {
@@ -295,6 +291,47 @@ function generateSecureRandomPassword() {
   }
   return pass;
 }
+
+// FIX 1: FUNGSI UNDUH TEMPLATE EXCEL PENGGUNA
+window.downloadUserTemplate = function() {
+  if (typeof XLSX === 'undefined') {
+    return alert("Pustaka SheetJS (XLSX) belum dimuat. Mohon muat ulang halaman.");
+  }
+
+  const templateData = [
+    {
+      "Nama Lengkap": "Ahmad Abdullah",
+      "Username": "ahmad01",
+      "Role": "siswa",
+      "NISN": "0012345678",
+      "Kelas": "VII",
+      "Password": "123"
+    },
+    {
+      "Nama Lengkap": "Arham Ramlan",
+      "Username": "arham",
+      "Role": "guru",
+      "NISN": "",
+      "Kelas": "",
+      "Password": "guru123"
+    }
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(templateData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Template Pengguna");
+
+  worksheet['!cols'] = [
+    { wch: 30 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 15 },
+    { wch: 10 },
+    { wch: 15 }
+  ];
+
+  XLSX.writeFile(workbook, "Template_Import_Pengguna_CBT.xlsx");
+};
 
 window.handleSaveUser = async function(e) {
   e.preventDefault();
@@ -311,7 +348,6 @@ window.handleSaveUser = async function(e) {
 
   try {
     if (editId) {
-      // Objek data yang akan di-update
       const updatePayload = {
         name,
         role,
@@ -320,7 +356,6 @@ window.handleSaveUser = async function(e) {
         updatedAt: Date.now()
       };
 
-      // Jika Admin mengisikan password baru pada form edit, update juga password-nya
       if (manualPass) {
         updatePayload.password = manualPass;
       }
@@ -329,7 +364,6 @@ window.handleSaveUser = async function(e) {
       alert(`Data pengguna ${name} berhasil diperbarui!${manualPass ? ' (Password diubah)' : ''}`);
       logActivity(`Memperbarui profil pengguna: ${username}`);
     } else {
-      // Tambah Pengguna Baru
       const qUser = query(collection(db, "users"), where("username", "==", username));
       const snapUser = await getDocs(qUser);
 
@@ -366,7 +400,6 @@ window.resetPasswordUser = async function(userId, username) {
   if (confirm(`Reset password untuk pengguna ${username}? Kata sandi acak baru akan dibuat.`)) {
     const newTempPassword = generateSecureRandomPassword();
     try {
-      // PERBAIKAN: Sertakan field password yang diperbarui ke Firestore
       await updateDoc(doc(db, "users", userId), { 
         password: newTempPassword,
         mustChangePassword: true,
@@ -835,3 +868,83 @@ function initSettingsListener() {
     }
   });
 }
+
+// FIX 2: FUNGSI EKSPOR (BACKUP) DATABASE KE FILE .JSON
+window.exportDatabaseJson = async function() {
+  try {
+    const collectionsToBackup = ["users", "classes", "subjects", "packages", "schedules", "settings"];
+    const backupData = {
+      backupTimestamp: Date.now(),
+      backupDate: formatIndonesiaDateTime(Date.now()),
+      data: {}
+    };
+
+    for (const colName of collectionsToBackup) {
+      const snap = await getDocs(collection(db, colName));
+      backupData.data[colName] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `Backup_CBT_Database_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    logActivity("Melakukan Backup Database ke file JSON.");
+    alert("Backup Database Berhasil Diunduh!");
+  } catch (err) {
+    alert("Gagal melakukan backup database: " + err.message);
+  }
+};
+
+// FIX 3: FUNGSI IMPOR (RESTORE) DATABASE DARI FILE .JSON
+window.importDatabaseJson = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (!confirm("PERINGATAN: Memulihkan database akan menimpa/menambahkan data di Firestore. Apakah Anda yakin ingin melanjutkan?")) {
+    e.target.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async function(evt) {
+    try {
+      const backupObj = JSON.parse(evt.target.result);
+      if (!backupObj.data) {
+        return alert("Format file backup JSON tidak valid!");
+      }
+
+      let countSuccess = 0;
+      for (const colName in backupObj.data) {
+        const items = backupObj.data[colName];
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            const docId = item.id;
+            const dataToSave = { ...item };
+            delete dataToSave.id;
+
+            if (docId) {
+              await setDoc(doc(db, colName, docId), dataToSave);
+            } else {
+              await addDoc(collection(db, colName), dataToSave);
+            }
+            countSuccess++;
+          }
+        }
+      }
+
+      alert(`Restore Database Selesai!\n✔ ${countSuccess} dokumen berhasil dipulihkan ke Firestore.`);
+      logActivity(`Memulihkan Database dari file JSON (${countSuccess} dokumen).`);
+      e.target.value = '';
+      location.reload();
+
+    } catch (err) {
+      alert("Gagal memulihkan database: " + err.message);
+    }
+  };
+
+  reader.readAsText(file);
+};
