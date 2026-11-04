@@ -1,1178 +1,585 @@
-// app-core-firebase.js
-import { 
-  db, 
-  auth, 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  where,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged 
+// app-core-firebase.js — autentikasi, admin (pengguna, kelas, mapel, penugasan, kartu, log, pengaturan, backup)
+import {
+  db, auth, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
+  onSnapshot, query, where, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from './firebase-config.js';
 
-let currentUserSession = null;
-let isLogoutProcessing = false;
+// ------------------------------------------------------------------
+// UTILITAS BERSAMA (dipakai juga oleh app-exam-firebase.js lewat window.CBT)
+// ------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const pad = (n) => String(n).padStart(2, '0');
+function fmtDateTime(ts) {
+  const d = new Date(ts || Date.now());
+  return `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}.${pad(d.getMinutes())}.${pad(d.getSeconds())}`;
+}
+function randomString(len, chars) {
+  const a = new Uint32Array(len); crypto.getRandomValues(a);
+  return Array.from(a, (n) => chars[n % chars.length]).join('');
+}
+const genPassword = () => randomString(7, 'abcdefghjkmnpqrstuvwxyz23456789');
+// jalankan tugas paralel per kelompok (jauh lebih cepat daripada await berurutan)
+async function runChunks(items, fn, size = 20) {
+  for (let i = 0; i < items.length; i += size) await Promise.all(items.slice(i, i + size).map(fn));
+}
+// satu listener per kunci: listener lama otomatis dilepas, tidak menumpuk
+const unsubs = {};
+function listen(key, ref, cb) {
+  unsubs[key]?.();
+  unsubs[key] = onSnapshot(ref, cb, (e) => console.error('Listener', key, e.message));
+}
+function stopListen(key) { unsubs[key]?.(); delete unsubs[key]; }
+function stopAll() { Object.keys(unsubs).forEach(stopListen); }
 
-// -------------------------------------------------------------
-// INISIALISASI & OBSERVER AUTHENTICATION
-// -------------------------------------------------------------
+let session = null;
+let settingsCache = {};
+let busyLogout = false;
 
+async function logActivity(text) {
+  if (!session) return;
+  try {
+    await addDoc(collection(db, 'logs'), {
+      formattedTime: fmtDateTime(), timestamp: Date.now(),
+      user: session.name || session.username || 'Sistem', role: session.role || 'system', event: text
+    });
+  } catch (e) { console.error('Gagal mencatat log:', e); }
+}
+
+window.CBT = { $, esc, fmtDateTime, randomString, runChunks, listen, stopListen, stopAll, log: logActivity,
+  getSession: () => session, getSettings: () => settingsCache };
+
+// ------------------------------------------------------------------
+// AUTENTIKASI
+// ------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-  // CEK LOGIN OTOMATIS DARI QR CODE
-  const urlParams = new URLSearchParams(window.location.search);
-  const qrUser = urlParams.get('u');
-  const qrPass = urlParams.get('p');
-  
-  if (qrUser && qrPass) {
-    // Tunggu sebentar hingga DOM siap lalu jalankan login otomatis
-    setTimeout(() => {
-      const userInput = document.getElementById('loginUsername');
-      const passInput = document.getElementById('loginPassword');
-      if (userInput && passInput) {
-        userInput.value = qrUser;
-        passInput.value = qrPass;
-        if (typeof window.handleLogin === 'function') {
-          window.handleLogin();
-        }
-      }
-    }, 500);
-  }
   initAuthObserver();
   initSettingsListener();
-  setupGlobalEvents();
-});
+  $('btnLogoutHeader')?.addEventListener('click', (e) => { e.preventDefault(); window.handleLogout(); });
 
-function setupGlobalEvents() {
-  const logoutBtn = document.getElementById('btnLogoutHeader');
-  if (logoutBtn && !logoutBtn.dataset.bound) {
-    logoutBtn.dataset.bound = "true";
-    logoutBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.handleLogout();
-    });
+  // Login otomatis dari QR kartu ujian, lalu parameter dibuang dari URL agar tidak tersimpan di riwayat
+  const p = new URLSearchParams(location.search);
+  if (p.get('u') && p.get('p')) {
+    $('loginUsername').value = p.get('u');
+    $('loginPassword').value = p.get('p');
+    history.replaceState(null, '', location.pathname);
+    window.handleLogin();
   }
-}
+});
 
 function initAuthObserver() {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
-      try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          currentUserSession = { 
-            uid: user.uid, 
-            name: data.name || data.username || 'Admin Utama',
-            role: data.role || 'admin',
-            ...data 
-          };
-        } else {
-          currentUserSession = { uid: user.uid, name: 'Admin Utama', role: 'admin', username: 'admin' };
-        }
-      } catch (e) {
-        currentUserSession = { uid: user.uid, name: 'Admin Utama', role: 'admin', username: 'admin' };
-      }
-      localStorage.setItem('cbt_session', JSON.stringify(currentUserSession));
-      renderUserInterface();
-    } else {
-      const savedSession = localStorage.getItem('cbt_session');
-      if (savedSession) {
-        try {
-          currentUserSession = JSON.parse(savedSession);
-          renderUserInterface();
-        } catch (e) {
-          currentUserSession = null;
-          localStorage.removeItem('cbt_session');
-          renderUserInterface();
-        }
-      } else {
-        currentUserSession = null;
-        renderUserInterface();
-      }
+      let data = {};
+      try { const d = await getDoc(doc(db, 'users', user.uid)); if (d.exists()) data = d.data(); } catch (e) { /* abaikan */ }
+      if (data.active === false) { await signOut(auth); return; }
+      setSession({ uid: user.uid, name: 'Admin Utama', role: 'admin', username: 'admin', ...data });
+    } else if (!session) {
+      try { session = JSON.parse(sessionStorage.getItem('cbt_session')); } catch (e) { session = null; }
     }
-  });
-}
-
-function renderUserInterface() {
-  ['viewLogin', 'viewAdmin', 'viewTeacher', 'viewStudent', 'navUserArea'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('hidden');
-  });
-
-  if (!currentUserSession) {
-    document.getElementById('viewLogin')?.classList.remove('hidden');
-    return;
-  }
-
-  document.getElementById('navUserArea')?.classList.remove('hidden');
-  const navInfo = document.getElementById('navUserInfo');
-  if (navInfo) navInfo.innerText = `${currentUserSession.name} (${currentUserSession.role.toUpperCase()})`;
-
-  if (currentUserSession.role === 'admin') {
-    document.getElementById('viewAdmin')?.classList.remove('hidden');
-    listenToMasterData();
-  } else if (currentUserSession.role === 'guru') {
-    document.getElementById('viewTeacher')?.classList.remove('hidden');
-    if (window.initTeacherFirebaseDashboard) window.initTeacherFirebaseDashboard(currentUserSession);
-  } else if (currentUserSession.role === 'siswa') {
-    document.getElementById('viewStudent')?.classList.remove('hidden');
-  }
-}
-
-// -------------------------------------------------------------
-// HELPER FORMAT TANGGAL & LOG AKTIVITAS
-// -------------------------------------------------------------
-
-function formatIndonesiaDateTime(timestamp) {
-  const date = new Date(timestamp || Date.now());
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = months[date.getMonth()];
-  const year = date.getFullYear();
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${day} ${month} ${year}, ${hours}.${minutes}.${seconds}`;
-}
-
-async function logActivity(eventText) {
-  if (!currentUserSession) return;
-  try {
-    await addDoc(collection(db, "logs"), {
-      formattedTime: formatIndonesiaDateTime(Date.now()),
-      timestamp: Date.now(),
-      user: currentUserSession.name || currentUserSession.username || 'Sistem',
-      role: currentUserSession.role || 'system',
-      event: eventText
-    });
-  } catch (e) {
-    console.error("Gagal mencatat log:", e);
-  }
-}
-
-// -------------------------------------------------------------
-// FUNGSI LOGIN & LOGOUT
-// -------------------------------------------------------------
-
-window.handleLogin = async function(e) {
-  if (e && e.preventDefault) e.preventDefault();
-  
-  const u = document.getElementById('loginUsername')?.value.trim();
-  const p = document.getElementById('loginPassword')?.value.trim();
-
-  if (!u || !p) {
-    return alert("Silakan isi Username / NISN dan Kata Sandi!");
-  }
-
-  const email = u.includes('@') ? u : `${u.toLowerCase()}@cbt.alwahdah.sch.id`;
-
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, p);
-    const user = userCredential.user;
-
-    const userDoc = await getDoc(doc(db, "users", user.uid));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      if (data.active === false) {
-        await signOut(auth);
-        return alert("Login Gagal: Akun Anda sedang dinonaktifkan oleh Admin!");
-      }
-
-      currentUserSession = {
-        uid: user.uid,
-        name: data.name || data.username,
-        role: data.role || 'siswa',
-        ...data
-      };
-    } else {
-      currentUserSession = {
-        uid: user.uid,
-        name: u,
-        username: u,
-        role: u.toLowerCase() === 'admin' ? 'admin' : 'guru'
-      };
-    }
-
-    localStorage.setItem('cbt_session', JSON.stringify(currentUserSession));
-    logActivity(`User ${u} (${currentUserSession.role}) berhasil login via Firebase Auth.`);
     renderUserInterface();
+  });
+}
 
-  } catch (authErr) {
-    console.warn("Firebase Auth tidak cocok, memeriksa verifikasi Firestore Direct...", authErr.message);
+function setSession(data) {
+  const { password, ...safe } = data;           // jangan simpan password di browser
+  session = { ...safe, name: safe.name || safe.username, role: safe.role || 'siswa' };
+  sessionStorage.setItem('cbt_session', JSON.stringify(session));
+}
 
-    try {
-      const q = query(collection(db, "users"), where("username", "==", u.toLowerCase()));
-      const snap = await getDocs(q);
+let adminStarted = false;
+function renderUserInterface() {
+  ['viewLogin', 'viewAdmin', 'viewTeacher', 'viewStudent', 'navUserArea'].forEach((id) => $(id)?.classList.add('hidden'));
+  if (!session) return $('viewLogin')?.classList.remove('hidden');
 
-      if (snap.empty) {
-        return alert("Login Gagal: Username atau Kata Sandi salah!");
-      }
+  $('navUserArea')?.classList.remove('hidden');
+  $('navUserInfo').innerText = `${session.name} (${session.role.toUpperCase()})`;
 
-      let userData = null;
-      let userId = null;
-
-      snap.forEach(d => {
-        userData = d.data();
-        userId = d.id;
-      });
-
-      if (userData.active === false) {
-        return alert("Login Gagal: Akun Anda sedang dinonaktifkan oleh Admin!");
-      }
-
-      if (userData.password && userData.password !== p) {
-        return alert("Login Gagal: Username atau Kata Sandi salah!");
-      }
-
-      currentUserSession = {
-        uid: userId,
-        name: userData.name || userData.username,
-        role: userData.role || 'siswa',
-        ...userData
-      };
-
-      localStorage.setItem('cbt_session', JSON.stringify(currentUserSession));
-      logActivity(`User ${u} (${userData.role}) berhasil login.`);
-      renderUserInterface();
-
-    } catch (dbErr) {
-      alert("Gagal melakukan verifikasi login: " + dbErr.message);
-    }
+  if (session.role === 'admin') {
+    $('viewAdmin').classList.remove('hidden');
+    if (!adminStarted) { adminStarted = true; listenToMasterData(); }
+  } else if (session.role === 'guru') {
+    $('viewTeacher').classList.remove('hidden');
+    window.initTeacherFirebaseDashboard?.(session);
+  } else {
+    $('viewStudent').classList.remove('hidden');
+    window.initStudentView?.(session);
   }
-};
+  if (session.mustChangePassword) window.openProfileModal(true);
+}
 
-window.handleLogout = async function() {
-  if (isLogoutProcessing) return;
-  if (!confirm("Apakah Anda yakin ingin keluar dari sistem CBT?")) return;
+window.handleLogin = async function (e) {
+  e?.preventDefault?.();
+  const u = $('loginUsername')?.value.trim();
+  const p = $('loginPassword')?.value.trim();
+  if (!u || !p) return alert('Silakan isi Username / NISN dan Kata Sandi!');
+  const btn = e?.target?.querySelector?.('button[type=submit]');
+  if (btn) btn.disabled = true;
 
-  isLogoutProcessing = true;
   try {
-    await logActivity(`Pengguna keluar dari sistem.`);
-    localStorage.removeItem('cbt_session');
-    currentUserSession = null;
-    if (auth) await signOut(auth);
-  } catch (err) {
-    console.warn("Logout error:", err.message);
-  } finally {
-    isLogoutProcessing = false;
-    location.reload();
-  }
+    // 1) Akun di Firestore (siswa & guru) — satu query saja
+    try {
+      const snap = await getDocs(query(collection(db, 'users'), where('username', '==', u.toLowerCase())));
+      const d = snap.docs[0];
+      if (d && d.data().password && d.data().password === p) {
+        if (d.data().active === false) return alert('Login Gagal: Akun Anda sedang dinonaktifkan oleh Admin!');
+        setSession({ uid: d.id, ...d.data() });
+        logActivity(`User ${u} (${session.role}) berhasil login.`);
+        return renderUserInterface();
+      }
+    } catch (err) { console.warn('Login Firestore:', err.message); }
+
+    // 2) Firebase Authentication (akun admin)
+    try {
+      const email = u.includes('@') ? u : `${u.toLowerCase()}@cbt.alwahdah.sch.id`;
+      await signInWithEmailAndPassword(auth, email, p);   // onAuthStateChanged yang menyusun sesi
+      logActivity(`User ${u} berhasil login via Firebase Auth.`);
+    } catch (err) {
+      alert('Login Gagal: Username atau Kata Sandi salah!');
+    }
+  } finally { if (btn) btn.disabled = false; }
 };
 
-// -------------------------------------------------------------
+window.handleLogout = async function () {
+  if (busyLogout || !confirm('Apakah Anda yakin ingin keluar dari sistem CBT?')) return;
+  busyLogout = true;
+  try {
+    await logActivity('Pengguna keluar dari sistem.');
+    stopAll();
+    sessionStorage.removeItem('cbt_session');
+    session = null;
+    if (auth.currentUser) await signOut(auth);
+  } catch (err) { console.warn('Logout:', err.message); }
+  location.reload();
+};
+
+// Ganti password sendiri
+window.openProfileModal = (force) => {
+  $('profileNotice')?.classList.toggle('hidden', !force);
+  $('modalProfile')?.classList.remove('hidden');
+};
+window.closeProfileModal = () => $('modalProfile')?.classList.add('hidden');
+window.handleSaveProfile = async function (e) {
+  e.preventDefault();
+  const np = $('profileNewPass').value.trim();
+  if (np.length < 6) return alert('Password minimal 6 karakter!');
+  if (auth.currentUser) return alert('Akun ini memakai Firebase Authentication. Ubah password-nya lewat Firebase Console.');
+  try {
+    await updateDoc(doc(db, 'users', session.uid), { password: np, mustChangePassword: false, updatedAt: Date.now() });
+    session.mustChangePassword = false; setSession(session);
+    $('profileNewPass').value = '';
+    window.closeProfileModal();
+    alert('Password berhasil diubah.');
+    logActivity('Mengganti password sendiri.');
+  } catch (err) { alert('Gagal mengubah password: ' + err.message); }
+};
+
+// ------------------------------------------------------------------
 // NAVIGASI TAB ADMIN
-// -------------------------------------------------------------
-
-window.switchAdminTab = function(tabId) {
-  document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.add('hidden'));
-  document.querySelectorAll('.admin-tab-btn').forEach(el => el.classList.remove('active-tab'));
-
-  const target = document.getElementById(tabId);
-  if (target) target.classList.remove('hidden');
-  
-  const btnMap = {
-    'adminTabUsers': 'btnAdminUsers',
-    'adminTabClasses': 'btnAdminClasses',
-    'adminTabSubjects': 'btnAdminSubjects',
-    'adminTabAssign': 'btnAdminAssign',
-    'adminTabCards': 'btnAdminCards',
-    'adminTabLogs': 'btnAdminLogs',
-    'adminTabSettings': 'btnAdminSettings'
-  };
-
-  if (btnMap[tabId] && document.getElementById(btnMap[tabId])) {
-    document.getElementById(btnMap[tabId]).classList.add('active-tab');
-  }
-
+// ------------------------------------------------------------------
+const ADMIN_TABS = { adminTabUsers: 'btnAdminUsers', adminTabClasses: 'btnAdminClasses', adminTabSubjects: 'btnAdminSubjects',
+  adminTabAssign: 'btnAdminAssign', adminTabCards: 'btnAdminCards', adminTabLogs: 'btnAdminLogs', adminTabSettings: 'btnAdminSettings' };
+window.switchAdminTab = function (tabId) {
+  document.querySelectorAll('.admin-tab-content').forEach((el) => el.classList.add('hidden'));
+  document.querySelectorAll('.admin-tab-btn').forEach((el) => el.classList.remove('active-tab'));
+  $(tabId)?.classList.remove('hidden');
+  $(ADMIN_TABS[tabId])?.classList.add('active-tab');
   if (tabId === 'adminTabAssign') window.populateAssignTab();
   if (tabId === 'adminTabCards') window.renderExamCards();
-  if (tabId === 'adminTabLogs') listenToLogs();
+  if (tabId === 'adminTabLogs') window.loadLogs();
   if (tabId === 'adminTabSettings') loadSettingsForm();
 };
 
-// -------------------------------------------------------------
-// MANAJEMEN PENGGUNA (TAMBAH, EDIT, RESET PASSWORD, TEMPLATE EXCEL)
-// -------------------------------------------------------------
+// ------------------------------------------------------------------
+// DATA MASTER (satu listener per koleksi, tanpa listener bersarang)
+// ------------------------------------------------------------------
+let users = [], classes = [], subjects = [];
 
-function generateSecureRandomPassword() {
-  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
-  let pass = '';
-  for (let i = 0; i < 7; i++) {
-    pass += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return pass;
+function listenToMasterData() {
+  listen('users', collection(db, 'users'), (s) => {
+    users = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+    window.filterUserTableUI(); renderClassTable(); window.renderTeacherAssignmentUI();
+    if (!$('adminTabCards')?.classList.contains('hidden')) window.renderExamCards();
+  });
+  listen('classes', collection(db, 'classes'), (s) => {
+    classes = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.code.localeCompare(b.code));
+    renderClassTable(); populateClassOptions();
+  });
+  listen('subjects', collection(db, 'subjects'), (s) => {
+    subjects = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.code.localeCompare(b.code));
+    renderSubjectTable();
+  });
 }
 
-// FIX 1: FUNGSI UNDUH TEMPLATE EXCEL PENGGUNA
-window.downloadUserTemplate = function() {
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat. Mohon muat ulang halaman.");
-  }
+function populateClassOptions() {
+  const opts = classes.map((c) => `<option value="${esc(c.code)}">${esc(c.code)}</option>`).join('');
+  const all = `<option value="">Semua Kelas</option>`;
+  if ($('userClass')) $('userClass').innerHTML = opts;
+  if ($('filterUserClass')) $('filterUserClass').innerHTML = all + opts;
+  if ($('cardClassFilter')) $('cardClassFilter').innerHTML = all + opts;
+}
 
-  const templateData = [
-    {
-      "Nama Lengkap": "Ahmad Abdullah",
-      "Username": "ahmad01",
-      "Role": "siswa",
-      "NISN": "0012345678",
-      "Kelas": "VII",
-      "Password": "123"
-    },
-    {
-      "Nama Lengkap": "Arham Ramlan",
-      "Username": "arham",
-      "Role": "guru",
-      "NISN": "",
-      "Kelas": "",
-      "Password": "guru123"
-    }
-  ];
+// ---------- Pengguna ----------
+const tmpl = (rows, cols, msg) => rows.length ? rows.join('') : `<tr><td colspan="${cols}" class="p-4 text-center text-slate-400">${msg}</td></tr>`;
 
-  const worksheet = XLSX.utils.json_to_sheet(templateData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Template Pengguna");
-
-  worksheet['!cols'] = [
-    { wch: 30 },
-    { wch: 18 },
-    { wch: 12 },
-    { wch: 15 },
-    { wch: 10 },
-    { wch: 15 }
-  ];
-
-  XLSX.writeFile(workbook, "Template_Import_Pengguna_CBT.xlsx");
+window.filterUserTableUI = function () {
+  const q = ($('searchUser')?.value || '').toLowerCase().trim();
+  const role = $('filterRole')?.value || '';
+  const cls = $('filterUserClass')?.value || '';
+  const list = users.filter((u) =>
+    (!q || [u.name, u.username, u.nisn].some((v) => String(v || '').toLowerCase().includes(q))) &&
+    (!role || u.role === role) && (!cls || u.class === cls));
+  $('userTableBody').innerHTML = tmpl(list.map((u, i) => {
+    const isAdmin = u.username === 'admin', on = u.active !== false, pid = `userPass_${i}`;
+    return `<tr class="border-b text-xs">
+      <td class="p-2.5"><strong class="text-slate-800 block">${esc(u.name || u.username)}</strong>
+        <span class="text-[10px] text-slate-500">Username: <code class="font-bold text-blue-900">${esc(u.username)}</code>${u.nisn ? ` | NISN: ${esc(u.nisn)}` : ''}</span>
+        <div class="flex items-center gap-1 mt-1"><span class="text-[10px] text-slate-400">Pass:</span>
+          <input type="password" id="${pid}" value="${esc(u.password || '******')}" readonly class="bg-slate-100 border px-1 py-0.5 rounded text-[10px] w-20 font-mono outline-none">
+          <button onclick="togglePasswordVisibility('${pid}')" class="text-slate-500 hover:text-blue-800 text-[11px] px-1"><i class="fa-solid fa-eye"></i></button></div></td>
+      <td class="p-2.5"><span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase text-[10px]">${esc(u.role)}</span>
+        ${u.class ? `<span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] ml-1 font-semibold">${esc(u.class)}</span>` : ''}</td>
+      <td class="p-2.5"><button onclick="toggleUserActive('${u.id}')" ${isAdmin ? 'disabled' : ''} class="px-2 py-0.5 rounded text-[10px] font-bold ${on ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${on ? '● Aktif' : '○ Nonaktif'}</button></td>
+      <td class="p-2.5 text-center space-x-1">${isAdmin ? '<span class="text-[10px] text-slate-400 italic">Terproteksi</span>' : `
+        <button onclick="editUserDoc('${u.id}')" class="btn btn-sm btn-amber">Edit</button>
+        <button onclick="resetPasswordUser('${u.id}')" class="btn btn-sm btn-blue">Reset Pass</button>
+        <button onclick="deleteUserDoc('${u.id}')" class="btn btn-sm btn-red">Hapus</button>`}</td></tr>`;
+  }), 4, 'Tidak ada pengguna.');
 };
 
-window.handleSaveUser = async function(e) {
-  e.preventDefault();
-  const editId = document.getElementById('editUserId')?.value;
-  const name = document.getElementById('userName').value.trim();
-  const username = document.getElementById('userUsername').value.trim().toLowerCase();
-  const role = document.getElementById('userRole').value;
-  const nisn = document.getElementById('userNisn')?.value.trim() || '';
-  const userClass = document.getElementById('userClass')?.value || '';
-  const manualPass = document.getElementById('userPassword')?.value.trim();
+window.generateAutoPassword = () => { const el = $('userPassword'); el.type = 'text'; el.value = genPassword(); };
+window.togglePasswordVisibility = (id) => { const el = $(id); if (el) el.type = el.type === 'password' ? 'text' : 'password'; };
+window.toggleRoleFields = () => $('fieldSiswa')?.classList.toggle('hidden', $('userRole').value !== 'siswa');
 
-  if (!name || !username) return alert("Nama Lengkap dan Username wajib diisi!");
-  if (role === 'siswa' && !nisn) return alert("NISN wajib diisi untuk siswa!");
+window.resetUserForm = function () {
+  ['editUserId', 'userName', 'userUsername', 'userPassword', 'userNisn'].forEach((id) => { if ($(id)) $(id).value = ''; });
+  $('userUsername').disabled = false; $('userPassword').type = 'password'; $('userRole').value = 'siswa';
+  $('userFormTitle').innerHTML = '<i class="fa-solid fa-user-plus text-blue-600 mr-2"></i>Tambah Pengguna Baru';
+  window.toggleRoleFields();
+};
+
+window.editUserDoc = function (id) {
+  const u = users.find((x) => x.id === id); if (!u) return;
+  $('editUserId').value = id; $('userName').value = u.name || '';
+  $('userUsername').value = u.username || ''; $('userUsername').disabled = true;
+  $('userRole').value = u.role || 'siswa'; $('userNisn').value = u.nisn || ''; $('userClass').value = u.class || '';
+  $('userPassword').value = '';
+  $('userFormTitle').innerHTML = '<i class="fa-solid fa-user-pen text-amber-600 mr-2"></i>Edit Pengguna';
+  window.toggleRoleFields(); $('userName').focus();
+};
+
+window.handleSaveUser = async function (e) {
+  e.preventDefault();
+  const editId = $('editUserId').value;
+  const name = $('userName').value.trim();
+  const username = $('userUsername').value.trim().toLowerCase();
+  const role = $('userRole').value;
+  const nisn = $('userNisn').value.trim();
+  const cls = role === 'siswa' ? $('userClass').value : '';
+  const pass = $('userPassword').value.trim();
+
+  if (!name || !username) return alert('Nama Lengkap dan Username wajib diisi!');
+  if (!/^[a-z0-9._-]+$/.test(username)) return alert('Username hanya boleh huruf kecil, angka, titik, strip, dan garis bawah (tanpa spasi).');
+  if (role === 'siswa' && !nisn) return alert('NISN wajib diisi untuk siswa!');
+  if (pass && pass.length < 4) return alert('Password minimal 4 karakter!');
 
   try {
     if (editId) {
-      const updatePayload = {
-        name,
-        role,
-        nisn,
-        class: userClass,
-        updatedAt: Date.now()
-      };
-
-      if (manualPass) {
-        updatePayload.password = manualPass;
-      }
-
-      await updateDoc(doc(db, "users", editId), updatePayload);
-      alert(`Data pengguna ${name} berhasil diperbarui!${manualPass ? ' (Password diubah)' : ''}`);
+      await updateDoc(doc(db, 'users', editId), { name, role, nisn, class: cls, updatedAt: Date.now(), ...(pass ? { password: pass, mustChangePassword: true } : {}) });
+      alert(`Data ${name} berhasil diperbarui!${pass ? ' (Password diubah)' : ''}`);
       logActivity(`Memperbarui profil pengguna: ${username}`);
     } else {
-      const qUser = query(collection(db, "users"), where("username", "==", username));
-      const snapUser = await getDocs(qUser);
-
-      if (!snapUser.empty) {
-        return alert(`Username "${username}" sudah digunakan!`);
-      }
-
-      const finalPassword = manualPass || generateSecureRandomPassword();
-      const newDocRef = doc(collection(db, "users"));
-      
-      await setDoc(newDocRef, {
-        name,
-        username,
-        role,
-        nisn,
-        class: userClass,
-        password: finalPassword,
-        active: true,
-        mustChangePassword: true,
-        createdAt: Date.now()
-      });
-
-      alert(`Pengguna Berhasil Ditambahkan!\n\nNama: ${name}\nUsername: ${username}\nPassword: ${finalPassword}`);
+      if (users.some((u) => u.username === username)) return alert(`Username "${username}" sudah digunakan!`);
+      const password = pass || genPassword();
+      await setDoc(doc(collection(db, 'users')), { name, username, role, nisn, class: cls, password, active: true, mustChangePassword: true, createdAt: Date.now() });
+      alert(`Pengguna berhasil ditambahkan!\n\nNama: ${name}\nUsername: ${username}\nPassword: ${password}`);
       logActivity(`Menambahkan pengguna baru: ${username} (${role})`);
     }
-
     window.resetUserForm();
-  } catch (err) {
-    alert("Gagal menyimpan pengguna: " + err.message);
-  }
+  } catch (err) { alert('Gagal menyimpan pengguna: ' + err.message); }
 };
 
-// FUNGSI IMPOR PENGGUNA DARI FILE EXCEL (.XLSX)
-window.handleImportUsersExcel = function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+window.resetPasswordUser = async function (id) {
+  const u = users.find((x) => x.id === id); if (!u) return;
+  if (!confirm(`Reset password untuk ${u.username}? Kata sandi acak baru akan dibuat.`)) return;
+  const password = genPassword();
+  try {
+    await updateDoc(doc(db, 'users', id), { password, mustChangePassword: true, updatedAt: Date.now() });
+    alert(`Password berhasil di-reset!\n\nUsername: ${u.username}\nPassword Baru: ${password}`);
+    logActivity(`Mereset kata sandi pengguna: ${u.username}`);
+  } catch (err) { alert('Gagal mereset password: ' + err.message); }
+};
 
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat. Mohon muat ulang halaman.");
-  }
+window.toggleUserActive = async function (id) {
+  const u = users.find((x) => x.id === id); if (!u) return;
+  if (u.username === 'admin') return alert('Akun Admin Utama tidak bisa dinonaktifkan!');
+  const next = u.active === false;
+  if (!confirm(`Ubah status akun ${u.username} menjadi ${next ? 'Aktif' : 'Nonaktif'}?`)) return;
+  try { await updateDoc(doc(db, 'users', id), { active: next }); logActivity(`Mengubah status akun ${u.username} menjadi ${next ? 'Aktif' : 'Nonaktif'}`); }
+  catch (err) { alert('Gagal mengubah status: ' + err.message); }
+};
 
-  const reader = new FileReader();
-  reader.onload = async function(evt) {
+window.deleteUserDoc = async function (id) {
+  const u = users.find((x) => x.id === id); if (!u) return;
+  if (u.username === 'admin') return alert('Akun Admin Utama tidak bisa dihapus!');
+  if (!confirm(`Hapus akun ${u.username} secara permanen?`)) return;
+  try { await deleteDoc(doc(db, 'users', id)); logActivity(`Menghapus akun pengguna: ${u.username}`); }
+  catch (err) { alert('Gagal menghapus pengguna: ' + err.message); }
+};
+
+// ---------- Excel helper ----------
+function readExcelRows(file, onRows) {
+  if (typeof XLSX === 'undefined') return alert('Pustaka SheetJS (XLSX) belum dimuat. Mohon muat ulang halaman.');
+  const r = new FileReader();
+  r.onload = async (evt) => {
     try {
-      const data = new Uint8Array(evt.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const jsonUsers = XLSX.utils.sheet_to_json(worksheet);
-
-      if (!jsonUsers || jsonUsers.length === 0) {
-        return alert("File Excel kosong atau format kolom tidak sesuai!");
-      }
-
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const row of jsonUsers) {
-        const name = row["Nama Lengkap"] ? String(row["Nama Lengkap"]).trim() : "";
-        const username = row["Username"] ? String(row["Username"]).trim().toLowerCase() : "";
-        const role = row["Role"] ? String(row["Role"]).trim().toLowerCase() : "siswa";
-        const nisn = row["NISN"] ? String(row["NISN"]).trim() : "";
-        const userClass = row["Kelas"] ? String(row["Kelas"]).trim().toUpperCase() : "";
-        const password = row["Password"] ? String(row["Password"]).trim() : "123456";
-
-        if (name && username) {
-          // Buat dokumen pengguna baru di koleksi 'users'
-          const newDocRef = doc(collection(db, "users"));
-          await setDoc(newDocRef, {
-            name,
-            username,
-            role,
-            nisn,
-            class: userClass,
-            password,
-            active: true,
-            mustChangePassword: true,
-            createdAt: Date.now()
-          });
-          successCount++;
-        } else {
-          failCount++;
-        }
-      }
-
-      alert(`Impor Selesai!\n✔ ${successCount} Pengguna Ditambahkan.\n${failCount > 0 ? `✖ ${failCount} Baris Gagal (Nama/Username Kosong).` : ''}`);
-      logActivity(`Mengimpor ${successCount} pengguna baru dari file Excel.`);
-      e.target.value = '';
-    } catch (err) {
-      alert("Gagal memproses file Excel: " + err.message);
-    }
+      const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      if (!rows.length) return alert('File Excel kosong atau format kolom tidak sesuai!');
+      await onRows(rows);
+    } catch (err) { alert('Gagal memproses file Excel: ' + err.message); }
   };
+  r.readAsArrayBuffer(file);
+}
+function downloadSheet(rows, sheet, filename, cols) {
+  if (typeof XLSX === 'undefined') return alert('Pustaka SheetJS (XLSX) belum dimuat. Mohon muat ulang halaman.');
+  const ws = XLSX.utils.json_to_sheet(rows); ws['!cols'] = cols.map((wch) => ({ wch }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, sheet); XLSX.writeFile(wb, filename);
+}
 
-  reader.readAsArrayBuffer(file);
-};
+window.downloadUserTemplate = () => downloadSheet([
+  { 'Nama Lengkap': 'Ahmad Abdullah', Username: 'ahmad01', Role: 'siswa', NISN: '0012345678', Kelas: 'VII-A', Password: '' },
+  { 'Nama Lengkap': 'Arham Ramlan', Username: 'arham', Role: 'guru', NISN: '', Kelas: '', Password: 'guru123' }
+], 'Template Pengguna', 'Template_Import_Pengguna_CBT.xlsx', [30, 18, 12, 15, 10, 15]);
 
-window.resetPasswordUser = async function(userId, username) {
-  if (confirm(`Reset password untuk pengguna ${username}? Kata sandi acak baru akan dibuat.`)) {
-    const newTempPassword = generateSecureRandomPassword();
-    try {
-      await updateDoc(doc(db, "users", userId), { 
-        password: newTempPassword,
-        mustChangePassword: true,
-        updatedAt: Date.now() 
-      });
-
-      alert(`Password Berhasil Di-reset!\n\nUsername: ${username}\nPassword Baru Sementara: ${newTempPassword}`);
-      logActivity(`Mereset kata sandi pengguna: ${username}`);
-    } catch (err) {
-      alert("Gagal mereset password: " + err.message);
-    }
-  }
-};
-
-window.editUserDoc = async function(userId) {
-  const docSnap = await getDoc(doc(db, "users", userId));
-  if (docSnap.exists()) {
-    const u = docSnap.data();
-    if (document.getElementById('editUserId')) document.getElementById('editUserId').value = userId;
-    if (document.getElementById('userName')) document.getElementById('userName').value = u.name || '';
-    if (document.getElementById('userUsername')) {
-      document.getElementById('userUsername').value = u.username || '';
-      document.getElementById('userUsername').disabled = true;
-    }
-    if (document.getElementById('userRole')) document.getElementById('userRole').value = u.role || 'siswa';
-    if (document.getElementById('userNisn')) document.getElementById('userNisn').value = u.nisn || '';
-    if (document.getElementById('userClass')) document.getElementById('userClass').value = u.class || '';
-    window.toggleRoleFields();
-  }
-};
-
-window.resetUserForm = function() {
-  if (document.getElementById('editUserId')) document.getElementById('editUserId').value = '';
-  if (document.getElementById('userName')) document.getElementById('userName').value = '';
-  if (document.getElementById('userUsername')) {
-    document.getElementById('userUsername').value = '';
-    document.getElementById('userUsername').disabled = false;
-  }
-  if (document.getElementById('userPassword')) document.getElementById('userPassword').value = '';
-  if (document.getElementById('userNisn')) document.getElementById('userNisn').value = '';
-};
-
-window.toggleRoleFields = function() {
-  const role = document.getElementById('userRole')?.value;
-  const fieldSiswa = document.getElementById('fieldSiswa');
-  if (fieldSiswa) {
-    if (role === 'siswa') fieldSiswa.classList.remove('hidden');
-    else fieldSiswa.classList.add('hidden');
-  }
-};
-
-window.toggleUserActive = async function(userId, currentStatus, username) {
-  if (username === 'admin') return alert("Akun Admin Utama tidak bisa dinonaktifkan!");
-
-  if (confirm(`Ubah status akun ${username} menjadi ${!currentStatus ? 'Aktif' : 'Nonaktif'}?`)) {
-    try {
-      await updateDoc(doc(db, "users", userId), { active: !currentStatus });
-      logActivity(`Mengubah status akun ${username} menjadi ${!currentStatus ? 'Aktif' : 'Nonaktif'}`);
-    } catch (err) {
-      alert("Gagal mengubah status: " + err.message);
-    }
-  }
-};
-
-window.deleteUserDoc = async function(userId, username) {
-  if (username === 'admin') return alert("Akun Admin Utama tidak bisa dihapus!");
-
-  if (confirm(`Apakah Anda YAKIN ingin menghapus akun ${username} secara permanen?`)) {
-    try {
-      await deleteDoc(doc(db, "users", userId));
-      alert(`Akun ${username} berhasil dihapus.`);
-      logActivity(`Menghapus akun pengguna: ${username}`);
-    } catch (err) {
-      alert("Gagal menghapus pengguna: " + err.message);
-    }
-  }
-};
-
-window.togglePasswordVisibility = function(elementId) {
-  const el = document.getElementById(elementId);
-  if (el) el.type = el.type === "password" ? "text" : "password";
-};
-
-// -------------------------------------------------------------
-// MASTER KELAS, MAPEL & HITUNG PENGGUNA REAL-TIME
-// -------------------------------------------------------------
-
-let cachedUsersList = []; // Menyimpan data pengguna real-time
-
-function listenToMasterData() {
-  onSnapshot(collection(db, "users"), (userSnap) => {
-    cachedUsersList = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    // Panggil penyaringan saat data diperbarui dari Firestore
-    window.filterUserTableUI();
-    
-    onSnapshot(collection(db, "classes"), (classSnap) => {
-      const classes = classSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderClassTable(classes, cachedUsersList);
-      populateClassOptions(classes);
+window.handleImportUsersExcel = function (e) {
+  const file = e.target.files[0]; if (!file) return;
+  readExcelRows(file, async (rows) => {
+    const taken = new Set(users.map((u) => u.username));
+    const toSave = [], errors = [];
+    rows.forEach((r, i) => {
+      const name = String(r['Nama Lengkap'] || '').trim();
+      const username = String(r.Username || '').trim().toLowerCase();
+      let role = String(r.Role || 'siswa').trim().toLowerCase();
+      const nisn = String(r.NISN || '').trim();
+      const cls = String(r.Kelas || '').trim().toUpperCase();
+      if (!name || !username) return errors.push(`Baris ${i + 2}: nama/username kosong`);
+      if (!/^[a-z0-9._-]+$/.test(username)) return errors.push(`Baris ${i + 2}: username "${username}" tidak valid`);
+      if (taken.has(username)) return errors.push(`Baris ${i + 2}: username "${username}" sudah ada`);
+      if (!['siswa', 'guru', 'admin'].includes(role)) role = 'siswa';
+      if (role === 'siswa' && cls && !classes.some((c) => c.code === cls)) errors.push(`Baris ${i + 2}: kelas "${cls}" belum ada di Master Kelas (tetap disimpan)`);
+      taken.add(username);
+      toSave.push({ name, username, role, nisn, class: cls, password: String(r.Password || '').trim() || genPassword(), active: true, mustChangePassword: true, createdAt: Date.now() });
     });
-  });
-
-  onSnapshot(collection(db, "subjects"), (snapshot) => {
-    const subjects = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderSubjectTable(subjects);
-  });
-}
-
-window.filterUserTableUI = function() {
-  const searchInput = (document.getElementById('searchUser')?.value || '').toLowerCase().trim();
-  const roleFilter = (document.getElementById('filterRole')?.value || '').toLowerCase().trim();
-  const classFilter = (document.getElementById('filterUserClass')?.value || '').trim();
-
-  let filtered = cachedUsersList.filter(u => {
-    // Match Search Name / Username / NISN
-    const nameMatch = (u.name || '').toLowerCase().includes(searchInput);
-    const usernameMatch = (u.username || '').toLowerCase().includes(searchInput);
-    const nisnMatch = (u.nisn || '').toLowerCase().includes(searchInput);
-    const matchesSearch = !searchInput || (nameMatch || usernameMatch || nisnMatch);
-
-    // Match Role (Semua Peran / Admin / Guru / Siswa)
-    const matchesRole = !roleFilter || (u.role || '').toLowerCase() === roleFilter;
-
-    // Match Class (Semua Kelas / VII / VIII / IX / VII-A dst.)
-    const matchesClass = !classFilter || (u.class || '') === classFilter;
-
-    return matchesSearch && matchesRole && matchesClass;
-  });
-
-  renderUserTable(filtered);
-};
-
-function renderClassTable(classes, users) {
-  const tbody = document.getElementById('classTableBody');
-  if (!tbody) return;
-
-  tbody.innerHTML = classes.length ? classes.map(c => {
-    const studentCount = users.filter(u => u.role === 'siswa' && u.class === c.code).length;
-    return `
-      <tr class="border-b text-xs">
-        <td class="p-2.5 font-bold text-blue-900">${c.code}</td>
-        <td class="p-2.5">Tingkat ${c.level}</td>
-        <td class="p-2.5">${c.homeroom || '-'}</td>
-        <td class="p-2.5 font-bold text-slate-700">${studentCount} Siswa</td>
-        <td class="p-2.5 text-center space-x-1">
-          <button onclick="deleteClass('${c.code}', ${studentCount})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
-        </td>
-      </tr>
-    `;
-  }).join('') : `<tr><td colspan="5" class="p-4 text-center text-slate-400">Belum ada kelas.</td></tr>`;
-}
-
-window.deleteClass = async function(code, studentCount) {
-  if (studentCount > 0) {
-    return alert(`Gagal Menghapus: Kelas ${code} masih memiliki ${studentCount} siswa terdaftar!`);
-  }
-  if (confirm(`Hapus kelas ${code}?`)) {
-    await deleteDoc(doc(db, "classes", code));
-    logActivity(`Menghapus Master Kelas: ${code}`);
-  }
-};
-
-window.handleSaveClass = async function(e) {
-  e.preventDefault();
-  const code = document.getElementById('classNameInput').value.trim().toUpperCase();
-  const level = document.getElementById('classLevelInput').value;
-  const homeroom = document.getElementById('classHomeroomInput').value.trim() || '-';
-
-  if (!code) return alert("Kode kelas wajib diisi!");
-
-  try {
-    await setDoc(doc(db, "classes", code), { code, level, homeroom, updatedAt: Date.now() });
-    alert(`Kelas ${code} berhasil disimpan!`);
-    document.getElementById('classNameInput').value = '';
-    document.getElementById('classHomeroomInput').value = '';
-    logActivity(`Menyimpan Master Kelas: ${code}`);
-  } catch (err) {
-    alert("Gagal menyimpan kelas: " + err.message);
-  }
-};
-
-function renderSubjectTable(subjects) {
-  const tbody = document.getElementById('subjectTableBody');
-  if (!tbody) return;
-
-  tbody.innerHTML = subjects.length ? subjects.map(s => `
-    <tr class="border-b text-xs">
-      <td class="p-2.5 font-bold">${s.code}</td>
-      <td class="p-2.5">${s.name}</td>
-      <td class="p-2.5 text-center">
-        <button onclick="deleteSubject('${s.code}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px]">Hapus</button>
-      </td>
-    </tr>
-  `).join('') : `<tr><td colspan="3" class="p-4 text-center text-slate-400">Belum ada mapel.</td></tr>`;
-}
-
-window.handleSaveSubject = async function(e) {
-  e.preventDefault();
-  const code = document.getElementById('subjectCodeInput').value.trim().toUpperCase();
-  const name = document.getElementById('subjectNameInput').value.trim();
-
-  if (!code || !name) return alert("Kode dan nama mapel wajib diisi!");
-
-  try {
-    await setDoc(doc(db, "subjects", code), { code, name, updatedAt: Date.now() });
-    alert(`Mapel ${name} berhasil disimpan!`);
-    document.getElementById('subjectCodeInput').value = '';
-    document.getElementById('subjectNameInput').value = '';
-    logActivity(`Menyimpan Master Mapel: ${name}`);
-  } catch (err) {
-    alert("Gagal menyimpan mapel: " + err.message);
-  }
-};
-
-window.deleteSubject = async function(code) {
-  if (confirm(`Hapus mapel ${code}?`)) {
-    await deleteDoc(doc(db, "subjects", code));
-    logActivity(`Menghapus Master Mapel: ${code}`);
-  }
-};
-
-function renderUserTable(users) {
-  const tbody = document.getElementById('userTableBody');
-  if (!tbody) return;
-
-  tbody.innerHTML = users.length ? users.map((u, i) => {
-    const isAdmin = u.username === 'admin';
-    const passInputId = `userPass_${i}`;
-    const userPass = u.password || '******';
-
-    return `
-      <tr class="border-b text-xs">
-        <td class="p-2.5">
-          <strong class="text-slate-800 block">${u.name || u.username}</strong>
-          <span class="text-[10px] text-slate-500">Username: <code class="font-bold text-blue-900">${u.username}</code> ${u.nisn ? `| NISN: ${u.nisn}` : ''}</span>
-          <div class="flex items-center gap-1 mt-1">
-            <span class="text-[10px] text-slate-400">Pass:</span>
-            <input type="password" id="${passInputId}" value="${userPass}" readonly class="bg-slate-100 border px-1 py-0.5 rounded text-[10px] w-20 font-mono outline-none">
-            <button onclick="togglePasswordVisibility('${passInputId}')" title="Lihat Password" class="text-slate-500 hover:text-blue-800 text-[11px] px-1">
-              <i class="fa-solid fa-eye"></i>
-            </button>
-          </div>
-        </td>
-        <td class="p-2.5">
-          <span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase text-[10px]">${u.role}</span>
-          ${u.class ? `<span class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] ml-1 font-semibold">${u.class}</span>` : ''}
-        </td>
-        <td class="p-2.5">
-          <button onclick="toggleUserActive('${u.id}', ${u.active !== false}, '${u.username}')" ${isAdmin ? 'disabled' : ''} class="px-2 py-0.5 rounded text-[10px] font-bold ${u.active !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
-            ${u.active !== false ? '● Aktif' : '○ Nonaktif'}
-          </button>
-        </td>
-        <td class="p-2.5 text-center space-x-1">
-          ${isAdmin ? `<span class="text-[10px] text-slate-400 italic">Terproteksi</span>` : `
-            <button onclick="editUserDoc('${u.id}')" class="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Edit</button>
-            <button onclick="resetPasswordUser('${u.id}', '${u.username}')" class="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Reset Pass</button>
-            <button onclick="deleteUserDoc('${u.id}', '${u.username}')" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
-          `}
-        </td>
-      </tr>
-    `;
-  }).join('') : `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada pengguna.</td></tr>`;
-}
-
-function populateClassOptions(classes) {
-  const selects = [document.getElementById('userClass'), document.getElementById('filterUserClass'), document.getElementById('cardClassFilter')];
-  selects.forEach(s => {
-    if (s) {
-      s.innerHTML = (s.id === 'filterUserClass' || s.id === 'cardClassFilter' ? `<option value="">Semua Kelas</option>` : '') + 
-        classes.map(c => `<option value="${c.code}">${c.code}</option>`).join('');
-    }
-  });
-}
-
-// -------------------------------------------------------------
-// TEMPLATE & IMPOR EXCEL MASTER MATA PELAJARAN
-// -------------------------------------------------------------
-
-// 1. Unduh Template Excel Master Mapel
-window.downloadSubjectTemplate = function() {
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat. Mohon refresh halaman.");
-  }
-
-  const templateData = [
-    {
-      "Kode Mapel": "PAI",
-      "Nama Mata Pelajaran": "Pendidikan Agama Islam"
-    },
-    {
-      "Kode Mapel": "MTK",
-      "Nama Mata Pelajaran": "Matematika"
-    },
-    {
-      "Kode Mapel": "BINDO",
-      "Nama Mata Pelajaran": "Bahasa Indonesia"
-    },
-    {
-      "Kode Mapel": "BING",
-      "Nama Mata Pelajaran": "Bahasa Inggris"
-    }
-  ];
-
-  const worksheet = XLSX.utils.json_to_sheet(templateData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Master Mapel");
-
-  worksheet['!cols'] = [
-    { wch: 15 },
-    { wch: 35 }
-  ];
-
-  XLSX.writeFile(workbook, "Template_Master_Mata_Pelajaran.xlsx");
-};
-
-// 2. Impor File Excel Master Mapel ke Cloud Firestore
-window.handleImportSubjectsExcel = function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (typeof XLSX === 'undefined') {
-    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
-  }
-
-  const reader = new FileReader();
-  reader.onload = async function(evt) {
-    try {
-      const data = new Uint8Array(evt.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const jsonSubjects = XLSX.utils.sheet_to_json(worksheet);
-
-      if (!jsonSubjects || jsonSubjects.length === 0) {
-        return alert("File Excel kosong atau format kolom tidak sesuai!");
-      }
-
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const row of jsonSubjects) {
-        const code = row["Kode Mapel"] ? String(row["Kode Mapel"]).trim().toUpperCase() : "";
-        const name = row["Nama Mata Pelajaran"] ? String(row["Nama Mata Pelajaran"]).trim() : "";
-
-        if (code && name) {
-          await setDoc(doc(db, "subjects", code), {
-            code,
-            name,
-            updatedAt: Date.now()
-          });
-          successCount++;
-        } else {
-          failCount++;
-        }
-      }
-
-      alert(`Impor Master Mapel Selesai!\n✔ ${successCount} Mapel Berhasil Ditambahkan/Diperbarui.\n${failCount > 0 ? `✖ ${failCount} Baris Gagal (Kode/Nama Kosong).` : ''}`);
-      if (typeof logActivity === 'function') {
-        logActivity(`Mengimpor ${successCount} Master Mapel dari file Excel.`);
-      }
-      e.target.value = '';
-    } catch (err) {
-      alert("Gagal memproses file Excel: " + err.message);
-    }
-  };
-
-  reader.readAsArrayBuffer(file);
-};
-
-
-// -------------------------------------------------------------
-// PENUGASAN GURU
-// -------------------------------------------------------------
-
-window.populateAssignTab = async function() {
-  try {
-    const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "guru")));
-    const teachers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
-    const teacherSelect = document.getElementById('assignTeacherSelect');
-    if (teacherSelect) {
-      teacherSelect.innerHTML = teachers.length 
-        ? teachers.map(g => `<option value="${g.id}">${g.name || g.username}</option>`).join('')
-        : `<option value="">-- Belum Ada Guru --</option>`;
-    }
-
-    const subjectsSnap = await getDocs(collection(db, "subjects"));
-    const subjects = subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
-    const subSelect = document.getElementById('assignSubjectSelect');
-    if (subSelect) {
-      subSelect.innerHTML = subjects.length 
-        ? subjects.map(s => `<option value="${s.code}">${s.name} (${s.code})</option>`).join('')
-        : `<option value="">-- Belum Ada Mapel --</option>`;
-    }
-
-    const classesSnap = await getDocs(collection(db, "classes"));
-    const classes = classesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
-    const classBox = document.getElementById('assignClassesBox');
-    if (classBox) {
-      classBox.innerHTML = classes.length 
-        ? classes.map(c => `
-          <label class="flex items-center text-xs space-x-2 py-0.5">
-            <input type="checkbox" name="assignCls" value="${c.code}" class="rounded border-slate-300">
-            <span>Kelas ${c.code}</span>
-          </label>
-        `).join('')
-        : `<p class="text-xs text-slate-400">Belum ada kelas.</p>`;
-    }
-
-    window.renderTeacherAssignmentUI();
-  } catch (err) {
-    console.error("Gagal memuat form penugasan:", err);
-  }
-};
-
-window.addTeacherAssignment = async function() {
-  const teacherId = document.getElementById('assignTeacherSelect')?.value;
-  const subjectCode = document.getElementById('assignSubjectSelect')?.value;
-  const selectedClasses = Array.from(document.querySelectorAll('input[name="assignCls"]:checked')).map(cb => cb.value);
-
-  if (!teacherId || !subjectCode || !selectedClasses.length) return alert('Lengkapi pilihan Guru, Mapel, dan Kelas!');
-
-  try {
-    const teacherRef = doc(db, "users", teacherId);
-    const teacherSnap = await getDoc(teacherRef);
-
-    if (teacherSnap.exists()) {
-      let assignments = teacherSnap.data().teacherAssignments || [];
-      const existingIndex = assignments.findIndex(a => a.subject === subjectCode);
-
-      if (existingIndex > -1) {
-        assignments[existingIndex].classes = Array.from(new Set([...assignments[existingIndex].classes, ...selectedClasses]));
-      } else {
-        assignments.push({ subject: subjectCode, classes: selectedClasses });
-      }
-
-      await updateDoc(teacherRef, { teacherAssignments: assignments });
-      alert("Penugasan guru berhasil disimpan!");
-      logActivity(`Memperbarui penugasan guru: ${teacherSnap.data().name}`);
-      window.renderTeacherAssignmentUI();
-    }
-  } catch (err) {
-    alert("Gagal menyimpan penugasan: " + err.message);
-  }
-};
-
-window.renderTeacherAssignmentUI = async function() {
-  const tbody = document.getElementById('teacherAssignmentTableBody');
-  if (!tbody) return;
-
-  try {
-    const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "guru")));
-    const teachers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    let rows = [];
-
-    teachers.forEach(g => {
-      if (g.teacherAssignments && g.teacherAssignments.length > 0) {
-        g.teacherAssignments.forEach((a, aIdx) => {
-          rows.push(`
-            <tr class="border-b text-xs">
-              <td class="p-2.5 font-bold text-slate-800">${g.name || g.username}</td>
-              <td class="p-2.5 font-semibold text-blue-900">${a.subject}</td>
-              <td class="p-2.5">${a.classes ? a.classes.join(', ') : '-'}</td>
-              <td class="p-2.5 text-center">
-                <button onclick="removeTeacherAssignment('${g.id}', ${aIdx})" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Hapus</button>
-              </td>
-            </tr>
-          `);
-        });
-      }
-    });
-
-    tbody.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="p-4 text-center text-slate-400">Belum ada penugasan guru.</td></tr>`;
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-window.removeTeacherAssignment = async function(teacherId, assignIndex) {
-  if (confirm("Hapus penugasan ini?")) {
-    const teacherRef = doc(db, "users", teacherId);
-    const teacherSnap = await getDoc(teacherRef);
-    if (teacherSnap.exists()) {
-      let assignments = teacherSnap.data().teacherAssignments || [];
-      assignments.splice(assignIndex, 1);
-      await updateDoc(teacherRef, { teacherAssignments: assignments });
-      window.renderTeacherAssignmentUI();
-    }
-  }
-};
-
-// -------------------------------------------------------------
-// CETAK KARTU UJIAN
-// -------------------------------------------------------------
-
-window.renderExamCards = async function() {
-  const grid = document.getElementById('examCardsGrid');
-  if (!grid) return;
-
-  const selectedClass = document.getElementById('cardClassFilter')?.value || '';
-  const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "siswa")));
-  const students = usersSnap.docs.map(d => d.data()).filter(s => !selectedClass || s.class === selectedClass);
-
-  const settingsDoc = await getDoc(doc(db, "settings", "academic"));
-  const s = settingsDoc.exists() ? settingsDoc.data() : {};
-
-  if (!students.length) {
-    grid.innerHTML = `<p class="text-xs text-slate-400 p-4">Tidak ada kartu peserta siswa untuk kelas ini.</p>`;
-    return;
-  }
-
-  // Ambil URL dasar web saat ini
-  const baseUrl = window.location.origin + window.location.pathname;
-
-  grid.innerHTML = students.map(st => {
-    const pass = st.password || '123456';
-    // Buat URL Auto-Login unik per siswa
-    const loginUrl = `${baseUrl}?u=${encodeURIComponent(st.username)}&p=${encodeURIComponent(pass)}`;
-    // URL API QR Code
-    const qrApiUrl = `https://quickchart.io/qr?text=${encodeURIComponent(loginUrl)}&size=120&margin=1`;
-
-    return `
-      <div class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs relative">
-        <div class="text-center border-b pb-1">
-          <strong class="uppercase text-[11px] block font-bold text-blue-950">${s.schoolName || 'SMP QUR\'AN AL WAHDAH'}</strong>
-          <span class="text-[9px] text-slate-500 uppercase font-bold">KARTU PESERTA UJIAN CBT T.A ${s.academicYear || '2026/2027'} (${s.semester || 'GANJIL'})</span>
-        </div>
-        
-        <!-- KONTEN KARTU + QR CODE DI KANAN -->
-        <div class="flex justify-between items-center gap-2">
-          <div class="space-y-1 text-[11px] flex-1">
-            <div><strong>Nama:</strong> ${st.name || st.username}</div>
-            <div><strong>NISN / Kelas:</strong> ${st.nisn || '-'} / ${st.class || '-'}</div>
-            <div><strong>Username:</strong> <code class="font-bold text-blue-900">${st.username}</code></div>
-            <div><strong>Password:</strong> <code class="font-bold text-rose-700">${pass}</code></div>
-          </div>
-          
-          <!-- GAMBAR QR CODE -->
-          <div class="text-center">
-            <img src="${qrApiUrl}" alt="QR Login" class="w-20 h-20 border rounded p-0.5 bg-white shadow-sm">
-            <span class="text-[8px] text-slate-500 block font-bold mt-0.5">Scan Login</span>
-          </div>
-        </div>
-
-        <div class="border-t pt-1 text-[9px] text-slate-400 text-center font-bold uppercase">
-          Harap Jaga Kerahasiaan Kartu Ujian Ini
-        </div>
-      </div>
-    `;
-  }).join('');
-};
-
-// -------------------------------------------------------------
-// LOG AKTIVITAS & PENGATURAN SYSTEM
-// -------------------------------------------------------------
-
-function listenToLogs() {
-  onSnapshot(collection(db, "logs"), (snapshot) => {
-    const logs = snapshot.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp);
-    const tbody = document.getElementById('adminLogsTableBody');
-    if (!tbody) return;
-
-    tbody.innerHTML = logs.length ? logs.map(l => `
-      <tr class="border-b text-xs">
-        <td class="p-2 font-mono text-[10px] text-slate-500">${l.formattedTime || formatIndonesiaDateTime(l.timestamp)}</td>
-        <td class="p-2 font-bold">${l.user}</td>
-        <td class="p-2">${l.event}</td>
-      </tr>
-    `).join('') : `<tr><td colspan="3" class="p-4 text-center text-slate-400">Belum ada log aktivitas.</td></tr>`;
-  });
-}
-
-async function loadSettingsForm() {
-  const settingsDoc = await getDoc(doc(db, "settings", "academic"));
-  if (settingsDoc.exists()) {
-    const s = settingsDoc.data();
-    if (document.getElementById('settingSchoolName')) document.getElementById('settingSchoolName').value = s.schoolName || '';
-    if (document.getElementById('settingNPSN')) document.getElementById('settingNPSN').value = s.npsn || '';
-    if (document.getElementById('settingYear')) document.getElementById('settingYear').value = s.academicYear || '2026/2027';
-    if (document.getElementById('settingSemester')) document.getElementById('settingSemester').value = s.semester || 'Ganjil';
-  }
-}
-
-window.handleSaveSettings = async function(e) {
-  e.preventDefault();
-  const settingsData = {
-    schoolName: document.getElementById('settingSchoolName').value.trim(),
-    npsn: document.getElementById('settingNPSN').value.trim(),
-    academicYear: document.getElementById('settingYear').value.trim(),
-    semester: document.getElementById('settingSemester').value,
-    updatedAt: Date.now()
-  };
-
-  try {
-    await setDoc(doc(db, "settings", "academic"), settingsData);
-    alert("Pengaturan sekolah berhasil disimpan!");
-    logActivity(`Memperbarui pengaturan sekolah`);
-  } catch (err) {
-    alert("Gagal menyimpan pengaturan: " + err.message);
-  }
-};
-
-function initSettingsListener() {
-  onSnapshot(doc(db, "settings", "academic"), (docSnap) => {
-    if (docSnap.exists()) {
-      const s = docSnap.data();
-      if (document.getElementById('headerSchoolName')) document.getElementById('headerSchoolName').innerText = s.schoolName || "SMP Qur'an Al Wahdah";
-      if (document.getElementById('headerSubTitle')) document.getElementById('headerSubTitle').innerText = `Sistem CBT - Tahun Ajaran ${s.academicYear || '2026/2027'} (${s.semester || 'Ganjil'})`;
-    }
-  });
-}
-
-// FIX 2: FUNGSI EKSPOR (BACKUP) DATABASE KE FILE .JSON
-window.exportDatabaseJson = async function() {
-  try {
-    const collectionsToBackup = ["users", "classes", "subjects", "packages", "schedules", "settings"];
-    const backupData = {
-      backupTimestamp: Date.now(),
-      backupDate: formatIndonesiaDateTime(Date.now()),
-      data: {}
-    };
-
-    for (const colName of collectionsToBackup) {
-      const snap = await getDocs(collection(db, colName));
-      backupData.data[colName] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    }
-
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `Backup_CBT_Database_${Date.now()}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-
-    logActivity("Melakukan Backup Database ke file JSON.");
-    alert("Backup Database Berhasil Diunduh!");
-  } catch (err) {
-    alert("Gagal melakukan backup database: " + err.message);
-  }
-};
-
-// FIX 3: FUNGSI IMPOR (RESTORE) DATABASE DARI FILE .JSON
-window.importDatabaseJson = function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (!confirm("PERINGATAN: Memulihkan database akan menimpa/menambahkan data di Firestore. Apakah Anda yakin ingin melanjutkan?")) {
+    await runChunks(toSave, (u) => setDoc(doc(collection(db, 'users')), u));
+    alert(`Impor selesai!\n✔ ${toSave.length} pengguna ditambahkan.${errors.length ? `\n✖ ${errors.length} catatan:\n${errors.slice(0, 8).join('\n')}${errors.length > 8 ? '\n…' : ''}` : ''}`);
+    logActivity(`Mengimpor ${toSave.length} pengguna dari file Excel.`);
     e.target.value = '';
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = async function(evt) {
-    try {
-      const backupObj = JSON.parse(evt.target.result);
-      if (!backupObj.data) {
-        return alert("Format file backup JSON tidak valid!");
-      }
-
-      let countSuccess = 0;
-      for (const colName in backupObj.data) {
-        const items = backupObj.data[colName];
-        if (Array.isArray(items)) {
-          for (const item of items) {
-            const docId = item.id;
-            const dataToSave = { ...item };
-            delete dataToSave.id;
-
-            if (docId) {
-              await setDoc(doc(db, colName, docId), dataToSave);
-            } else {
-              await addDoc(collection(db, colName), dataToSave);
-            }
-            countSuccess++;
-          }
-        }
-      }
-
-      alert(`Restore Database Selesai!\n✔ ${countSuccess} dokumen berhasil dipulihkan ke Firestore.`);
-      logActivity(`Memulihkan Database dari file JSON (${countSuccess} dokumen).`);
-      e.target.value = '';
-      location.reload();
-
-    } catch (err) {
-      alert("Gagal memulihkan database: " + err.message);
-    }
-  };
-
-  reader.readAsText(file);
+  });
 };
+
+// ---------- Kelas ----------
+function renderClassTable() {
+  const tb = $('classTableBody'); if (!tb) return;
+  const count = {}; users.forEach((u) => { if (u.role === 'siswa') count[u.class] = (count[u.class] || 0) + 1; });
+  tb.innerHTML = tmpl(classes.map((c) => `<tr class="border-b text-xs">
+    <td class="p-2.5 font-bold text-blue-900">${esc(c.code)}</td><td class="p-2.5">Tingkat ${esc(c.level)}</td><td class="p-2.5">${esc(c.homeroom || '-')}</td>
+    <td class="p-2.5 font-bold text-slate-700">${count[c.code] || 0} Siswa</td>
+    <td class="p-2.5 text-center space-x-1"><button onclick="editClass('${esc(c.code)}')" class="btn btn-sm btn-amber">Edit</button>
+      <button onclick="deleteClass('${esc(c.code)}')" class="btn btn-sm btn-red">Hapus</button></td></tr>`), 5, 'Belum ada kelas.');
+}
+window.editClass = (code) => {
+  const c = classes.find((x) => x.code === code); if (!c) return;
+  $('editClassOldCode').value = code; $('classNameInput').value = c.code; $('classNameInput').readOnly = true;
+  $('classLevelInput').value = c.level; $('classHomeroomInput').value = c.homeroom === '-' ? '' : c.homeroom;
+};
+window.handleSaveClass = async function (e) {
+  e.preventDefault();
+  const code = $('classNameInput').value.trim().toUpperCase();
+  if (!code) return alert('Kode kelas wajib diisi!');
+  try {
+    await setDoc(doc(db, 'classes', code), { code, level: $('classLevelInput').value, homeroom: $('classHomeroomInput').value.trim() || '-', updatedAt: Date.now() });
+    logActivity(`Menyimpan Master Kelas: ${code}`);
+    $('editClassOldCode').value = ''; $('classNameInput').value = ''; $('classNameInput').readOnly = false; $('classHomeroomInput').value = '';
+    alert(`Kelas ${code} berhasil disimpan!`);
+  } catch (err) { alert('Gagal menyimpan kelas: ' + err.message); }
+};
+window.deleteClass = async function (code) {
+  const n = users.filter((u) => u.role === 'siswa' && u.class === code).length;
+  if (n) return alert(`Gagal Menghapus: Kelas ${code} masih memiliki ${n} siswa terdaftar!`);
+  if (confirm(`Hapus kelas ${code}?`)) { await deleteDoc(doc(db, 'classes', code)); logActivity(`Menghapus Master Kelas: ${code}`); }
+};
+
+// ---------- Mapel ----------
+function renderSubjectTable() {
+  const tb = $('subjectTableBody'); if (!tb) return;
+  tb.innerHTML = tmpl(subjects.map((s) => `<tr class="border-b text-xs"><td class="p-2.5 font-bold">${esc(s.code)}</td><td class="p-2.5">${esc(s.name)}</td>
+    <td class="p-2.5 text-center space-x-1"><button onclick="editSubject('${esc(s.code)}')" class="btn btn-sm btn-amber">Edit</button>
+      <button onclick="deleteSubject('${esc(s.code)}')" class="btn btn-sm btn-red">Hapus</button></td></tr>`), 3, 'Belum ada mapel.');
+}
+window.editSubject = (code) => {
+  const s = subjects.find((x) => x.code === code); if (!s) return;
+  $('subjectCodeInput').value = s.code; $('subjectCodeInput').readOnly = true; $('subjectNameInput').value = s.name;
+};
+window.handleSaveSubject = async function (e) {
+  e.preventDefault();
+  const code = $('subjectCodeInput').value.trim().toUpperCase(), name = $('subjectNameInput').value.trim();
+  if (!code || !name) return alert('Kode dan nama mapel wajib diisi!');
+  try {
+    await setDoc(doc(db, 'subjects', code), { code, name, updatedAt: Date.now() });
+    logActivity(`Menyimpan Master Mapel: ${name}`);
+    $('subjectCodeInput').value = ''; $('subjectCodeInput').readOnly = false; $('subjectNameInput').value = '';
+    alert(`Mapel ${name} berhasil disimpan!`);
+  } catch (err) { alert('Gagal menyimpan mapel: ' + err.message); }
+};
+window.deleteSubject = async function (code) {
+  if (confirm(`Hapus mapel ${code}?`)) { await deleteDoc(doc(db, 'subjects', code)); logActivity(`Menghapus Master Mapel: ${code}`); }
+};
+window.downloadSubjectTemplate = () => downloadSheet(
+  [['PAI', 'Pendidikan Agama Islam'], ['MTK', 'Matematika'], ['BINDO', 'Bahasa Indonesia'], ['BING', 'Bahasa Inggris']]
+    .map(([k, n]) => ({ 'Kode Mapel': k, 'Nama Mata Pelajaran': n })), 'Master Mapel', 'Template_Master_Mata_Pelajaran.xlsx', [15, 35]);
+window.handleImportSubjectsExcel = function (e) {
+  const file = e.target.files[0]; if (!file) return;
+  readExcelRows(file, async (rows) => {
+    const valid = rows.map((r) => ({ code: String(r['Kode Mapel'] || '').trim().toUpperCase(), name: String(r['Nama Mata Pelajaran'] || '').trim() })).filter((r) => r.code && r.name);
+    await runChunks(valid, (s) => setDoc(doc(db, 'subjects', s.code), { ...s, updatedAt: Date.now() }));
+    alert(`Impor Master Mapel selesai!\n✔ ${valid.length} mapel ditambahkan/diperbarui.${rows.length - valid.length ? `\n✖ ${rows.length - valid.length} baris gagal (kode/nama kosong).` : ''}`);
+    logActivity(`Mengimpor ${valid.length} Master Mapel dari file Excel.`);
+    e.target.value = '';
+  });
+};
+
+// ---------- Penugasan guru ----------
+window.populateAssignTab = function () {
+  const teachers = users.filter((u) => u.role === 'guru');
+  const keep = $('assignTeacherSelect').value;
+  $('assignTeacherSelect').innerHTML = teachers.length ? teachers.map((g) => `<option value="${g.id}">${esc(g.name || g.username)}</option>`).join('') : '<option value="">-- Belum Ada Guru --</option>';
+  if (keep) $('assignTeacherSelect').value = keep;
+  $('assignSubjectSelect').innerHTML = subjects.length ? subjects.map((s) => `<option value="${esc(s.code)}">${esc(s.name)} (${esc(s.code)})</option>`).join('') : '<option value="">-- Belum Ada Mapel --</option>';
+  $('assignClassesBox').innerHTML = classes.length ? classes.map((c) => `<label class="flex items-center text-xs space-x-2 py-0.5"><input type="checkbox" name="assignCls" value="${esc(c.code)}" class="rounded border-slate-300"><span>Kelas ${esc(c.code)}</span></label>`).join('') : '<p class="text-xs text-slate-400">Belum ada kelas.</p>';
+  window.renderTeacherAssignmentUI();
+};
+
+window.addTeacherAssignment = async function () {
+  const tid = $('assignTeacherSelect').value, subject = $('assignSubjectSelect').value;
+  const sel = [...document.querySelectorAll('input[name="assignCls"]:checked')].map((c) => c.value);
+  if (!tid || !subject || !sel.length) return alert('Lengkapi pilihan Guru, Mapel, dan Kelas!');
+  const t = users.find((u) => u.id === tid); if (!t) return;
+  const list = (t.teacherAssignments || []).map((a) => ({ ...a }));
+  const ex = list.find((a) => a.subject === subject);
+  if (ex) ex.classes = [...new Set([...(ex.classes || []), ...sel])]; else list.push({ subject, classes: sel });
+  try { await updateDoc(doc(db, 'users', tid), { teacherAssignments: list }); logActivity(`Memperbarui penugasan guru: ${t.name}`); alert('Penugasan guru berhasil disimpan!'); }
+  catch (err) { alert('Gagal menyimpan penugasan: ' + err.message); }
+};
+
+window.renderTeacherAssignmentUI = function () {
+  const tb = $('teacherAssignmentTableBody'); if (!tb) return;
+  const rows = [];
+  users.filter((u) => u.role === 'guru').forEach((g) => (g.teacherAssignments || []).forEach((a, i) => rows.push(`<tr class="border-b text-xs">
+    <td class="p-2.5 font-bold text-slate-800">${esc(g.name || g.username)}</td><td class="p-2.5 font-semibold text-blue-900">${esc(a.subject)}</td>
+    <td class="p-2.5">${esc((a.classes || []).join(', ') || '-')}</td>
+    <td class="p-2.5 text-center"><button onclick="removeTeacherAssignment('${g.id}',${i})" class="btn btn-sm btn-red">Hapus</button></td></tr>`)));
+  tb.innerHTML = tmpl(rows, 4, 'Belum ada penugasan guru.');
+};
+
+window.removeTeacherAssignment = async function (tid, idx) {
+  const t = users.find((u) => u.id === tid); if (!t || !confirm('Hapus penugasan ini?')) return;
+  const list = (t.teacherAssignments || []).filter((_, i) => i !== idx);
+  await updateDoc(doc(db, 'users', tid), { teacherAssignments: list });
+};
+
+// ---------- Kartu ujian (QR dibuat lokal, password tidak dikirim ke layanan luar) ----------
+window.renderExamCards = function () {
+  const grid = $('examCardsGrid'); if (!grid) return;
+  const cls = $('cardClassFilter')?.value || '';
+  const list = users.filter((u) => u.role === 'siswa' && (!cls || u.class === cls)).sort((a, b) => (a.class + a.name).localeCompare(b.class + b.name));
+  const s = settingsCache;
+  if (!list.length) { grid.innerHTML = '<p class="text-xs text-slate-400 p-4">Tidak ada kartu peserta untuk kelas ini.</p>'; return; }
+  grid.innerHTML = list.map((st, i) => `<div class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs break-inside-avoid">
+    <div class="text-center border-b pb-1"><strong class="uppercase text-[11px] block text-blue-950">${esc(s.schoolName || "SMP QUR'AN AL WAHDAH")}</strong>
+      <span class="text-[9px] text-slate-500 uppercase font-bold">KARTU PESERTA UJIAN CBT T.A ${esc(s.academicYear || '2026/2027')} (${esc(s.semester || 'GANJIL')})</span></div>
+    <div class="flex justify-between items-center gap-2"><div class="space-y-1 text-[11px] flex-1">
+      <div><strong>Nama:</strong> ${esc(st.name || st.username)}</div><div><strong>NISN / Kelas:</strong> ${esc(st.nisn || '-')} / ${esc(st.class || '-')}</div>
+      <div><strong>Username:</strong> <code class="font-bold text-blue-900">${esc(st.username)}</code></div>
+      <div><strong>Password:</strong> <code class="font-bold text-rose-700">${esc(st.password || '-')}</code></div></div>
+      <div class="text-center"><div id="qr_${i}" class="w-20 h-20 flex items-center justify-center"></div><span class="text-[8px] text-slate-500 block font-bold mt-0.5">Scan Login</span></div></div>
+    <div class="border-t pt-1 text-[9px] text-slate-400 text-center font-bold uppercase">Harap Jaga Kerahasiaan Kartu Ujian Ini</div></div>`).join('');
+  if (typeof QRCode === 'undefined') return;
+  const base = location.origin + location.pathname;
+  list.forEach((st, i) => new QRCode($(`qr_${i}`), { text: `${base}?u=${encodeURIComponent(st.username)}&p=${encodeURIComponent(st.password || '')}`, width: 80, height: 80, correctLevel: QRCode.CorrectLevel.L }));
+};
+
+// ---------- Log (dibaca sekali, 200 terbaru; bukan listener realtime) ----------
+window.loadLogs = async function () {
+  const tb = $('adminLogsTableBody'); if (!tb) return;
+  try {
+    const snap = await getDocs(collection(db, 'logs'));
+    const logs = snap.docs.map((d) => d.data()).sort((a, b) => b.timestamp - a.timestamp).slice(0, 200);
+    tb.innerHTML = tmpl(logs.map((l) => `<tr class="border-b text-xs"><td class="p-2 font-mono text-[10px] text-slate-500">${esc(l.formattedTime || fmtDateTime(l.timestamp))}</td>
+      <td class="p-2 font-bold">${esc(l.user)}</td><td class="p-2">${esc(l.event)}</td></tr>`), 3, 'Belum ada log aktivitas.');
+  } catch (err) { tb.innerHTML = `<tr><td colspan="3" class="p-4 text-rose-600">Gagal memuat log: ${esc(err.message)}</td></tr>`; }
+};
+window.clearOldLogs = async function () {
+  if (!confirm('Hapus semua log yang lebih lama dari 30 hari?')) return;
+  const limit = Date.now() - 30 * 864e5;
+  const snap = await getDocs(collection(db, 'logs'));
+  const old = snap.docs.filter((d) => (d.data().timestamp || 0) < limit);
+  await runChunks(old, (d) => deleteDoc(d.ref), 25);
+  alert(`${old.length} log lama dihapus.`); window.loadLogs();
+};
+
+// ---------- Pengaturan ----------
+function initSettingsListener() {
+  listen('settings', doc(db, 'settings', 'academic'), (s) => {
+    settingsCache = s.exists() ? s.data() : {};
+    $('headerSchoolName').innerText = settingsCache.schoolName || "SMP Qur'an Al Wahdah";
+    $('headerSubTitle').innerText = `Sistem CBT - Tahun Ajaran ${settingsCache.academicYear || '2026/2027'} (${settingsCache.semester || 'Ganjil'})`;
+  });
+}
+function loadSettingsForm() {
+  const s = settingsCache;
+  $('settingSchoolName').value = s.schoolName || ''; $('settingNPSN').value = s.npsn || '';
+  $('settingYear').value = s.academicYear || '2026/2027'; $('settingSemester').value = s.semester || 'Ganjil';
+}
+window.handleSaveSettings = async function (e) {
+  e.preventDefault();
+  try {
+    await setDoc(doc(db, 'settings', 'academic'), { schoolName: $('settingSchoolName').value.trim(), npsn: $('settingNPSN').value.trim(),
+      academicYear: $('settingYear').value.trim(), semester: $('settingSemester').value, updatedAt: Date.now() });
+    alert('Pengaturan sekolah berhasil disimpan!'); logActivity('Memperbarui pengaturan sekolah');
+  } catch (err) { alert('Gagal menyimpan pengaturan: ' + err.message); }
+};
+
+// ---------- Backup & Restore ----------
+const BACKUP_COLLECTIONS = ['users', 'classes', 'subjects', 'packages', 'schedules', 'sessions', 'settings'];
+window.backupSystemData = async function () {
+  try {
+    const parts = await Promise.all(BACKUP_COLLECTIONS.map((c) => getDocs(collection(db, c))));
+    const data = {}; BACKUP_COLLECTIONS.forEach((c, i) => (data[c] = parts[i].docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const blob = new Blob([JSON.stringify({ backupTimestamp: Date.now(), backupDate: fmtDateTime(), data })], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `Backup_CBT_${new Date().toISOString().slice(0, 10)}.json` });
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+    logActivity('Melakukan Backup Database ke file JSON.'); alert('Backup database berhasil diunduh!');
+  } catch (err) { alert('Gagal melakukan backup: ' + err.message); }
+};
+window.restoreSystemData = function (e) {
+  const file = e.target.files[0]; if (!file) return;
+  if (!confirm('PERINGATAN: Restore akan menimpa dokumen dengan ID yang sama di Firestore. Lanjutkan?')) { e.target.value = ''; return; }
+  const r = new FileReader();
+  r.onload = async (evt) => {
+    try {
+      const obj = JSON.parse(evt.target.result);
+      if (!obj.data) return alert('Format file backup JSON tidak valid!');
+      const jobs = [];
+      for (const [col, items] of Object.entries(obj.data)) if (Array.isArray(items)) items.forEach((it) => { const { id, ...rest } = it; jobs.push([col, id, rest]); });
+      await runChunks(jobs, ([col, id, rest]) => (id ? setDoc(doc(db, col, id), rest) : addDoc(collection(db, col), rest)), 25);
+      logActivity(`Memulihkan Database dari file JSON (${jobs.length} dokumen).`);
+      alert(`Restore selesai!\n✔ ${jobs.length} dokumen dipulihkan.`); location.reload();
+    } catch (err) { alert('Gagal memulihkan database: ' + err.message); }
+  };
+  r.readAsText(file);
+};
+// nama lama tetap tersedia
+window.exportDatabaseJson = window.backupSystemData;
+window.importDatabaseJson = window.restoreSystemData;
