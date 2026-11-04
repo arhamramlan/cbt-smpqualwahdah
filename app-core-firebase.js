@@ -26,6 +26,25 @@ let isLogoutProcessing = false;
 // -------------------------------------------------------------
 
 document.addEventListener('DOMContentLoaded', () => {
+  // CEK LOGIN OTOMATIS DARI QR CODE
+  const urlParams = new URLSearchParams(window.location.search);
+  const qrUser = urlParams.get('u');
+  const qrPass = urlParams.get('p');
+  
+  if (qrUser && qrPass) {
+    // Tunggu sebentar hingga DOM siap lalu jalankan login otomatis
+    setTimeout(() => {
+      const userInput = document.getElementById('loginUsername');
+      const passInput = document.getElementById('loginPassword');
+      if (userInput && passInput) {
+        userInput.value = qrUser;
+        passInput.value = qrPass;
+        if (typeof window.handleLogin === 'function') {
+          window.handleLogin();
+        }
+      }
+    }, 500);
+  }
   initAuthObserver();
   initSettingsListener();
   setupGlobalEvents();
@@ -977,23 +996,45 @@ window.renderExamCards = async function() {
     return;
   }
 
-  grid.innerHTML = students.map(st => `
-    <div class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs relative">
-      <div class="text-center border-b pb-1">
-        <strong class="uppercase text-[11px] block font-bold text-blue-950">${s.schoolName || 'SMP QUR\'AN AL WAHDAH'}</strong>
-        <span class="text-[9px] text-slate-500 uppercase font-bold">KARTU PESERTA UJIAN CBT T.A ${s.academicYear || '2026/2027'} (${s.semester || 'GANJIL'})</span>
+  // Ambil URL dasar web saat ini
+  const baseUrl = window.location.origin + window.location.pathname;
+
+  grid.innerHTML = students.map(st => {
+    const pass = st.password || '123456';
+    // Buat URL Auto-Login unik per siswa
+    const loginUrl = `${baseUrl}?u=${encodeURIComponent(st.username)}&p=${encodeURIComponent(pass)}`;
+    // URL API QR Code
+    const qrApiUrl = `https://quickchart.io/qr?text=${encodeURIComponent(loginUrl)}&size=120&margin=1`;
+
+    return `
+      <div class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs relative">
+        <div class="text-center border-b pb-1">
+          <strong class="uppercase text-[11px] block font-bold text-blue-950">${s.schoolName || 'SMP QUR\'AN AL WAHDAH'}</strong>
+          <span class="text-[9px] text-slate-500 uppercase font-bold">KARTU PESERTA UJIAN CBT T.A ${s.academicYear || '2026/2027'} (${s.semester || 'GANJIL'})</span>
+        </div>
+        
+        <!-- KONTEN KARTU + QR CODE DI KANAN -->
+        <div class="flex justify-between items-center gap-2">
+          <div class="space-y-1 text-[11px] flex-1">
+            <div><strong>Nama:</strong> ${st.name || st.username}</div>
+            <div><strong>NISN / Kelas:</strong> ${st.nisn || '-'} / ${st.class || '-'}</div>
+            <div><strong>Username:</strong> <code class="font-bold text-blue-900">${st.username}</code></div>
+            <div><strong>Password:</strong> <code class="font-bold text-rose-700">${pass}</code></div>
+          </div>
+          
+          <!-- GAMBAR QR CODE -->
+          <div class="text-center">
+            <img src="${qrApiUrl}" alt="QR Login" class="w-20 h-20 border rounded p-0.5 bg-white shadow-sm">
+            <span class="text-[8px] text-slate-500 block font-bold mt-0.5">Scan Login</span>
+          </div>
+        </div>
+
+        <div class="border-t pt-1 text-[9px] text-slate-400 text-center font-bold uppercase">
+          Harap Jaga Kerahasiaan Kartu Ujian Ini
+        </div>
       </div>
-      <div class="space-y-1 text-[11px]">
-        <div><strong>Nama:</strong> ${st.name || st.username}</div>
-        <div><strong>NISN / Kelas:</strong> ${st.nisn || '-'} / ${st.class || '-'}</div>
-        <div><strong>Username:</strong> <code class="font-bold text-blue-900">${st.username}</code></div>
-        <div><strong>Password:</strong> <code class="font-bold text-rose-700">${st.password || '******'}</code></div>
-      </div>
-      <div class="border-t pt-1 text-[9px] text-slate-400 text-center font-bold uppercase">
-        Harap Jaga Kerahasiaan Kartu Ujian Ini
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 };
 
 // -------------------------------------------------------------
