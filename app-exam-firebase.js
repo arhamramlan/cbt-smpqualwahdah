@@ -254,12 +254,15 @@ window.closeAddQuestionModal = function() {
 };
 
 // 3. MODAL UPLOAD / IMPOR WORD (.DOCX)
+// -------------------------------------------------------------
+// FUNGSI IMPOR SOAL WORD (.DOCX) SINKRON
+// -------------------------------------------------------------
+
 window.openImportQuestionModal = function() {
   if (!activePackageId) {
     return alert("Silakan klik 'Buka Soal' pada salah satu paket soal terlebih dahulu!");
   }
   importedQuestionsBuffer = [];
-  // Cek ID modalImport atau modalImportQuestion
   const modal = document.getElementById('modalImportQuestion') || document.getElementById('modalImport');
   if (modal) {
     modal.classList.remove('hidden');
@@ -271,6 +274,115 @@ window.openImportQuestionModal = function() {
 window.closeImportQuestionModal = function() {
   const modal = document.getElementById('modalImportQuestion') || document.getElementById('modalImport');
   if (modal) modal.classList.add('hidden');
+};
+
+window.handleProcessImportFile = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (typeof mammoth === 'undefined') {
+    return alert("Pustaka Mammoth.js belum dimuat. Mohon refresh halaman.");
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    mammoth.extractRawText({ arrayBuffer: evt.target.result })
+      .then(res => parseWordContent(res.value))
+      .catch(err => alert('Gagal membaca file Word: ' + err.message));
+  };
+  reader.readAsArrayBuffer(file);
+};
+
+function parseWordContent(text) {
+  // Split berdasarkan kata kunci "JENIS:" (case-insensitive)
+  const blocks = text.split(/(?=JENIS:)/i);
+  importedQuestionsBuffer = [];
+
+  blocks.forEach(block => {
+    if (!block.trim()) return;
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+
+    let type = 'PG', qText = '', options = [], key = 'A', score = 2;
+
+    lines.forEach(l => {
+      const lower = l.toLowerCase();
+      if (lower.startsWith('jenis:')) type = l.split(':')[1].trim().toUpperCase();
+      else if (lower.startsWith('soal:')) qText = l.substring(5).trim();
+      else if (lower.startsWith('a:')) options[0] = l.substring(2).trim();
+      else if (lower.startsWith('b:')) options[1] = l.substring(2).trim();
+      else if (lower.startsWith('c:')) options[2] = l.substring(2).trim();
+      else if (lower.startsWith('d:')) options[3] = l.substring(2).trim();
+      else if (lower.startsWith('kunci:')) key = l.split(':')[1].trim().toUpperCase();
+      else if (lower.startsWith('bobot:')) score = parseInt(l.split(':')[1].trim()) || 2;
+    });
+
+    if (qText) {
+      if (type === 'BS') options = ['Benar', 'Salah'];
+      if (type === 'PGK' && typeof key === 'string') {
+        key = key.split(',').map(k => k.trim()).filter(k => k);
+      }
+      importedQuestionsBuffer.push({ type, text: qText, options, key, score });
+    }
+  });
+
+  const btnSave = document.getElementById('btnSaveImportedDocx');
+  const previewBox = document.getElementById('importPreviewReport');
+
+  if (importedQuestionsBuffer.length > 0) {
+    // Aktifkan tombol simpan
+    if (btnSave) {
+      btnSave.disabled = false;
+      btnSave.classList.remove('opacity-50', 'cursor-not-allowed');
+      btnSave.classList.add('hover:bg-emerald-700', 'cursor-pointer');
+    }
+
+    if (previewBox) {
+      previewBox.classList.remove('hidden');
+      previewBox.innerHTML = `
+        <div class="text-emerald-700 font-bold mb-1">✔ Berhasil membaca ${importedQuestionsBuffer.length} butir soal!</div>
+        ${importedQuestionsBuffer.map((q, idx) => `<div class="text-[10px] text-slate-600">#${idx+1} [${q.type}] ${q.text.substring(0, 40)}...</div>`).join('')}
+      `;
+    }
+  } else {
+    if (btnSave) btnSave.disabled = true;
+    alert("Format file Word tidak sesuai! Pastikan diawali dengan JENIS: PG / BS / ISIAN / URAIAN.");
+  }
+}
+
+window.saveImportedQuestionsDocx = async function() {
+  if (!activePackageId) {
+    return alert("Paket soal tidak aktif. Silakan pilih paket soal terlebih dahulu!");
+  }
+  
+  if (!importedQuestionsBuffer || importedQuestionsBuffer.length === 0) {
+    return alert("Tidak ada soal valid yang dibaca dari file Word!");
+  }
+
+  try {
+    const pkgRef = doc(db, "packages", activePackageId);
+    const pkgDoc = await getDoc(pkgRef);
+
+    if (pkgDoc.exists()) {
+      let currentQuestions = pkgDoc.data().questions || [];
+      const updatedQuestions = [...currentQuestions, ...importedQuestionsBuffer];
+
+      await updateDoc(pkgRef, { 
+        questions: updatedQuestions, 
+        status: 'Siap' 
+      });
+
+      alert(`Sukses! ${importedQuestionsBuffer.length} butir soal berhasil disimpan ke Firestore.`);
+      
+      importedQuestionsBuffer = [];
+      const docxInput = document.getElementById('docxQuestionFile');
+      if (docxInput) docxInput.value = '';
+      
+      window.closeImportQuestionModal();
+      window.openPackageDetailFire(activePackageId);
+    }
+  } catch (err) {
+    alert("Gagal menyimpan soal ke Firestore: " + err.message);
+  }
 };
 
 // 4. DOWNLOAD TEMPLATE / PANDUAN WORD
