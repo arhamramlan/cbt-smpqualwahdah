@@ -739,6 +739,102 @@ function populateClassOptions(classes) {
 }
 
 // -------------------------------------------------------------
+// TEMPLATE & IMPOR EXCEL MASTER MATA PELAJARAN
+// -------------------------------------------------------------
+
+// 1. Unduh Template Excel Master Mapel
+window.downloadSubjectTemplate = function() {
+  if (typeof XLSX === 'undefined') {
+    return alert("Pustaka SheetJS (XLSX) belum dimuat. Mohon refresh halaman.");
+  }
+
+  const templateData = [
+    {
+      "Kode Mapel": "PAI",
+      "Nama Mata Pelajaran": "Pendidikan Agama Islam"
+    },
+    {
+      "Kode Mapel": "MTK",
+      "Nama Mata Pelajaran": "Matematika"
+    },
+    {
+      "Kode Mapel": "BINDO",
+      "Nama Mata Pelajaran": "Bahasa Indonesia"
+    },
+    {
+      "Kode Mapel": "BING",
+      "Nama Mata Pelajaran": "Bahasa Inggris"
+    }
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(templateData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Master Mapel");
+
+  worksheet['!cols'] = [
+    { wch: 15 },
+    { wch: 35 }
+  ];
+
+  XLSX.writeFile(workbook, "Template_Master_Mata_Pelajaran.xlsx");
+};
+
+// 2. Impor File Excel Master Mapel ke Cloud Firestore
+window.handleImportSubjectsExcel = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (typeof XLSX === 'undefined') {
+    return alert("Pustaka SheetJS (XLSX) belum dimuat.");
+  }
+
+  const reader = new FileReader();
+  reader.onload = async function(evt) {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonSubjects = XLSX.utils.sheet_to_json(worksheet);
+
+      if (!jsonSubjects || jsonSubjects.length === 0) {
+        return alert("File Excel kosong atau format kolom tidak sesuai!");
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const row of jsonSubjects) {
+        const code = row["Kode Mapel"] ? String(row["Kode Mapel"]).trim().toUpperCase() : "";
+        const name = row["Nama Mata Pelajaran"] ? String(row["Nama Mata Pelajaran"]).trim() : "";
+
+        if (code && name) {
+          await setDoc(doc(db, "subjects", code), {
+            code,
+            name,
+            updatedAt: Date.now()
+          });
+          successCount++;
+        } else {
+          failCount++;
+        }
+      }
+
+      alert(`Impor Master Mapel Selesai!\n✔ ${successCount} Mapel Berhasil Ditambahkan/Diperbarui.\n${failCount > 0 ? `✖ ${failCount} Baris Gagal (Kode/Nama Kosong).` : ''}`);
+      if (typeof logActivity === 'function') {
+        logActivity(`Mengimpor ${successCount} Master Mapel dari file Excel.`);
+      }
+      e.target.value = '';
+    } catch (err) {
+      alert("Gagal memproses file Excel: " + err.message);
+    }
+  };
+
+  reader.readAsArrayBuffer(file);
+};
+
+
+// -------------------------------------------------------------
 // PENUGASAN GURU
 // -------------------------------------------------------------
 
