@@ -551,14 +551,17 @@ window.togglePasswordVisibility = function(elementId) {
 // MASTER KELAS, MAPEL & HITUNG PENGGUNA REAL-TIME
 // -------------------------------------------------------------
 
+let cachedUsersList = []; // Menyimpan data pengguna real-time
+
 function listenToMasterData() {
   onSnapshot(collection(db, "users"), (userSnap) => {
-    const users = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderUserTable(users);
+    cachedUsersList = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Panggil penyaringan saat data diperbarui dari Firestore
+    window.filterUserTableUI();
     
     onSnapshot(collection(db, "classes"), (classSnap) => {
       const classes = classSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderClassTable(classes, users);
+      renderClassTable(classes, cachedUsersList);
       populateClassOptions(classes);
     });
   });
@@ -568,6 +571,30 @@ function listenToMasterData() {
     renderSubjectTable(subjects);
   });
 }
+
+window.filterUserTableUI = function() {
+  const searchInput = (document.getElementById('searchUser')?.value || '').toLowerCase().trim();
+  const roleFilter = (document.getElementById('filterRole')?.value || '').toLowerCase().trim();
+  const classFilter = (document.getElementById('filterUserClass')?.value || '').trim();
+
+  let filtered = cachedUsersList.filter(u => {
+    // Match Search Name / Username / NISN
+    const nameMatch = (u.name || '').toLowerCase().includes(searchInput);
+    const usernameMatch = (u.username || '').toLowerCase().includes(searchInput);
+    const nisnMatch = (u.nisn || '').toLowerCase().includes(searchInput);
+    const matchesSearch = !searchInput || (nameMatch || usernameMatch || nisnMatch);
+
+    // Match Role (Semua Peran / Admin / Guru / Siswa)
+    const matchesRole = !roleFilter || (u.role || '').toLowerCase() === roleFilter;
+
+    // Match Class (Semua Kelas / VII / VIII / IX / VII-A dst.)
+    const matchesClass = !classFilter || (u.class || '') === classFilter;
+
+    return matchesSearch && matchesRole && matchesClass;
+  });
+
+  renderUserTable(filtered);
+};
 
 function renderClassTable(classes, users) {
   const tbody = document.getElementById('classTableBody');
