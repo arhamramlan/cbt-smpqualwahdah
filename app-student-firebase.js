@@ -2,7 +2,7 @@
 import { db, collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where } from './firebase-config.js';
 import { LETTERS, EXAM_HINT, LIMITS } from './constants.js';
 import { toArr, computeResult, resultFields, buildOrder, buildOptOrder, isFilled } from './scoring.js';
-import { $, esc, clock, arCls } from './util.js';
+import { $, esc, clock, arCls, fmtStart } from './util.js';
 
 const { listen, stopListen, log: logActivity, getSession } = window.CBT;
 const coarse = matchMedia('(pointer:coarse)').matches;       // HP/tablet: blur & fullscreen tidak dihitung pelanggaran
@@ -22,7 +22,7 @@ window.validateStudentToken = async function () {
     const now = Date.now(), ref = doc(db, 'sessions', `${s.id}_${u.uid}`), got = await getDoc(ref);
     if (got.exists() && got.data().status === 'Selesai') return alert('Anda sudah menyelesaikan ujian ini. Hubungi guru/pengawas bila perlu mengulang.');
     if (!got.exists()) {
-      if (s.startAt && now < s.startAt) return alert(`Ujian belum dimulai. Mulai: ${(s.startTime || '').replace('T', ' ')}`);
+      if (s.startAt && now < s.startAt) return alert(`Ujian belum dimulai. Mulai: ${fmtStart(s)}`);
       if (s.startAt && s.lateTolerance > 0 && now > s.startAt + s.lateTolerance * 60000) return alert('Waktu masuk ujian telah lewat (melebihi toleransi keterlambatan). Hubungi pengawas.');
     }
     const qs = s.packageSnapshot?.questions || [];
