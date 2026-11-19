@@ -18,35 +18,35 @@
   
   <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
   <script>try{var p=JSON.parse(localStorage.getItem('cbt_prefs')||'{}');if(p.dark)document.documentElement.classList.add('dark')}catch(e){}</script>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col text-sm">
 
   <!-- HEADER UTAMA -->
-<header class="bg-blue-900 text-white px-3 py-2.5 md:p-4 shadow-md flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-3">
-  <div class="flex items-center gap-2.5 min-w-0">
+<header class="bg-blue-900 text-white px-3 py-2.5 md:p-4 shadow-md flex flex-wrap items-center justify-between gap-x-3 gap-y-2 relative">
+  <div class="flex items-center gap-2.5 min-w-0 flex-1 md:flex-none">
     <i class="fa-solid fa-graduation-cap text-2xl md:text-3xl text-amber-400 shrink-0"></i>
     <div class="min-w-0">
-      <h1 id="headerSchoolName" class="font-bold text-base md:text-lg leading-tight">SMP Qur'an Al Wahdah</h1>
-      <p id="headerSubTitle" class="text-[10px] md:text-xs text-blue-200 leading-tight">Sistem CBT - Tahun Ajaran 2026/2027 (Ganjil)</p>
+      <h1 id="headerSchoolName" class="font-bold text-base md:text-lg leading-tight truncate">SMP Qur'an Al Wahdah</h1>
+      <p id="headerSubTitle" class="text-[10px] md:text-xs text-blue-200 leading-tight truncate">Sistem CBT - Tahun Ajaran 2026/2027 (Ganjil)</p>
     </div>
   </div>
 
-  <div class="flex flex-wrap items-center justify-between md:justify-end gap-2 md:gap-3 w-full md:w-auto">
-  <div id="prefsBar" class="flex items-center gap-1 text-xs print:hidden">
-    <button title="Perkecil huruf" onclick="CBTPrefs.bumpFont(-1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1.5 rounded font-bold">A−</button>
-    <button title="Perbesar huruf" onclick="CBTPrefs.bumpFont(1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1.5 rounded font-bold">A+</button>
-    <button title="Perkecil teks Arab" onclick="CBTPrefs.bumpArabic(-1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1 rounded font-arabic">ع−</button>
-    <button title="Perbesar teks Arab" onclick="CBTPrefs.bumpArabic(1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1 rounded font-arabic">ع+</button>
-    <button title="Mode gelap / terang" data-pref-dark onclick="CBTPrefs.toggleDark()" class="bg-blue-800 hover:bg-blue-700 px-2 py-1 rounded"><i class="fa-solid fa-moon"></i></button>
-  </div>
-  <div id="navUserArea" class="flex flex-wrap items-center gap-2 hidden">
-    <span id="navUserInfo" class="text-xs bg-blue-800 px-3 py-1 rounded-full font-bold text-amber-300 truncate max-w-[11rem] md:max-w-none"></span>
-    <button id="btnProfileHeader" onclick="openProfileModal()" class="bg-blue-700 hover:bg-blue-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1"><i class="fa-solid fa-lock"></i><span class="hidden sm:inline"> Password</span></button>
-    <button id="btnLogoutHeader" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1">
-      <i class="fa-solid fa-right-from-bracket"></i><span class="hidden sm:inline"> Keluar</span>
-    </button>
-  </div>
+  <button id="btnHeaderMenu" onclick="toggleMenu('headerMenu', this)" aria-label="Menu" class="md:hidden shrink-0 bg-blue-800 hover:bg-blue-700 w-10 h-10 rounded-lg print:hidden"><i class="fa-solid fa-bars"></i></button>
+
+  <div id="headerMenu" class="collapse-m basis-full md:basis-auto flex-col md:flex-row md:items-center gap-2 md:gap-3 bg-blue-800/60 md:bg-transparent rounded-xl p-2.5 md:p-0">
+    <div id="prefsBar" class="flex items-center justify-between md:justify-start gap-1 text-xs print:hidden">
+      <button title="Perkecil huruf" onclick="CBTPrefs.bumpFont(-1)" class="bg-blue-800 hover:bg-blue-700 px-3 md:px-2 py-1.5 rounded font-bold">A−</button>
+      <button title="Perbesar huruf" onclick="CBTPrefs.bumpFont(1)" class="bg-blue-800 hover:bg-blue-700 px-3 md:px-2 py-1.5 rounded font-bold">A+</button>
+      <button title="Perkecil teks Arab" onclick="CBTPrefs.bumpArabic(-1)" class="bg-blue-800 hover:bg-blue-700 px-3 md:px-2 py-1.5 rounded font-arabic">ع−</button>
+      <button title="Perbesar teks Arab" onclick="CBTPrefs.bumpArabic(1)" class="bg-blue-800 hover:bg-blue-700 px-3 md:px-2 py-1.5 rounded font-arabic">ع+</button>
+      <button title="Mode gelap / terang" data-pref-dark onclick="CBTPrefs.toggleDark()" class="bg-blue-800 hover:bg-blue-700 px-3 md:px-2 py-1.5 rounded"><i class="fa-solid fa-moon"></i></button>
+    </div>
+    <div id="navUserArea" class="flex flex-wrap items-center gap-2 hidden">
+      <span id="navUserInfo" class="text-xs bg-blue-800 px-3 py-1.5 rounded-full font-bold text-amber-300 truncate max-w-full flex-1 md:flex-none"></span>
+      <button id="btnProfileHeader" onclick="openProfileModal()" class="bg-blue-700 hover:bg-blue-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1"><i class="fa-solid fa-lock"></i> Password</button>
+      <button id="btnLogoutHeader" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1"><i class="fa-solid fa-right-from-bracket"></i> Keluar</button>
+    </div>
   </div>
 </header>
 
@@ -596,14 +596,17 @@
 
   <!-- RUANG UJIAN (layar penuh) -->
   <div id="viewExam" class="hidden">
-    <div class="bg-blue-900 text-white px-3 py-2 flex flex-wrap justify-between items-center gap-2 shadow">
-      <div class="min-w-0"><h2 id="examTitle" class="font-bold text-sm truncate"></h2><p id="examStudentInfo" class="text-[11px] text-blue-200 truncate"></p></div>
-      <div class="flex items-center gap-1.5 text-xs">
-        <button onclick="CBTPrefs.bumpFont(-1)" class="bg-blue-800 px-2 py-1 rounded font-bold">A−</button><button onclick="CBTPrefs.bumpFont(1)" class="bg-blue-800 px-2 py-1 rounded font-bold">A+</button>
-        <button onclick="CBTPrefs.bumpArabic(-1)" class="bg-blue-800 px-2 py-1 rounded font-arabic">ع−</button><button onclick="CBTPrefs.bumpArabic(1)" class="bg-blue-800 px-2 py-1 rounded font-arabic">ع+</button>
-        <button data-pref-dark onclick="CBTPrefs.toggleDark()" class="bg-blue-800 px-2 py-1 rounded"><i class="fa-solid fa-moon"></i></button>
+    <div class="bg-blue-900 text-white px-3 py-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 shadow">
+      <div class="min-w-0 flex-1"><h2 id="examTitle" class="font-bold text-sm truncate"></h2><p id="examStudentInfo" class="text-[11px] text-blue-200 truncate"></p></div>
+      <div class="flex items-center gap-1.5 text-xs shrink-0">
+        <button onclick="toggleMenu('examPrefs', this)" aria-label="Tampilan" class="md:hidden bg-blue-800 px-2.5 py-1.5 rounded font-bold">Aa</button>
         <span id="examViolations" class="text-[11px] bg-rose-600 px-2 py-0.5 rounded font-bold hidden"></span>
         <span id="examTimer" class="font-mono font-bold text-base bg-blue-800 px-2.5 py-1 rounded">00:00:00</span>
+      </div>
+      <div id="examPrefs" class="collapse-m basis-full md:basis-auto order-last md:order-none items-center justify-between md:justify-start gap-1.5 text-xs md:ml-auto">
+        <button onclick="CBTPrefs.bumpFont(-1)" class="bg-blue-800 px-3 md:px-2 py-1.5 rounded font-bold">A−</button><button onclick="CBTPrefs.bumpFont(1)" class="bg-blue-800 px-3 md:px-2 py-1.5 rounded font-bold">A+</button>
+        <button onclick="CBTPrefs.bumpArabic(-1)" class="bg-blue-800 px-3 md:px-2 py-1.5 rounded font-arabic">ع−</button><button onclick="CBTPrefs.bumpArabic(1)" class="bg-blue-800 px-3 md:px-2 py-1.5 rounded font-arabic">ع+</button>
+        <button data-pref-dark onclick="CBTPrefs.toggleDark()" class="bg-blue-800 px-3 md:px-2 py-1.5 rounded"><i class="fa-solid fa-moon"></i></button>
       </div>
     </div>
     <div id="examAnnounce" class="hidden bg-amber-400 text-amber-950 px-3 py-2 text-xs font-semibold flex items-center gap-2">
@@ -734,7 +737,7 @@
       <div class="flex justify-end gap-2"><button type="button" onclick="closeProfileModal()" class="btn btn-gray">Batal</button><button type="submit" class="btn btn-blue">Simpan</button></div>
     </form></div></div>
 
-  <script type="module" src="ui-prefs.js?v=4"></script>
+  <script type="module" src="ui-prefs.js?v=5"></script>
   <script type="module" src="firebase-config.js"></script>
   <script type="module" src="app-core-firebase.js"></script>
   <script type="module" src="app-exam-firebase.js"></script>
