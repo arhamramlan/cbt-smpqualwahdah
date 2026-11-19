@@ -47,3 +47,36 @@ textarea[dir="rtl"], input[dir="rtl"], .font-arabic { font-family: 'Amiri', 'Tra
   header, nav, button, input, select, .print\:hidden { display: none !important; }
   body { background-color: #fff; }
 }
+
+/* ===== v2: ukuran huruf, teks Arab, mobile ===== */
+:root { --fs: 1; --ar-fs: 1.25; }
+.exam-text { font-size: calc(.875rem * var(--fs)); }
+.ar-text { font-family: 'Amiri', 'Traditional Arabic', 'Arial', sans-serif; font-size: calc(1rem * var(--ar-fs)); line-height: 2.1; }
+select.exam-text, input.exam-text, textarea.exam-text { font-size: calc(.875rem * var(--fs)); }
+#viewExam { overscroll-behavior: contain; }
+#examFooter { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
+.nav-q { touch-action: manipulation; }
+@media (max-width: 640px) {
+  .nav-q { width: 2.5rem; height: 2.5rem; }
+  .opt-row { padding: .9rem .75rem; }
+  .modal { padding: .5rem; }
+  .btn { min-height: 2.25rem; }
+}
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ===== v2: mode gelap (menimpa kelas Tailwind yang dipakai) ===== */
+html.dark body { background: #0f172a; color: #e2e8f0; }
+html.dark .bg-white, html.dark .card, html.dark .modal > div, html.dark .opt-row, html.dark .inp,
+html.dark #examFooter, html.dark .nav-q:not(.answered):not(.doubt) { background-color: #1e293b !important; color: #e2e8f0; }
+html.dark .bg-slate-50, html.dark .bg-slate-100 { background-color: #273449 !important; }
+html.dark .bg-slate-200 { background-color: #334155 !important; }
+html.dark .text-slate-800, html.dark .text-slate-700, html.dark .text-slate-600 { color: #e2e8f0 !important; }
+html.dark .text-slate-500, html.dark .text-slate-400 { color: #94a3b8 !important; }
+html.dark .text-blue-900, html.dark .text-blue-800 { color: #93c5fd !important; }
+html.dark .border, html.dark .border-b, html.dark .border-t, html.dark .border-slate-200, html.dark .border-slate-300, html.dark .opt-row, html.dark .inp, html.dark .nav-q { border-color: #475569 !important; }
+html.dark .opt-row.picked { background-color: #1e3a8a !important; border-color: #3b82f6 !important; }
+html.dark .btn-gray { background: #475569; color: #f1f5f9; }
+html.dark #viewExam { background: #0f172a; }
+html.dark .bg-amber-50, html.dark .bg-emerald-50, html.dark .bg-blue-50, html.dark .bg-rose-50 { background-color: #1e293b !important; }
+html.dark .bg-amber-50 .text-amber-800, html.dark .text-amber-800 { color: #fcd34d !important; }
+html.dark tr.border-b:hover { background: #273449; }
