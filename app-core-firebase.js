@@ -1,4 +1,5 @@
 // app-core-firebase.js — autentikasi, admin (pengguna, kelas, mapel, penugasan, kartu, log, pengaturan, backup)
+import { LIMITS } from './constants.js';
 import {
   db, auth, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
   onSnapshot, query, where, signInWithEmailAndPassword, signOut, onAuthStateChanged
@@ -199,7 +200,7 @@ let users = [], classes = [], subjects = [];
 function listenToMasterData() {
   listen('users', collection(db, 'users'), (s) => {
     users = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-    window.filterUserTableUI(); renderClassTable(); window.renderTeacherAssignmentUI();
+    renderUserTable(); renderClassTable(); window.renderTeacherAssignmentUI();
     if (!$('adminTabCards')?.classList.contains('hidden')) window.renderExamCards();
   });
   listen('classes', collection(db, 'classes'), (s) => {
@@ -223,14 +224,30 @@ function populateClassOptions() {
 // ---------- Pengguna ----------
 const tmpl = (rows, cols, msg) => rows.length ? rows.join('') : `<tr><td colspan="${cols}" class="p-4 text-center text-slate-400">${msg}</td></tr>`;
 
-window.filterUserTableUI = function () {
+let userPage = 0, userPageSize = LIMITS.pageSizes[0];
+window.filterUserTableUI = () => { userPage = 0; renderUserTable(); };      // dipanggil saat filter/pencarian berubah
+window.userPageGo = (d) => { userPage += d; renderUserTable(); };
+window.userPageSizeSet = (v) => { userPageSize = +v || LIMITS.pageSizes[0]; userPage = 0; renderUserTable(); };
+function renderUserPager(total, pages) {
+  const el = $('userPager'); if (!el) return;
+  const from = total ? userPage * userPageSize + 1 : 0, to = Math.min(total, (userPage + 1) * userPageSize);
+  el.innerHTML = `<span class="text-slate-500">${from}–${to} dari ${total} pengguna</span>
+    <div class="flex items-center gap-2"><select onchange="userPageSizeSet(this.value)" class="px-2 py-1 border rounded-lg text-xs">${LIMITS.pageSizes.map((n) => `<option value="${n}" ${n === userPageSize ? 'selected' : ''}>${n}/halaman</option>`).join('')}</select>
+    <button onclick="userPageGo(-1)" ${userPage <= 0 ? 'disabled' : ''} class="btn btn-gray btn-sm">‹ Sebelumnya</button>
+    <span class="font-bold">${userPage + 1}/${pages}</span>
+    <button onclick="userPageGo(1)" ${userPage >= pages - 1 ? 'disabled' : ''} class="btn btn-gray btn-sm">Berikutnya ›</button></div>`;
+}
+function renderUserTable() {
   const q = ($('searchUser')?.value || '').toLowerCase().trim();
   const role = $('filterRole')?.value || '';
   const cls = $('filterUserClass')?.value || '';
   const list = users.filter((u) =>
     (!q || [u.name, u.username, u.nisn].some((v) => String(v || '').toLowerCase().includes(q))) &&
     (!role || u.role === role) && (!cls || u.class === cls));
-  $('userTableBody').innerHTML = tmpl(list.map((u, i) => {
+  const pages = Math.max(1, Math.ceil(list.length / userPageSize)); userPage = Math.min(userPage, pages - 1);
+  const pageList = list.slice(userPage * userPageSize, (userPage + 1) * userPageSize);
+  renderUserPager(list.length, pages);
+  $('userTableBody').innerHTML = tmpl(pageList.map((u, i) => {
     const isAdmin = u.username === 'admin', on = u.active !== false, pid = `userPass_${i}`;
     return `<tr class="border-b text-xs">
       <td class="p-2.5"><strong class="text-slate-800 block">${esc(u.name || u.username)}</strong>
@@ -246,7 +263,7 @@ window.filterUserTableUI = function () {
         <button onclick="resetPasswordUser('${u.id}')" class="btn btn-sm btn-blue">Reset Pass</button>
         <button onclick="deleteUserDoc('${u.id}')" class="btn btn-sm btn-red">Hapus</button>`}</td></tr>`;
   }), 4, 'Tidak ada pengguna.');
-};
+}
 
 window.generateAutoPassword = () => { const el = $('userPassword'); el.type = 'text'; el.value = genPassword(); };
 window.togglePasswordVisibility = (id) => { const el = $(id); if (el) el.type = el.type === 'password' ? 'text' : 'password'; };
