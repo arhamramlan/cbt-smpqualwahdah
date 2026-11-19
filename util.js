@@ -30,3 +30,10 @@ export function download(blob, name) {
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
 }
 export const slug = (s) => String(s || 'file').replace(/[^\w-]+/g, '_');
+
+// waktu mulai ujian yang enak dibaca, mis. "19 Nov 2026, 14.48" (menggantikan teks mentah 2026-11-19T14:48)
+export function fmtStart(s) {
+  const d = new Date(s?.startAt || s?.startTime || NaN);
+  if (isNaN(d)) return 'Sekarang';
+  return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/\./g, '.').replace(',', ',');
+}
