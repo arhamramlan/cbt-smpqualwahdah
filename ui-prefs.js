@@ -22,8 +22,19 @@ apply();
 
 // Diagnosa: bila style.css lama/ter-cache, mode gelap & ukuran huruf tidak akan bekerja — beri tahu pengguna
 addEventListener('load', () => {
-  if (getComputedStyle(document.documentElement).getPropertyValue('--css-v').trim() === '4') return;
+  if (getComputedStyle(document.documentElement).getPropertyValue('--css-v').trim() === '5') return;
   const b = Object.assign(document.createElement('div'), { innerHTML: '⚠ File <b>style.css</b> di server belum versi terbaru, sehingga mode gelap & ukuran huruf belum berfungsi. Unggah ulang style.css lalu tekan Ctrl+F5.' });
   b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99;background:#be123c;color:#fff;font:600 12px sans-serif;padding:8px 12px;text-align:center';
   document.body.appendChild(b);
+});
+
+// menu lipat (HP): buka/tutup panel; tutup otomatis bila mengetuk di luar header
+window.toggleMenu = (id, btn) => {
+  const el = document.getElementById(id); if (!el) return;
+  const open = el.classList.toggle('open');
+  const ic = btn?.querySelector('i'); if (ic) ic.className = `fa-solid ${open ? 'fa-xmark' : 'fa-bars'}`;
+};
+document.addEventListener('click', (e) => {
+  const m = document.getElementById('headerMenu');
+  if (m?.classList.contains('open') && !e.target.closest('header')) window.toggleMenu('headerMenu', document.getElementById('btnHeaderMenu'));
 });
