@@ -49,17 +49,17 @@ export function computeResult(questions, answers = {}, manual = {}) {
 export const resultFields = (r) => ({ scoreAuto: r.auto, scoreManualPts: r.man, maxScore: r.max, pct: r.pct, needsGrading: r.pending > 0 });
 export const sessResult = (sched, s) => computeResult(sched.packageSnapshot?.questions || [], s.answers, s.scoreManual);
 
-// urutan soal. Soal sebuah bacaan (passageId sama) = satu blok yang tetap berurutan.
-// Blok bertanda `fixed` tetap di posisinya; blok lain diacak mengisi posisi sisanya.
+// urutan soal. Soal sebuah bacaan (passageId sama) selalu menjadi satu blok berurutan — juga tanpa pengacakan,
+// agar teks bacaan tidak muncul berulang di tengah soal lain. Blok bertanda `fixed` tetap di posisinya
+// saat diacak; blok lain diacak mengisi posisi sisanya.
 export function buildOrder(qs, randomize, rnd = Math.random) {
-  const idx = qs.map((_, i) => i);
-  if (!randomize) return idx;
   const blocks = [], byPassage = new Map();
-  idx.forEach((i) => {
-    const p = qs[i].passageId;
+  qs.forEach((q, i) => {
+    const p = q.passageId;
     if (p) { if (!byPassage.has(p)) { const b = []; byPassage.set(p, b); blocks.push(b); } byPassage.get(p).push(i); }
     else blocks.push([i]);
   });
+  if (!randomize) return blocks.flat();
   const fixed = blocks.map((b) => b.some((i) => qs[i].fixed));
   const free = shuffle(blocks.filter((_, k) => !fixed[k]), rnd);
   let f = 0;
