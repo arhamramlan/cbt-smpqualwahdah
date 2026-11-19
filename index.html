@@ -631,7 +631,7 @@
   </div>
 
   <!-- MODAL: TEKS BACAAN -->
-  <div id="modalPassage" class="modal hidden"><div class="max-w-2xl space-y-3">
+  <div id="modalPassage" class="modal hidden" style="z-index:60"><div class="max-w-2xl space-y-3">
     <h3 class="font-bold border-b pb-2"><i class="fa-solid fa-book-open text-blue-600 mr-2"></i>Teks Bacaan Paket (satu teks, banyak soal)</h3>
     <div id="passageList" class="space-y-2 max-h-48 overflow-y-auto"></div>
     <form onsubmit="handleSavePassage(event)" class="space-y-2 text-xs border-t pt-3">
@@ -699,7 +699,8 @@
         <div id="qImagePreviewContainer" class="hidden relative w-32 h-32 border rounded-lg overflow-hidden bg-white mt-2"><img id="qImagePreviewImg" alt="Preview" class="w-full h-full object-cover">
           <button type="button" onclick="removeQuestionImage()" class="absolute top-1 right-1 bg-rose-600 text-white rounded-full w-5 h-5 text-[10px] font-bold">✕</button></div></div>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2 border-t pt-2">
-        <div class="col-span-2"><label class="lbl">Teks Bacaan (opsional)</label><select id="qPassage" class="inp"></select></div>
+        <div class="col-span-2"><label class="lbl">Teks Bacaan (opsional)</label><select id="qPassage" class="inp"></select><p id="qPassageHint" class="text-[10px] text-amber-700 mt-0.5"></p>
+          <button type="button" onclick="openPassageModal()" class="text-[11px] text-blue-700 font-bold mt-0.5">＋ Buat / kelola teks bacaan</button></div>
         <div><label class="lbl">Bab / Topik</label><input type="text" id="qChapter" class="inp" placeholder="mis. Rukun Islam"></div>
         <div><label class="lbl">Tingkat</label><select id="qDifficulty" class="inp"><option value="">—</option><option>Mudah</option><option>Sedang</option><option>Sulit</option></select></div>
         <div class="col-span-2"><label class="lbl">Tag (pisahkan koma)</label><input type="text" id="qTags" class="inp" placeholder="mis. akidah, ibadah"></div>
