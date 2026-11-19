@@ -45,6 +45,10 @@ t('paket kosong tidak error', () => assert.equal(computeResult([], {}, {}).pct, 
 t('isFilled', () => { assert.ok(!isFilled([])); assert.ok(!isFilled(['', ''])); assert.ok(isFilled(['', '1'])); assert.ok(!isFilled('  ')); });
 
 t('buildOrder: tanpa acak = urutan asli', () => assert.deepEqual(buildOrder([{}, {}, {}], false), [0, 1, 2]));
+t('buildOrder: tanpa acak, soal satu bacaan tetap dikumpulkan berdampingan', () => {
+  const qs = [{ passageId: 'p' }, {}, { passageId: 'p' }, { passageId: 'q' }, {}, { passageId: 'q' }];
+  assert.deepEqual(buildOrder(qs, false), [0, 2, 1, 3, 5, 4]);
+});
 t('buildOrder: soal bacaan tetap berurutan dan satu blok', () => {
   const qs = [{}, { passageId: 'p' }, {}, { passageId: 'p' }, { passageId: 'p' }, {}];
   for (let k = 0; k < 200; k++) {
