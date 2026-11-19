@@ -49,7 +49,7 @@ textarea[dir="rtl"], input[dir="rtl"], .font-arabic { font-family: 'Amiri', 'Tra
 }
 
 /* ===== v2: ukuran huruf, teks Arab, mobile ===== */
-:root { --fs: 1; --ar-fs: 1.25; --css-v: 4; }
+:root { --fs: 1; --ar-fs: 1.25; --css-v: 5; }
 /* Ukuran huruf: seluruh aplikasi memakai satuan rem (Tailwind), jadi cukup skala ukuran dasar halaman */
 html { font-size: calc(16px * var(--fs, 1)); }
 .exam-text { font-size: .875rem; }
@@ -100,3 +100,8 @@ button.font-arabic { unicode-bidi: isolate; direction: ltr; }
   input[type="text"], input[type="number"], input[type="password"], input[type="datetime-local"], select, textarea { font-size: 16px; }   /* cegah zoom otomatis iOS saat mengetik */
   .modal > div { padding: 1rem; margin: .5rem 0; border-radius: .75rem; }
 }
+
+/* ===== v5: menu lipat di HP (header & ruang ujian) ===== */
+.collapse-m { display: none; }
+.collapse-m.open { display: flex; }
+@media (min-width: 768px) { .collapse-m { display: flex; } }
