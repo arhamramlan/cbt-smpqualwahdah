@@ -49,7 +49,7 @@ textarea[dir="rtl"], input[dir="rtl"], .font-arabic { font-family: 'Amiri', 'Tra
 }
 
 /* ===== v2: ukuran huruf, teks Arab, mobile ===== */
-:root { --fs: 1; --ar-fs: 1.25; --css-v: 3; }
+:root { --fs: 1; --ar-fs: 1.25; --css-v: 4; }
 /* Ukuran huruf: seluruh aplikasi memakai satuan rem (Tailwind), jadi cukup skala ukuran dasar halaman */
 html { font-size: calc(16px * var(--fs, 1)); }
 .exam-text { font-size: .875rem; }
@@ -86,3 +86,17 @@ html.dark ::placeholder { color: #64748b; }
 html.dark .text-slate-900, html.dark h1, html.dark h2, html.dark h3, html.dark h4 { color: #f1f5f9; }
 html.dark thead { background-color: #273449 !important; }
 html.dark .hover\:bg-slate-50:hover, html.dark .hover\:bg-slate-100:hover { background-color: #334155 !important; }
+
+/* ===== v3: responsif HP ===== */
+html, body { max-width: 100%; }
+body { overflow-x: hidden; }
+img, video, canvas { max-width: 100%; height: auto; }
+button.font-arabic { unicode-bidi: isolate; direction: ltr; }
+@media (max-width: 640px) {
+  main { padding: .75rem !important; }
+  .card { padding: 1rem; }
+  table { font-size: .72rem; }
+  .teacher-tab-btn, .admin-tab-btn { padding: .45rem .65rem; }
+  input[type="text"], input[type="number"], input[type="password"], input[type="datetime-local"], select, textarea { font-size: 16px; }   /* cegah zoom otomatis iOS saat mengetik */
+  .modal > div { padding: 1rem; margin: .5rem 0; border-radius: .75rem; }
+}
