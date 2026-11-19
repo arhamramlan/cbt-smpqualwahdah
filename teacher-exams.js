@@ -215,7 +215,8 @@ function drawGrading() {
     <div class="flex justify-between items-center"><strong class="text-xs">${esc(x.name || x.username)} <span class="text-slate-400 font-normal">(${esc(x.class)})</span></strong>
       <span class="text-[10px] font-bold ${x.needsGrading ? 'text-amber-700' : 'text-emerald-700'}">${x.needsGrading ? 'Belum dikoreksi' : 'Sudah dikoreksi'} • Nilai ${x.pct ?? 0}</span></div>
     ${items.map((i) => { const q = qs[i], max = +q.score || 0, cur = x.scoreManual?.[i];
-      return `<div class="bg-white border rounded-lg p-2.5 text-xs space-y-1"><p dir="auto" class="font-semibold whitespace-pre-wrap">#${i + 1} [${q.type}] ${esc(q.text)}</p>
+      return `<div class="bg-white border rounded-lg p-2.5 text-xs space-y-1">${q.passageId ? `<p class="text-[10px] text-emerald-700">📖 ${esc((s.packageSnapshot.passages || []).find((p) => p.id === q.passageId)?.title || 'Bacaan')}</p>` : ''}
+        <p dir="auto" class="font-semibold whitespace-pre-wrap">#${i + 1} [${q.type}] ${esc(q.text)}</p>
         <p class="text-[11px] text-slate-500">Kunci/pedoman: <span dir="auto">${esc(q.key || '-')}</span></p>
         <p dir="auto" class="bg-slate-50 border rounded p-2 whitespace-pre-wrap">${esc(x.answers[i])}</p>
         <label class="text-[11px] font-bold">Skor (0–${max}): <input type="number" min="0" max="${max}" step="0.5" id="g_${x.id}_${i}" value="${cur ?? ''}" class="inp w-20 inline-block"></label></div>`; }).join('')}
