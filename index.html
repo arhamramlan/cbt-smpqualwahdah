@@ -18,33 +18,33 @@
   
   <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
   <script>try{var p=JSON.parse(localStorage.getItem('cbt_prefs')||'{}');if(p.dark)document.documentElement.classList.add('dark')}catch(e){}</script>
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col text-sm">
 
   <!-- HEADER UTAMA -->
-<header class="bg-blue-900 text-white p-4 shadow-md flex justify-between items-center">
-  <div class="flex items-center space-x-3">
-    <i class="fa-solid fa-graduation-cap text-3xl text-amber-400"></i>
-    <div>
-      <h1 id="headerSchoolName" class="font-bold text-lg leading-tight">SMP Qur'an Al Wahdah</h1>
-      <p id="headerSubTitle" class="text-xs text-blue-200">Sistem CBT - Tahun Ajaran 2026/2027 (Ganjil)</p>
+<header class="bg-blue-900 text-white px-3 py-2.5 md:p-4 shadow-md flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-3">
+  <div class="flex items-center gap-2.5 min-w-0">
+    <i class="fa-solid fa-graduation-cap text-2xl md:text-3xl text-amber-400 shrink-0"></i>
+    <div class="min-w-0">
+      <h1 id="headerSchoolName" class="font-bold text-base md:text-lg leading-tight">SMP Qur'an Al Wahdah</h1>
+      <p id="headerSubTitle" class="text-[10px] md:text-xs text-blue-200 leading-tight">Sistem CBT - Tahun Ajaran 2026/2027 (Ganjil)</p>
     </div>
   </div>
 
-  <div class="flex items-center gap-2 md:gap-3">
+  <div class="flex flex-wrap items-center justify-between md:justify-end gap-2 md:gap-3 w-full md:w-auto">
   <div id="prefsBar" class="flex items-center gap-1 text-xs print:hidden">
-    <button title="Perkecil huruf" onclick="CBTPrefs.bumpFont(-1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1 rounded font-bold">A−</button>
-    <button title="Perbesar huruf" onclick="CBTPrefs.bumpFont(1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1 rounded font-bold">A+</button>
+    <button title="Perkecil huruf" onclick="CBTPrefs.bumpFont(-1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1.5 rounded font-bold">A−</button>
+    <button title="Perbesar huruf" onclick="CBTPrefs.bumpFont(1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1.5 rounded font-bold">A+</button>
     <button title="Perkecil teks Arab" onclick="CBTPrefs.bumpArabic(-1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1 rounded font-arabic">ع−</button>
     <button title="Perbesar teks Arab" onclick="CBTPrefs.bumpArabic(1)" class="bg-blue-800 hover:bg-blue-700 px-2 py-1 rounded font-arabic">ع+</button>
     <button title="Mode gelap / terang" data-pref-dark onclick="CBTPrefs.toggleDark()" class="bg-blue-800 hover:bg-blue-700 px-2 py-1 rounded"><i class="fa-solid fa-moon"></i></button>
   </div>
-  <div id="navUserArea" class="flex items-center space-x-3 hidden">
-    <span id="navUserInfo" class="text-xs bg-blue-800 px-3 py-1 rounded-full font-bold text-amber-300"></span>
-    <button id="btnProfileHeader" onclick="openProfileModal()" class="bg-blue-700 hover:bg-blue-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1"><i class="fa-solid fa-lock"></i> Password</button>
+  <div id="navUserArea" class="flex flex-wrap items-center gap-2 hidden">
+    <span id="navUserInfo" class="text-xs bg-blue-800 px-3 py-1 rounded-full font-bold text-amber-300 truncate max-w-[11rem] md:max-w-none"></span>
+    <button id="btnProfileHeader" onclick="openProfileModal()" class="bg-blue-700 hover:bg-blue-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1"><i class="fa-solid fa-lock"></i><span class="hidden sm:inline"> Password</span></button>
     <button id="btnLogoutHeader" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1">
-      <i class="fa-solid fa-right-from-bracket"></i> Keluar
+      <i class="fa-solid fa-right-from-bracket"></i><span class="hidden sm:inline"> Keluar</span>
     </button>
   </div>
   </div>
@@ -580,7 +580,7 @@
           <ul class="list-disc pl-5 space-y-0.5 text-slate-600">
             <li>Aktifkan mode <b>jangan ganggu</b> / matikan notifikasi, lalu isi baterai &amp; pastikan internet stabil.</li>
             <li>Jawaban tersimpan otomatis. Jika halaman tertutup, masukkan token yang sama untuk melanjutkan; waktu tetap berjalan.</li>
-            <li>Gunakan tombol <b>A− A+</b> / <b>ع− ع+</b> / mode gelap di bagian atas untuk kenyamanan membaca.</li>
+            <li>Gunakan tombol <b>A− A+</b> / <bdi dir="ltr"><b>ع− ع+</b></bdi> / mode gelap di bagian atas untuk kenyamanan membaca.</li>
           </ul>
         </div>
         <div class="card p-6 text-center space-y-4">
@@ -734,7 +734,7 @@
       <div class="flex justify-end gap-2"><button type="button" onclick="closeProfileModal()" class="btn btn-gray">Batal</button><button type="submit" class="btn btn-blue">Simpan</button></div>
     </form></div></div>
 
-  <script type="module" src="ui-prefs.js?v=3"></script>
+  <script type="module" src="ui-prefs.js?v=4"></script>
   <script type="module" src="firebase-config.js"></script>
   <script type="module" src="app-core-firebase.js"></script>
   <script type="module" src="app-exam-firebase.js"></script>
