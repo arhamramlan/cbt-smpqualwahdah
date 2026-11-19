@@ -3,7 +3,7 @@ import { db, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, delete
 import { LETTERS, TOKEN_CHARS, LIMITS, TYPE_LABEL } from './constants.js';
 import { scoreItem, computeResult, resultFields, sessResult, buildOrder, isFilled } from './scoring.js';
 import { me, subjects, classes, packages, schedules, assignedSubjects, myPackages, schedOf, on } from './teacher-state.js';
-import { $, esc, empty, arCls, fmtDT, download, slug } from './util.js';
+import { $, esc, empty, arCls, fmtDT, fmtStart, download, slug } from './util.js';
 
 const { listen, stopListen, runChunks, randomString, log: logActivity } = window.CBT;
 let rosterCache = null, monSched = '', gradeData = { sched: null, sessions: [] }, repData = { sched: null, rows: [], items: [], all: [] };
@@ -43,7 +43,7 @@ function renderSummary() {
   $('statPendingGrading').innerText = pend.length;
   $('statOnlineStudents').innerText = sumOn.filter((s) => ids.has(s.schedId)).length;
   $('summaryExamsList').innerHTML = todays.length ? todays.map((s) => `<div class="flex justify-between items-center border rounded-lg p-2.5 text-xs">
-    <div><strong>${esc(s.title)}</strong><span class="block text-[10px] text-slate-500">${esc((s.classes || []).join(', '))} • ${esc(s.startTime || '')} • ${s.duration} mnt</span></div>
+    <div><strong>${esc(s.title)}</strong><span class="block text-[10px] text-slate-500">${esc((s.classes || []).join(', '))} • ${esc(fmtStart(s))} • ${s.duration} mnt</span></div>
     <button onclick="openMonitoring('${s.id}')" class="btn btn-sm btn-blue">Pantau</button></div>`).join('') : '<p class="text-xs text-slate-400">Tidak ada ujian hari ini.</p>';
   const by = {}; pend.forEach((s) => (by[s.schedId] = (by[s.schedId] || 0) + 1));
   $('summaryGradingPendingList').innerHTML = Object.keys(by).length ? Object.entries(by).map(([id, n]) => `<div class="flex justify-between items-center border rounded-lg p-2.5 text-xs">
@@ -89,7 +89,7 @@ function renderScheduleTable() {
   tb.innerHTML = schedules.length ? schedules.map((s) => { const [lbl, cls] = schedState(s); return `<tr class="border-b text-xs">
     <td class="p-2.5"><strong class="text-slate-800">${esc(s.title)}</strong> <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${cls}">${lbl}</span>${s.kind ? ` <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-100 text-violet-800">${s.kind === 'remedial' ? 'Remedial' : 'Susulan'} • ${(s.targetUids || []).length} siswa</span>` : ''}<br>
       <span class="text-[10px] text-slate-500">Token: <code class="font-bold text-blue-900 bg-blue-50 px-1 rounded">${esc(s.token)}</code> • ${s.packageSnapshot?.questions?.length || 0} soal</span></td>
-    <td class="p-2.5">${esc((s.startTime || '').replace('T', ' ') || 'Sekarang')} (${s.duration} Mnt)</td>
+    <td class="p-2.5">${esc(fmtStart(s))} (${s.duration} Mnt)</td>
     <td class="p-2.5">${esc((s.classes || []).join(', '))} | KKM: ${s.kkm}</td>
     <td class="p-2.5 text-center space-x-1"><button onclick="toggleScheduleActive('${s.id}')" class="btn btn-sm btn-gray">${s.active === false ? 'Aktifkan' : 'Nonaktifkan'}</button>
       <button onclick="openFollowUpModal('susulan','${s.id}')" class="btn btn-sm btn-blue">Susulan</button>
