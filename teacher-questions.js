@@ -10,7 +10,11 @@ let activePackageId = null, importBuf = null, rowsMode = 'OPT';   // rowsMode: i
 const curPkg = () => packages.find((p) => p.id === activePackageId);
 const pkgPassages = () => curPkg()?.passages || [];
 
-on('packages', () => { renderPackageGrid(); renderPackageDetail(); });
+on('packages', () => {
+  renderPackageGrid(); renderPackageDetail();
+  if (!$('modalPassage').classList.contains('hidden')) drawPassageList();
+  if (!$('modalAddQuestion').classList.contains('hidden')) fillPassageSelect($('qPassage').value);   // bacaan baru langsung muncul di form soal
+});
 on('me', () => startBank());
 
 // ------------------------------------------------------------------
@@ -69,9 +73,12 @@ function renderPackageDetail() {
   $('activePkgInfo').innerText = `Mapel: ${(p.subject || '').toUpperCase()} | Target: ${p.targetClass} | Total Bobot: ${(p.questions || []).reduce((n, q) => n + (+q.score || 0), 0)} | Bacaan: ${pkgPassages().length}`;
   $('btnValidatePkg').onclick = () => validatePackage(p.id);
   const qs = p.questions || [], ps = Object.fromEntries(pkgPassages().map((x) => [x.id, x]));
+  const shown = new Set();
   $('packageQuestionsList').innerHTML = qs.length ? qs.map((q, i) => {
     const err = validateQuestion(q);
-    return `<div class="bg-slate-50 p-3 rounded-lg border text-xs space-y-2 ${err ? 'border-rose-300' : ''}">
+    const pass = q.passageId && ps[q.passageId] && !shown.has(q.passageId) ? (shown.add(q.passageId), ps[q.passageId]) : null;
+    return `${pass ? `<div class="bg-emerald-50 border border-emerald-300 rounded-lg p-3 text-xs space-y-1"><div class="font-bold text-emerald-800">📖 Teks Bacaan: ${esc(pass.title)}</div>
+      <p dir="auto" class="whitespace-pre-wrap max-h-40 overflow-y-auto ${arCls(pass.text)}">${esc(pass.text)}</p>${pass.image ? `<img src="${pass.image}" class="max-h-32 rounded border" alt="">` : ''}</div>` : ''}<div class="bg-slate-50 p-3 rounded-lg border text-xs space-y-2 ${err ? 'border-rose-300' : ''}">
     <div class="flex flex-wrap justify-between items-center gap-2"><strong class="text-slate-800">#${i + 1} [<span class="text-blue-900">${esc(TYPE_LABEL[q.type] || q.type)}</span>] Bobot: ${esc(q.score || 2)} ${err ? `<span class="text-rose-600 font-semibold">⚠ ${esc(err)}</span>` : ''}</strong>
       <div class="space-x-1 shrink-0"><button onclick="openAddQuestionModal(${i})" class="btn btn-sm btn-amber">Edit</button>
         <button onclick="saveQuestionToBank(${i})" class="btn btn-sm btn-green">Ke Bank</button>
@@ -188,6 +195,7 @@ window.toggleQuestionOptionsUI = function () {
   if (rows && (mode !== rowsMode || !$('optRows').children.length)) mode === 'JODOH' ? renderPairRows([{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }]) : renderOptRows(['', '', '', '']);
 };
 function fillPassageSelect(sel) {
+  $('qPassageHint').innerText = pkgPassages().length ? '' : 'Belum ada teks bacaan di paket ini — klik tautan di bawah untuk membuatnya.';
   $('qPassage').innerHTML = '<option value="">— Tanpa teks bacaan —</option>' + pkgPassages().map((p) => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join('');
   $('qPassage').value = sel || '';
 }
@@ -253,14 +261,14 @@ window.handleSavePassage = async function (e) {
   const id = $('passageEditId').value || `ps_${Date.now().toString(36)}`;
   const item = { id, title: $('passageTitle').value.trim(), text: $('passageText').value.trim(), ...($('passageImageB64').value ? { image: $('passageImageB64').value } : {}) };
   if (!item.title || !item.text) return alert('Judul dan teks bacaan wajib diisi!');
-  const list = pkgPassages().filter((p) => p.id !== id); list.push(item);
-  if (await savePackage(curPkg().questions || [], list)) { window.resetPassageForm(); setTimeout(drawPassageList, 400); }
+  const cur = pkgPassages(), list = cur.some((p) => p.id === id) ? cur.map((p) => (p.id === id ? item : p)) : [...cur, item];
+  if (await savePackage(curPkg().questions || [], list)) window.resetPassageForm();
 };
 window.deletePassage = async (id) => {
   const n = (curPkg().questions || []).filter((q) => q.passageId === id).length;
   if (!confirm(n ? `Bacaan ini dipakai ${n} soal. Hapus bacaan dan lepaskan dari soal tersebut?` : 'Hapus teks bacaan ini?')) return;
   const qs = (curPkg().questions || []).map((q) => { if (q.passageId !== id) return q; const { passageId, ...rest } = q; return rest; });
-  if (await savePackage(qs, pkgPassages().filter((p) => p.id !== id))) setTimeout(drawPassageList, 400);
+  await savePackage(qs, pkgPassages().filter((p) => p.id !== id));
 };
 
 // ------------------------------------------------------------------
