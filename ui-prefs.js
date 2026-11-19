@@ -19,3 +19,11 @@ window.CBTPrefs = {
   bumpArabic: (d) => { p.ar = Math.round(clamp(p.ar + d * 0.15, 1, 2.4) * 100) / 100; apply(); }
 };
 apply();
+
+// Diagnosa: bila style.css lama/ter-cache, mode gelap & ukuran huruf tidak akan bekerja — beri tahu pengguna
+addEventListener('load', () => {
+  if (getComputedStyle(document.documentElement).getPropertyValue('--css-v').trim() === '3') return;
+  const b = Object.assign(document.createElement('div'), { innerHTML: '⚠ File <b>style.css</b> di server belum versi terbaru, sehingga mode gelap & ukuran huruf belum berfungsi. Unggah ulang style.css lalu tekan Ctrl+F5.' });
+  b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99;background:#be123c;color:#fff;font:600 12px sans-serif;padding:8px 12px;text-align:center';
+  document.body.appendChild(b);
+});
