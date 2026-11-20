@@ -189,7 +189,7 @@ async function finishExam(auto) {
 }
 function showResult(d) {
   overlay(`<i class="fa-solid fa-circle-check text-4xl text-emerald-600"></i><h3 class="font-bold text-lg">Ujian Selesai</h3>
-    ${ex.sched.showResult ? `<p class="text-3xl font-extrabold text-blue-900">${Number(d.pct || 0).toFixed(1)}</p><p class="text-xs text-slate-500">${d.needsGrading ? 'Nilai sementara — soal uraian menunggu koreksi guru.' : (d.pct >= ex.sched.kkm ? 'Tuntas' : 'Belum tuntas')}</p>` : '<p class="text-xs text-slate-600">Jawaban Anda telah tersimpan. Nilai akan diumumkan oleh guru.</p>'}
+    ${ex.sched.showResult ? `<p class="text-3xl font-extrabold text-blue-900">${Number(d.pct || 0).toFixed(1)}<span class="text-sm font-bold text-slate-400"> / 100</span></p><p class="text-[11px] text-slate-500">Skor ${+((d.scoreAuto || 0) + (d.scoreManualPts || 0)).toFixed(1)} dari ${+(d.maxScore || 0).toFixed(1)}</p><p class="text-xs text-slate-500">${d.needsGrading ? 'Nilai sementara — soal uraian menunggu koreksi guru.' : (d.pct >= ex.sched.kkm ? 'Tuntas' : 'Belum tuntas')}</p>` : '<p class="text-xs text-slate-600">Jawaban Anda telah tersimpan. Nilai akan diumumkan oleh guru.</p>'}
     <button onclick="leaveExam()" class="btn btn-blue w-full py-2">Keluar</button>`);
 }
 function leaveExam() {
