@@ -1,8 +1,8 @@
 // teacher-questions.js — paket soal, form soal, teks bacaan, bank soal bersama, impor Word/Excel
 import { db, collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where } from './firebase-config.js';
 import { TYPES, LETTERS, TYPE_LABEL, KEY_INFO, DIFFICULTY, LIMITS } from './constants.js';
-import { toArr } from './scoring.js';
-import { me, subjects, classes, packages, assignedSubjects, myPackages, on } from './teacher-state.js';
+import { toArr, scaleWeights } from './scoring.js';
+import { me, subjects, classes, packages, schedules, assignedSubjects, myPackages, on } from './teacher-state.js';
 import { $, esc, empty, arCls, compressDataUrl, fileToDataUrl, download } from './util.js';
 
 const { listen, runChunks, log: logActivity } = window.CBT;
@@ -70,7 +70,8 @@ function renderPackageDetail() {
   if (!p) return box.classList.add('hidden');
   box.classList.remove('hidden');
   $('activePkgTitle').innerText = `${(p.title || '').toUpperCase()} [Status: ${p.status}]`;
-  $('activePkgInfo').innerText = `Mapel: ${(p.subject || '').toUpperCase()} | Target: ${p.targetClass} | Total Bobot: ${(p.questions || []).reduce((n, q) => n + (+q.score || 0), 0)} | Bacaan: ${pkgPassages().length}`;
+  const totalW = Math.round((p.questions || []).reduce((n, q) => n + (+q.score || 0), 0) * 100) / 100;
+  $('activePkgInfo').innerText = `Mapel: ${(p.subject || '').toUpperCase()} | Target: ${p.targetClass} | Total Bobot: ${totalW}${totalW && totalW !== 100 ? ' → dikonversi ke skala 100' : ' (pas 100)'} | Bacaan: ${pkgPassages().length}`;
   $('btnValidatePkg').onclick = () => validatePackage(p.id);
   const qs = p.questions || [], ps = Object.fromEntries(pkgPassages().map((x) => [x.id, x]));
   const shown = new Set();
@@ -79,7 +80,7 @@ function renderPackageDetail() {
     const pass = q.passageId && ps[q.passageId] && !shown.has(q.passageId) ? (shown.add(q.passageId), ps[q.passageId]) : null;
     return `${pass ? `<div class="bg-emerald-50 border border-emerald-300 rounded-lg p-3 text-xs space-y-1"><div class="font-bold text-emerald-800">📖 Teks Bacaan: ${esc(pass.title)}</div>
       <p dir="auto" class="whitespace-pre-wrap max-h-40 overflow-y-auto ${arCls(pass.text)}">${esc(pass.text)}</p>${pass.image ? `<img src="${pass.image}" class="max-h-32 rounded border" alt="">` : ''}</div>` : ''}<div class="bg-slate-50 p-3 rounded-lg border text-xs space-y-2 ${err ? 'border-rose-300' : ''}">
-    <div class="flex flex-wrap justify-between items-center gap-2"><strong class="text-slate-800">#${i + 1} [<span class="text-blue-900">${esc(TYPE_LABEL[q.type] || q.type)}</span>] Bobot: ${esc(q.score || 2)} ${err ? `<span class="text-rose-600 font-semibold">⚠ ${esc(err)}</span>` : ''}</strong>
+    <div class="flex flex-wrap justify-between items-center gap-2"><strong class="text-slate-800">#${i + 1} [<span class="text-blue-900">${esc(TYPE_LABEL[q.type] || q.type)}</span>] Bobot: ${esc(q.score || 2)}${totalW && totalW !== 100 ? ` <span class="font-normal text-slate-500">(≈ ${(q.score / totalW * 100).toFixed(1)} dari 100)</span>` : ''} ${err ? `<span class="text-rose-600 font-semibold">⚠ ${esc(err)}</span>` : ''}</strong>
       <div class="space-x-1 shrink-0"><button onclick="openAddQuestionModal(${i})" class="btn btn-sm btn-amber">Edit</button>
         <button onclick="saveQuestionToBank(${i})" class="btn btn-sm btn-green">Ke Bank</button>
         <button onclick="duplicateQuestionFire(${i})" class="btn btn-sm btn-gray">Duplikat</button><button onclick="deleteQuestionFire(${i})" class="btn btn-sm btn-red">Hapus</button></div></div>
@@ -119,7 +120,7 @@ const parsePair = (s) => { const m = String(s || '').split(/\s*(?:=>|->|\|)\s*/)
 export function buildQuestion(raw) {
   const type = String(raw.type || 'PG').trim().toUpperCase();
   if (!TYPES.includes(type)) return { error: `jenis "${raw.type}" tidak dikenal` };
-  const q = { type, text: String(raw.text || '').trim(), score: parseInt(raw.score) || 2 };
+  const q = { type, text: String(raw.text || '').trim(), score: Math.round((parseFloat(String(raw.score ?? '').replace(',', '.')) || 2) * 100) / 100 };
   if (raw.image) q.image = raw.image;
   if (raw.passageId) q.passageId = raw.passageId;
   if (raw.chapter) q.chapter = String(raw.chapter).trim();
@@ -154,6 +155,14 @@ async function validatePackage(id) {
   alert('Paket soal berhasil ditandai SIAP dan bisa dijadwalkan!');
 }
 window.validateAndSetPackageReady = validatePackage;
+window.scalePackageWeights = async function () {
+  const p = curPkg(), qs = p?.questions || []; if (!qs.length) return alert('Paket belum berisi soal.');
+  const total = Math.round(qs.reduce((n, x) => n + (+x.score || 0), 0) * 100) / 100;
+  const used = schedules.some((s) => s.packageId === p.id);
+  if (!confirm(`Total bobot sekarang: ${total}.\n\nSemua bobot akan diskalakan (perbandingan antar soal tetap) sehingga totalnya tepat 100, dan setiap soal langsung bernilai sebagai poin dari 100.${used ? '\n\n⚠ Paket ini sudah dipakai jadwal. Jadwal lama tidak berubah sampai Anda menjalankan "Penilaian Ulang"; skor manual uraian yang sudah diberikan memakai skala lama.' : ''}\n\nLanjutkan?`)) return;
+  const w = scaleWeights(qs.map((x) => x.score));
+  await savePackage(qs.map((x, i) => ({ ...x, score: w[i] })));
+};
 window.duplicateQuestionFire = async (i) => { const qs = [...curPkg().questions]; qs.splice(i + 1, 0, JSON.parse(JSON.stringify(qs[i]))); await savePackage(qs); };
 window.deleteQuestionFire = async (i) => { if (!confirm(`Hapus soal #${i + 1}?`)) return; const qs = [...curPkg().questions]; qs.splice(i, 1); await savePackage(qs); };
 
