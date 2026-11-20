@@ -327,6 +327,8 @@ function drawReport(s) {
   const avg = n ? pcts.reduce((a, b) => a + b, 0) / n : 0;
   const card = (l, v) => `<div class="bg-slate-50 border rounded-lg p-2"><span class="block text-[10px] text-slate-500 font-bold uppercase">${l}</span><strong class="text-lg text-blue-900">${v}</strong></div>`;
   $('reportSummaryBox').innerHTML = card('Peserta', n) + card('Rata-rata', avg.toFixed(1)) + card('Tertinggi', n ? Math.max(...pcts).toFixed(1) : '-') + card('Terendah', n ? Math.min(...pcts).toFixed(1) : '-') + card('Ketuntasan', n ? Math.round(rows.filter((o) => o.tuntas).length / n * 100) + '%' : '-');
+  const tw = Math.round(qs.reduce((x, q) => x + (+q.score || 0), 0) * 100) / 100;
+  $('reportSummaryBox').innerHTML += `<p class="col-span-full text-left text-[10px] text-slate-500">Nilai Akhir = (skor otomatis + skor manual) ÷ total bobot (${tw}) × 100 → skor penuh = 100.</p>`;
   const sorted = [...rows].sort((a, b) => b.r.pct - a.r.pct), k = Math.max(1, Math.round(n * 0.27)), top = sorted.slice(0, k), bot = sorted.slice(-k);
   const ratio = (list, i) => list.reduce((a, o) => a + scoreItem(qs[i], o.x.answers?.[i]) / (+qs[i].score || 1), 0) / (list.length || 1);
   const items = qs.map((q, i) => (q.type === 'URAIAN' ? null : { no: i + 1, type: q.type, text: q.text, chapter: q.chapter || '', p: n ? ratio(rows, i) : 0, d: n >= 5 ? ratio(top, i) - ratio(bot, i) : null })).filter(Boolean);
@@ -363,7 +365,7 @@ window.printStudentSheet = function (sid) {
   pdfHeader(pdf, 'LEMBAR HASIL UJIAN', s.title);
   pdf.autoTable({ startY: 33, theme: 'plain', styles: { fontSize: 10, cellPadding: 1.2 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 } }, body: [
     ['Nama', x.name || x.username], ['NISN / Kelas', `${x.nisn || '-'} / ${x.class || '-'}`], ['Mulai - Selesai', `${fmtDT(x.startedAt)} - ${fmtDT(x.finishedAt)}`],
-    ['Nilai Akhir', `${r.pct.toFixed(1)}  (KKM ${s.kkm})`], ['Keterangan', r.pct >= s.kkm ? 'TUNTAS' : 'BELUM TUNTAS (REMEDIAL)'], ['Pelanggaran', `${x.violations || 0}x`]] });
+    ['Skor', `${(r.auto + r.man).toFixed(1)} dari ${r.max} (bobot total)`], ['Nilai Akhir (skala 100)', `${r.pct.toFixed(1)}  (KKM ${s.kkm})`], ['Keterangan', r.pct >= s.kkm ? 'TUNTAS' : 'BELUM TUNTAS (REMEDIAL)'], ['Pelanggaran', `${x.violations || 0}x`]] });
   const bab = {}, rows = qs.map((q, i) => {
     const m = x.scoreManual?.[i], max = +q.score || 0, filled = isFilled(x.answers?.[i]);
     const got = m != null ? +m : q.type === 'URAIAN' ? null : scoreItem(q, x.answers?.[i]);
