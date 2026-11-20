@@ -1,6 +1,6 @@
 // Jalankan: node scoring.test.js   (tidak butuh Firebase / browser)
 import assert from 'node:assert/strict';
-import { scoreItem, computeResult, buildOrder, buildOptOrder, isFilled } from './scoring.js';
+import { scoreItem, computeResult, buildOrder, buildOptOrder, isFilled, scaleWeights } from './scoring.js';
 
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✔', name); };
 
@@ -65,5 +65,21 @@ t('buildOptOrder: JODOH selalu diacak, PG sesuai flag', () => {
   const qs = [{ type: 'PG', options: ['a', 'b', 'c'] }, { type: 'JODOH', pairs: [{}, {}, {}] }];
   const a = buildOptOrder(qs, false); assert.ok(!(0 in a)); assert.equal(a[1].length, 3);
   assert.equal(buildOptOrder(qs, true)[0].length, 3);
+});
+const sum = (a) => Math.round(a.reduce((x, y) => x + y, 0) * 100) / 100;
+t('scaleWeights: total tepat 100, perbandingan tetap', () => {
+  assert.deepEqual(scaleWeights([2, 2, 2, 2, 2]), [20, 20, 20, 20, 20]);
+  assert.deepEqual(scaleWeights([2, 3, 5]), [20, 30, 50]);
+  const w = scaleWeights([1, 1, 1]); assert.equal(sum(w), 100); assert.deepEqual(w.slice().sort(), [33.33, 33.33, 33.34]);
+});
+t('scaleWeights: jumlah selalu 100 untuk berbagai paket', () => {
+  for (const arr of [[2, 3, 2, 5, 3, 3, 2], Array(7).fill(2), Array(40).fill(1), Array(33).fill(3), [1, 99, 7]]) {
+    const w = scaleWeights(arr); assert.equal(sum(w), 100); assert.ok(w.every((x) => x > 0));
+  }
+});
+t('semua benar → nilai 100 walau total bobot bukan 100', () => {
+  const qs = [{ type: 'PG', key: 'A', score: 2 }, { type: 'BS', key: 'BENAR', score: 3 }, { type: 'ISIAN', key: 'x', score: 5 }];
+  assert.equal(computeResult(qs, { 0: 'A', 1: 'BENAR', 2: 'x' }, {}).pct, 100);
+  assert.equal(computeResult(scaleWeights(qs.map((q) => q.score)).map((s, i) => ({ ...qs[i], score: s })), { 0: 'A', 1: 'BENAR', 2: 'x' }, {}).pct, 100);
 });
 console.log(`\n${n} pengujian lulus.`);
