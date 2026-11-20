@@ -75,3 +75,15 @@ export function buildOptOrder(qs, randomizeOptions, rnd = Math.random) {
   return out;
 }
 export const optionLetter = (k) => LETTERS[k];
+
+// skala ulang bobot agar totalnya tepat `target` (default 100), perbandingan antar soal tetap.
+// Memakai metode sisa terbesar pada ketelitian 0,01 sehingga jumlahnya selalu pas.
+export function scaleWeights(scores, target = 100) {
+  const w = scores.map((x) => Math.max(0, +x || 0)), total = w.reduce((a, b) => a + b, 0);
+  if (!w.length || total <= 0) return scores.map(Number);
+  const units = target * 100, raw = w.map((x) => (x / total) * units), base = raw.map(Math.floor);
+  let left = units - base.reduce((a, b) => a + b, 0);
+  raw.map((r, i) => [r - base[i], i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left > 0) { base[i]++; left--; } });
+  base.forEach((b, i) => { if (b < 1 && w[i] > 0) { base[i] = 1; base[base.indexOf(Math.max(...base))]--; } });      // tidak boleh 0
+  return base.map((b) => b / 100);
+}
