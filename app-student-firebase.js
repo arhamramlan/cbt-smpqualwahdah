@@ -23,7 +23,7 @@ window.validateStudentToken = async function () {
     if (got.exists() && got.data().status === 'Selesai') return alert('Anda sudah menyelesaikan ujian ini. Hubungi guru/pengawas bila perlu mengulang.');
     if (!got.exists()) {
       if (s.startAt && now < s.startAt) return alert(`Ujian belum dimulai. Mulai: ${fmtStart(s)}`);
-      if (s.startAt && s.lateTolerance > 0 && now > s.startAt + s.lateTolerance * 60000) return alert('Waktu masuk ujian telah lewat (melebihi toleransi keterlambatan). Hubungi pengawas.');
+      if (s.startAt && s.lateTolerance > 0 && now > s.startAt + s.lateTolerance * 60000 && !(s.allowLate || []).includes(u.uid)) return alert('Waktu masuk ujian telah lewat (melebihi toleransi keterlambatan). Mintalah pengawas/guru untuk mengizinkan Anda masuk, lalu coba lagi.');
     }
     const qs = s.packageSnapshot?.questions || [];
     if (!qs.length) return alert('Soal ujian ini belum tersedia. Hubungi guru.');
