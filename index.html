@@ -460,6 +460,7 @@
             <div class="flex flex-wrap gap-2">
               <button id="btnValidatePkg" class="btn btn-amber"><i class="fa-solid fa-circle-check mr-1"></i>Tandai Siap</button>
               <button onclick="downloadWordTemplate()" class="btn btn-blue"><i class="fa-solid fa-download mr-1"></i>Template Impor</button>
+              <button onclick="scalePackageWeights()" class="btn btn-gray" title="Skala semua bobot agar total tepat 100"><i class="fa-solid fa-scale-balanced mr-1"></i>Bobot Otomatis (Total 100)</button>
               <button onclick="openPassageModal()" class="btn btn-gray"><i class="fa-solid fa-book-open mr-1"></i>Teks Bacaan</button>
               <button onclick="openBankModal()" class="btn btn-gray"><i class="fa-solid fa-database mr-1"></i>Ambil dari Bank</button>
               <button onclick="saveAllToBank()" class="btn btn-gray"><i class="fa-solid fa-cloud-arrow-up mr-1"></i>Simpan Semua ke Bank</button>
@@ -695,7 +696,7 @@
       <div class="grid grid-cols-2 gap-2">
         <div><label class="lbl">Jenis Soal</label><select id="qTypeInput" onchange="toggleQuestionOptionsUI()" class="inp font-bold">
           <option value="PG">Pilihan Ganda</option><option value="PGK">PG Kompleks (Multi Kunci)</option><option value="BS">Benar / Salah</option><option value="ISIAN">Isian Singkat</option><option value="URAIAN">Uraian / Essay</option><option value="JODOH">Menjodohkan</option></select></div>
-        <div><label class="lbl">Bobot / Skor</label><input type="number" id="qScoreInput" value="2" min="1" required class="inp font-bold"></div>
+        <div><label class="lbl">Bobot / Skor</label><input type="number" id="qScoreInput" value="2" min="0.01" step="any" required class="inp font-bold"></div>
       </div>
       <div><label class="lbl">Teks Soal (mendukung Arab / RTL)</label><textarea id="qTextInput" rows="3" required dir="auto" class="inp"></textarea></div>
       <div><label class="lbl">Gambar Soal (opsional, otomatis dikecilkan)</label>
