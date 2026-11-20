@@ -506,25 +506,32 @@ window.removeTeacherAssignment = async function (tid, idx) {
   await updateDoc(doc(db, 'users', tid), { teacherAssignments: list });
 };
 
-// ---------- Kartu ujian (QR dibuat lokal, password tidak dikirim ke layanan luar) ----------
+// ---------- Kartu akses (siswa & guru). QR dibuat lokal, password tidak dikirim ke layanan luar ----------
 window.renderExamCards = function () {
   const grid = $('examCardsGrid'); if (!grid) return;
+  const role = $('cardRoleFilter')?.value || 'siswa', teacher = role === 'guru';
+  $('cardClassFilter')?.classList.toggle('hidden', teacher);            // filter kelas hanya untuk kartu siswa
   const cls = $('cardClassFilter')?.value || '';
-  const list = users.filter((u) => u.role === 'siswa' && (!cls || u.class === cls)).sort((a, b) => (a.class + a.name).localeCompare(b.class + b.name));
-  const s = settingsCache;
-  if (!list.length) { grid.innerHTML = '<p class="text-xs text-slate-400 p-4">Tidak ada kartu peserta untuk kelas ini.</p>'; return; }
-  grid.innerHTML = list.map((st, i) => `<div class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs break-inside-avoid">
+  const list = users.filter((u) => u.role === role && (teacher || !cls || u.class === cls))
+    .sort((a, b) => (teacher ? (a.name || a.username) : a.class + a.name).localeCompare(teacher ? (b.name || b.username) : b.class + b.name));
+  const s = settingsCache, year = `${esc(s.academicYear || '2026/2027')} (${esc(s.semester || 'GANJIL')})`;
+  if (!list.length) { grid.innerHTML = `<p class="text-xs text-slate-400 p-4">Tidak ada kartu untuk ${teacher ? 'guru' : 'kelas ini'}.</p>`; return; }
+  const teach = (u) => (u.teacherAssignments || []).map((a) => `${esc(a.subject)} (${esc((a.classes || []).join(', ') || '-')})`).join(' • ') || 'Belum ada penugasan';
+  grid.innerHTML = list.map((u, i) => `<div class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs break-inside-avoid">
     <div class="text-center border-b pb-1"><strong class="uppercase text-[11px] block text-blue-950">${esc(s.schoolName || "SMP QUR'AN AL WAHDAH")}</strong>
-      <span class="text-[9px] text-slate-500 uppercase font-bold">KARTU PESERTA UJIAN CBT T.A ${esc(s.academicYear || '2026/2027')} (${esc(s.semester || 'GANJIL')})</span></div>
-    <div class="flex justify-between items-center gap-2"><div class="space-y-1 text-[11px] flex-1">
-      <div><strong>Nama:</strong> ${esc(st.name || st.username)}</div><div><strong>NISN / Kelas:</strong> ${esc(st.nisn || '-')} / ${esc(st.class || '-')}</div>
-      <div><strong>Username:</strong> <code class="font-bold text-blue-900">${esc(st.username)}</code></div>
-      <div><strong>Password:</strong> <code class="font-bold text-rose-700">${esc(st.password || '-')}</code></div></div>
-      <div class="text-center"><div id="qr_${i}" class="w-20 h-20 flex items-center justify-center"></div><span class="text-[8px] text-slate-500 block font-bold mt-0.5">Scan Login</span></div></div>
-    <div class="border-t pt-1 text-[9px] text-slate-400 text-center font-bold uppercase">Harap Jaga Kerahasiaan Kartu Ujian Ini</div></div>`).join('');
+      <span class="text-[9px] text-slate-500 uppercase font-bold">${teacher ? 'KARTU AKSES GURU CBT' : 'KARTU PESERTA UJIAN CBT'} T.A ${year}</span></div>
+    <div class="flex justify-between items-center gap-2"><div class="space-y-1 text-[11px] flex-1 min-w-0">
+      <div><strong>Nama:</strong> ${esc(u.name || u.username)}</div>
+      ${teacher ? `<div><strong>Peran:</strong> Guru</div><div><strong>Mengampu:</strong> ${teach(u)}</div>`
+        : `<div><strong>NISN / Kelas:</strong> ${esc(u.nisn || '-')} / ${esc(u.class || '-')}</div>`}
+      <div><strong>Username:</strong> <code class="font-bold text-blue-900">${esc(u.username)}</code></div>
+      <div><strong>Password:</strong> <code class="font-bold text-rose-700">${esc(u.password || '-')}</code></div></div>
+      <div class="text-center shrink-0">${u.password ? `<div id="qr_${i}" class="w-20 h-20 flex items-center justify-center"></div><span class="text-[8px] text-slate-500 block font-bold mt-0.5">Scan Login</span>`
+        : '<div class="w-20 h-20 flex items-center justify-center text-[9px] text-slate-400 border border-dashed rounded">Tanpa QR</div>'}</div></div>
+    <div class="border-t pt-1 text-[9px] text-slate-400 text-center font-bold uppercase">Harap Jaga Kerahasiaan Kartu Ini</div></div>`).join('');
   if (typeof QRCode === 'undefined') return;
   const base = location.origin + location.pathname;
-  list.forEach((st, i) => new QRCode($(`qr_${i}`), { text: `${base}?u=${encodeURIComponent(st.username)}&p=${encodeURIComponent(st.password || '')}`, width: 80, height: 80, correctLevel: QRCode.CorrectLevel.L }));
+  list.forEach((u, i) => { if (u.password) new QRCode($(`qr_${i}`), { text: `${base}?u=${encodeURIComponent(u.username)}&p=${encodeURIComponent(u.password)}`, width: 80, height: 80, correctLevel: QRCode.CorrectLevel.L }); });
 };
 
 // ---------- Log (dibaca sekali, 200 terbaru; bukan listener realtime) ----------
