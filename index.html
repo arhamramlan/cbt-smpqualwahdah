@@ -88,7 +88,7 @@
           <button onclick="switchAdminTab('adminTabClasses')" id="btnAdminClasses" class="admin-tab-btn"><i class="fa-solid fa-school mr-1.5"></i>Master Kelas</button>
           <button onclick="switchAdminTab('adminTabSubjects')" id="btnAdminSubjects" class="admin-tab-btn"><i class="fa-solid fa-book mr-1.5"></i>Master Mapel</button>
           <button onclick="switchAdminTab('adminTabAssign')" id="btnAdminAssign" class="admin-tab-btn"><i class="fa-solid fa-chalkboard-user mr-1.5"></i>Penugasan Guru</button>
-          <button onclick="switchAdminTab('adminTabCards')" id="btnAdminCards" class="admin-tab-btn"><i class="fa-solid fa-id-card mr-1.5"></i>Cetak Kartu Ujian</button>
+          <button onclick="switchAdminTab('adminTabCards')" id="btnAdminCards" class="admin-tab-btn"><i class="fa-solid fa-id-card mr-1.5"></i>Cetak Kartu Akses</button>
           <button onclick="switchAdminTab('adminTabLogs')" id="btnAdminLogs" class="admin-tab-btn"><i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Log Aktivitas</button>
           <button onclick="switchAdminTab('adminTabSettings')" id="btnAdminSettings" class="admin-tab-btn"><i class="fa-solid fa-sliders mr-1.5"></i>Pengaturan Sistem</button>
         </div>
@@ -345,9 +345,10 @@
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 print:p-0 print:border-none">
           <div class="flex justify-between items-center border-b pb-3 print:hidden">
             <div>
-              <h3 class="font-bold text-slate-800"><i class="fa-solid fa-id-card text-blue-600 mr-2"></i>Cetak Kartu Peserta Ujian</h3>
+              <h3 class="font-bold text-slate-800"><i class="fa-solid fa-id-card text-blue-600 mr-2"></i>Cetak Kartu Akses (Siswa &amp; Guru)</h3>
             </div>
             <div class="flex gap-2">
+              <select id="cardRoleFilter" onchange="renderExamCards()" class="px-3 py-1.5 border rounded-lg text-xs font-semibold bg-slate-50"><option value="siswa">Kartu Siswa</option><option value="guru">Kartu Guru</option></select>
               <select id="cardClassFilter" onchange="renderExamCards()" class="px-3 py-1.5 border rounded-lg text-xs font-semibold bg-slate-50"></select>
               <button onclick="window.print()" class="bg-blue-800 text-white px-4 py-1.5 rounded-lg text-xs font-bold"><i class="fa-solid fa-print mr-1"></i>Cetak Kartu (A4)</button>
             </div>
