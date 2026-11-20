@@ -92,6 +92,7 @@ function renderScheduleTable() {
     <td class="p-2.5">${esc(fmtStart(s))} (${s.duration} Mnt)</td>
     <td class="p-2.5">${esc((s.classes || []).join(', '))} | KKM: ${s.kkm}</td>
     <td class="p-2.5 text-center space-x-1"><button onclick="toggleScheduleActive('${s.id}')" class="btn btn-sm btn-gray">${s.active === false ? 'Aktifkan' : 'Nonaktifkan'}</button>
+      <button onclick="openEditSchedule('${s.id}')" class="btn btn-sm btn-gray">Ubah</button>
       <button onclick="openFollowUpModal('susulan','${s.id}')" class="btn btn-sm btn-blue">Susulan</button>
       <button onclick="triggerReScoring('${s.id}')" class="btn btn-sm btn-amber">Penilaian Ulang</button>
       <button onclick="deleteScheduleFire('${s.id}')" class="btn btn-sm btn-red">Hapus</button></td></tr>`; }).join('') : empty(4, 'Belum ada jadwal ujian yang diterbitkan.');
@@ -119,6 +120,24 @@ window.handleSaveSchedule = async function (e) {
     logActivity(`Menerbitkan jadwal ujian: ${title} (token ${token})`);
     alert('Jadwal ujian berhasil diterbitkan!'); $('schedTitle').value = ''; window.generateRandomToken();
   } catch (err) { alert('Gagal menerbitkan jadwal: ' + err.message); }
+};
+window.openEditSchedule = function (id) {
+  const s = schedOf(id); if (!s) return;
+  $('esId').value = id; $('esHeading').innerText = `Ubah Jadwal: ${s.title}`;
+  $('esStart').value = s.startAt ? toLocalInput(s.startAt) : s.startTime || ''; $('esDuration').value = s.duration; $('esTolerance').value = s.lateTolerance || 0;
+  $('esMaxViol').value = s.maxViolations || 3; $('esKkm').value = s.kkm; $('esShowResult').checked = !!s.showResult;
+  $('modalEditSched').classList.remove('hidden');
+};
+window.closeEditSchedule = () => $('modalEditSched').classList.add('hidden');
+window.handleEditSchedule = async function (ev) {
+  ev.preventDefault();
+  const startAt = new Date($('esStart').value).getTime(); if (!startAt) return alert('Isi waktu mulai!');
+  const dur = parseInt($('esDuration').value);
+  if (!(dur > 0)) return alert('Durasi harus lebih dari 0 menit.');
+  const id = $('esId').value;
+  await updateDoc(doc(db, 'schedules', id), { startTime: $('esStart').value, startAt, duration: dur, lateTolerance: Math.max(0, parseInt($('esTolerance').value) || 0),
+    maxViolations: Math.max(1, parseInt($('esMaxViol').value) || 3), kkm: parseInt($('esKkm').value) || 75, showResult: $('esShowResult').checked });
+  logActivity(`Mengubah pengaturan jadwal: ${schedOf(id)?.title}`); window.closeEditSchedule();
 };
 window.toggleScheduleActive = async (id) => { const s = schedules.find((x) => x.id === id); if (s) await updateDoc(doc(db, 'schedules', id), { active: s.active === false }); };
 window.deleteScheduleFire = async function (id) {
@@ -170,10 +189,12 @@ window.renderMonitoringData = async function () {
       const x = by[u.uid], st = x?.status || 'Belum Masuk';
       if (!x) c.pending++; else if (st === 'Mengerjakan') c.ongoing++; else if (st === 'Selesai') c.finished++; else c.locked++;
       const b = (a, cl, t) => `<button onclick="controlStudentSession('${u.uid}','${a}')" ${x ? '' : 'disabled'} class="btn btn-sm ${cl}">${t}</button>`;
+      const allowed = (s.allowLate || []).includes(u.uid);
+      const allowBtn = x ? '' : `<button onclick="controlStudentSession('${u.uid}','allowLate')" ${allowed ? 'disabled' : ''} class="btn btn-sm btn-green">${allowed ? '✔ Diizinkan' : 'Izinkan Masuk'}</button>`;
       return `<tr class="border-b text-xs"><td class="p-2.5 font-bold text-slate-800">${esc(u.name || u.username)}</td><td class="p-2.5">${esc(u.class || '-')}</td>
         <td class="p-2.5"><span class="px-2 py-0.5 rounded font-bold ${{ Mengerjakan: 'bg-blue-100 text-blue-800', Selesai: 'bg-emerald-100 text-emerald-800', Terkunci: 'bg-rose-100 text-rose-800' }[st] || 'bg-slate-100 text-slate-700'}">${st}</span></td>
         <td class="p-2.5 font-bold">${x?.answeredCount || 0} / ${total}</td><td class="p-2.5 font-bold text-rose-600">${x?.violations || 0}x</td>
-        <td class="p-2.5 text-center space-x-1">${b('addTime', 'btn-amber', '+15 Mnt')}${b('forceSubmit', 'btn-blue', 'Paksa Kumpul')}${b('unlock', 'btn-green', 'Buka Kunci')}${b('reset', 'btn-red', 'Reset')}</td></tr>`;
+        <td class="p-2.5 text-center space-x-1">${allowBtn}${b('addTime', 'btn-amber', '+15 Mnt')}${b('forceSubmit', 'btn-blue', 'Paksa Kumpul')}${b('unlock', 'btn-green', 'Buka Kunci')}${b('reset', 'btn-red', 'Reset')}</td></tr>`;
     }).join('') || empty(6, 'Tidak ada siswa terdaftar pada kelas peserta.');
     $('monCountPending').innerText = c.pending; $('monCountOngoing').innerText = c.ongoing; $('monCountFinished').innerText = c.finished; $('monCountLocked').innerText = c.locked;
     $('monitoringLastUpdated').innerText = `Diperbarui ${new Date().toLocaleTimeString('id-ID')}`;
@@ -181,6 +202,12 @@ window.renderMonitoringData = async function () {
 };
 window.controlStudentSession = async function (uid, action) {
   const s = schedOf(monSched); if (!s) return;
+  if (action === 'allowLate') {                                   // izinkan siswa masuk walau melewati toleransi keterlambatan
+    const who = (await getRoster()).find((u) => u.uid === uid);
+    if (!confirm(`Izinkan ${who?.name || 'siswa ini'} masuk ujian walau terlambat?`)) return;
+    await updateDoc(doc(db, 'schedules', s.id), { allowLate: [...new Set([...(s.allowLate || []), uid])] });
+    logActivity(`Mengizinkan ${who?.username || uid} masuk terlambat pada ujian ${s.title}`); return;
+  }
   const ref = doc(db, 'sessions', `${monSched}_${uid}`), snap = await getDoc(ref); if (!snap.exists()) return;
   const x = snap.data(), label = { addTime: 'menambah waktu 15 menit untuk', forceSubmit: 'mengumpulkan paksa ujian', unlock: 'membuka kunci', reset: 'MERESET (menghapus jawaban)' }[action];
   if (!confirm(`Yakin ${label} siswa ${x.name || x.username}?`)) return;
@@ -246,11 +273,22 @@ function updateAnnounceLast() {
   el.innerText = a ? `Terakhir dikirim: "${a.text}" (${fmtDT(a.ts)})` : '';
 }
 on('schedules', updateAnnounceLast);
+on('schedules', () => { if (monSched && !$('tabMonitoring').classList.contains('hidden')) window.renderMonitoringData(); });
 window.sendAnnouncement = async function () {
   const s = schedOf($('monitorExamSelect').value); if (!s) return alert('Pilih ujian terlebih dahulu.');
   const text = $('announceText').value.trim(); if (!text) return alert('Tulis isi pengumuman.');
   await updateDoc(doc(db, 'schedules', s.id), { announcement: { text, ts: Date.now(), by: me.name || 'Pengawas' } });
   $('announceText').value = ''; logActivity(`Pengumuman ke peserta ${s.title}: ${text}`);
+};
+window.allowAllLate = async function () {                         // izinkan semua siswa yang belum masuk
+  const s = schedOf($('monitorExamSelect').value); if (!s) return alert('Pilih ujian terlebih dahulu.');
+  const roster = (await getRoster()).filter((u) => (s.targetUids ? s.targetUids.includes(u.uid) : (s.classes || []).includes(u.class)));
+  const snap = await getDocs(query(collection(db, 'sessions'), where('schedId', '==', s.id)));
+  const started = new Set(snap.docs.map((d) => d.data().uid)), pending = roster.filter((u) => !started.has(u.uid));
+  if (!pending.length) return alert('Semua siswa sudah masuk ujian.');
+  if (!confirm(`Izinkan ${pending.length} siswa yang belum masuk untuk masuk walau terlambat?`)) return;
+  await updateDoc(doc(db, 'schedules', s.id), { allowLate: [...new Set([...(s.allowLate || []), ...pending.map((u) => u.uid)])] });
+  logActivity(`Mengizinkan ${pending.length} siswa masuk terlambat pada ujian ${s.title}`);
 };
 window.clearAnnouncement = async function () {
   const s = schedOf($('monitorExamSelect').value); if (s) await updateDoc(doc(db, 'schedules', s.id), { announcement: null });
