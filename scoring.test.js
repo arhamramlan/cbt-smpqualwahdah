@@ -1,5 +1,6 @@
 // Jalankan: node scoring.test.js   (tidak butuh Firebase / browser)
 import assert from 'node:assert/strict';
+import { layoutCards } from './card-layout.js';
 import { scoreItem, computeResult, buildOrder, buildOptOrder, isFilled, scaleWeights } from './scoring.js';
 
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('✔', name); };
@@ -82,4 +83,15 @@ t('semua benar → nilai 100 walau total bobot bukan 100', () => {
   assert.equal(computeResult(qs, { 0: 'A', 1: 'BENAR', 2: 'x' }, {}).pct, 100);
   assert.equal(computeResult(scaleWeights(qs.map((q) => q.score)).map((s, i) => ({ ...qs[i], score: s })), { 0: 'A', 1: 'BENAR', 2: 'x' }, {}).pct, 100);
 });
+t('layoutCards: 2 kolom, tidak melewati batas halaman, halaman baru bila penuh', () => {
+  const pos = layoutCards(Array(12).fill(0.5));
+  assert.equal(pos[0].x, 10); assert.ok(pos[1].x > pos[0].x && pos[1].y === pos[0].y);
+  assert.ok(pos.every((p) => p.y + p.h <= 287.001), 'ada kartu melewati margin bawah');
+  assert.equal(pos.filter((p) => p.page === 0).length, 10); assert.equal(pos[10].page, 1); assert.equal(pos[10].y, 10);
+});
+t('layoutCards: kartu lebih tinggi pada satu baris tidak membuat baris terpotong', () => {
+  const pos = layoutCards([0.5, 0.9, 0.5, 0.5, 0.5, 0.5, 0.5, 0.9, 0.5, 0.5, 0.5, 0.5, 0.9, 0.5]);
+  assert.ok(pos.every((p) => p.y + p.h <= 287.001));
+});
+t('layoutCards: kartu ganjil dan daftar kosong', () => { assert.equal(layoutCards([0.5, 0.5, 0.5]).length, 3); assert.deepEqual(layoutCards([]), []); });
 console.log(`\n${n} pengujian lulus.`);
