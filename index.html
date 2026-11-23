@@ -14,6 +14,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   
   <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
@@ -347,11 +349,18 @@
             <div>
               <h3 class="font-bold text-slate-800"><i class="fa-solid fa-id-card text-blue-600 mr-2"></i>Cetak Kartu Akses (Siswa &amp; Guru)</h3>
             </div>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap items-center justify-end gap-2">
               <select id="cardRoleFilter" onchange="renderExamCards()" class="px-3 py-1.5 border rounded-lg text-xs font-semibold bg-slate-50"><option value="siswa">Kartu Siswa</option><option value="guru">Kartu Guru</option></select>
               <select id="cardClassFilter" onchange="renderExamCards()" class="px-3 py-1.5 border rounded-lg text-xs font-semibold bg-slate-50"></select>
+              <button data-card-dl onclick="downloadCardsPDF()" class="btn btn-red"><i class="fa-solid fa-file-pdf mr-1"></i>Unduh PDF</button>
+              <button data-card-dl onclick="downloadCardsZip()" class="btn btn-green"><i class="fa-solid fa-file-zipper mr-1"></i>Unduh ZIP (PNG)</button>
               <button onclick="window.print()" class="bg-blue-800 text-white px-4 py-1.5 rounded-lg text-xs font-bold"><i class="fa-solid fa-print mr-1"></i>Cetak Kartu (A4)</button>
             </div>
+          </div>
+          <div class="print:hidden flex flex-wrap items-center gap-3 text-xs text-slate-600 -mt-2">
+            <a href="#" onclick="cardSelectAll(true);return false" class="text-blue-700 font-bold">Pilih semua</a><a href="#" onclick="cardSelectAll(false);return false" class="text-blue-700 font-bold">Kosongkan pilihan</a>
+            <span id="cardSelInfo" class="font-semibold"></span><span id="cardProgress" class="text-emerald-700 font-bold"></span>
+            <span class="text-[10px] text-slate-400">Unduhan massal memakai kartu yang dipilih; bila tidak ada yang dipilih, semua kartu yang tampil.</span>
           </div>
           <div id="examCardsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-2"></div>
         </div>
