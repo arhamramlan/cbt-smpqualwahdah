@@ -1,5 +1,6 @@
 // app-core-firebase.js — autentikasi, admin (pengguna, kelas, mapel, penugasan, kartu, log, pengaturan, backup)
 import { LIMITS } from './constants.js';
+import { layoutCards } from './card-layout.js';
 import {
   db, auth, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
   onSnapshot, query, where, signInWithEmailAndPassword, signOut, onAuthStateChanged
@@ -514,10 +515,11 @@ window.renderExamCards = function () {
   const cls = $('cardClassFilter')?.value || '';
   const list = users.filter((u) => u.role === role && (teacher || !cls || u.class === cls))
     .sort((a, b) => (teacher ? (a.name || a.username) : a.class + a.name).localeCompare(teacher ? (b.name || b.username) : b.class + b.name));
+  cardList = list;
   const s = settingsCache, year = `${esc(s.academicYear || '2026/2027')} (${esc(s.semester || 'GANJIL')})`;
   if (!list.length) { grid.innerHTML = `<p class="text-xs text-slate-400 p-4">Tidak ada kartu untuk ${teacher ? 'guru' : 'kelas ini'}.</p>`; return; }
   const teach = (u) => (u.teacherAssignments || []).map((a) => `${esc(a.subject)} (${esc((a.classes || []).join(', ') || '-')})`).join(' • ') || 'Belum ada penugasan';
-  grid.innerHTML = list.map((u, i) => `<div class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs break-inside-avoid">
+  grid.innerHTML = list.map((u, i) => `<div id="card_${i}" class="border-2 border-slate-800 p-3 rounded-xl bg-white space-y-2 text-xs break-inside-avoid">
     <div class="text-center border-b pb-1"><strong class="uppercase text-[11px] block text-blue-950">${esc(s.schoolName || "SMP QUR'AN AL WAHDAH")}</strong>
       <span class="text-[9px] text-slate-500 uppercase font-bold">${teacher ? 'KARTU AKSES GURU CBT' : 'KARTU PESERTA UJIAN CBT'} T.A ${year}</span></div>
     <div class="flex justify-between items-center gap-2"><div class="space-y-1 text-[11px] flex-1 min-w-0">
@@ -528,10 +530,63 @@ window.renderExamCards = function () {
       <div><strong>Password:</strong> <code class="font-bold text-rose-700">${esc(u.password || '-')}</code></div></div>
       <div class="text-center shrink-0">${u.password ? `<div id="qr_${i}" class="w-20 h-20 flex items-center justify-center"></div><span class="text-[8px] text-slate-500 block font-bold mt-0.5">Scan Login</span>`
         : '<div class="w-20 h-20 flex items-center justify-center text-[9px] text-slate-400 border border-dashed rounded">Tanpa QR</div>'}</div></div>
-    <div class="border-t pt-1 text-[9px] text-slate-400 text-center font-bold uppercase">Harap Jaga Kerahasiaan Kartu Ini</div></div>`).join('');
+    <div class="border-t pt-1 text-[9px] text-slate-400 text-center font-bold uppercase">Harap Jaga Kerahasiaan Kartu Ini</div>
+    <div class="print:hidden flex justify-between items-center pt-1 border-t border-dashed" data-html2canvas-ignore="true">
+      <label class="flex items-center gap-1 text-[10px] text-slate-500 font-semibold cursor-pointer"><input type="checkbox" name="cardSel" value="${i}" onchange="cardSelChanged()">Pilih</label>
+      <button onclick="downloadCard(${i})" class="btn btn-sm btn-blue"><i class="fa-solid fa-download mr-1"></i>Unduh PNG</button></div></div>`).join('');
+  cardSelChanged();
   if (typeof QRCode === 'undefined') return;
   const base = location.origin + location.pathname;
   list.forEach((u, i) => { if (u.password) new QRCode($(`qr_${i}`), { text: `${base}?u=${encodeURIComponent(u.username)}&p=${encodeURIComponent(u.password)}`, width: 80, height: 80, correctLevel: QRCode.CorrectLevel.L }); });
+};
+
+// ---------- Unduh kartu: satu per satu (PNG) atau massal (PDF A4 / ZIP PNG). Diambil dari tampilan, jadi huruf Arab & QR ikut benar ----------
+let cardList = [];
+const slugf = (s) => String(s || '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '');
+const cardName = (u) => `Kartu_${u.role === 'guru' ? 'Guru' : 'Siswa'}${u.role === 'guru' ? '' : '_' + (slugf(u.class) || 'Kelas')}_${slugf(u.name) || slugf(u.username)}`;
+const needLib = (ok, nama) => (ok ? true : (alert(`Pustaka ${nama} belum dimuat (periksa koneksi internet), lalu muat ulang halaman.`), false));
+const grab = (i) => html2canvas($(`card_${i}`), { scale: 2, backgroundColor: '#ffffff', useCORS: true, onclone: (d) => d.documentElement.classList.remove('dark') });   // selalu tema terang
+const toBlob = (cv, type = 'image/png', q) => new Promise((res) => cv.toBlob(res, type, q));
+const saveBlob = (blob, name) => { const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name }); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+const selected = () => [...document.querySelectorAll('input[name="cardSel"]:checked')].map((c) => +c.value);
+const targets = () => { const s = selected(); return s.length ? s : cardList.map((_, i) => i); };
+window.cardSelChanged = () => { const n = selected().length, el = $('cardSelInfo'); if (el) el.innerText = n ? `${n} kartu dipilih` : `${cardList.length} kartu (semua)`; };
+window.cardSelectAll = (on) => { document.querySelectorAll('input[name="cardSel"]').forEach((c) => (c.checked = on)); window.cardSelChanged(); };
+
+async function withProgress(label, fn) {
+  const info = $('cardProgress'), btns = document.querySelectorAll('[data-card-dl]');
+  btns.forEach((b) => (b.disabled = true));
+  try { await fn((i, n) => { info.innerText = `${label} ${i}/${n}…`; }); info.innerText = 'Selesai ✔'; }
+  catch (err) { info.innerText = ''; alert('Gagal membuat file: ' + err.message); }
+  finally { btns.forEach((b) => (b.disabled = false)); setTimeout(() => { if (info.innerText.startsWith('Selesai')) info.innerText = ''; }, 3000); }
+}
+window.downloadCard = async (i) => {
+  if (!needLib(typeof html2canvas !== 'undefined', 'html2canvas') || !cardList[i]) return;
+  await withProgress('Membuat kartu', async () => saveBlob(await toBlob(await grab(i)), `${cardName(cardList[i])}.png`));
+};
+window.downloadCardsPDF = async () => {
+  if (!needLib(typeof html2canvas !== 'undefined', 'html2canvas') || !needLib(window.jspdf, 'jsPDF') || !cardList.length) return;
+  const ids = targets();
+  await withProgress('Membuat PDF', async (tick) => {
+    const shots = []; for (let k = 0; k < ids.length; k++) { tick(k + 1, ids.length); const cv = await grab(ids[k]); shots.push({ img: cv.toDataURL('image/jpeg', 0.92), r: cv.height / cv.width }); await new Promise((r) => setTimeout(r, 0)); }
+    const pos = layoutCards(shots.map((s) => s.r)), pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    pos.forEach((p, k) => { while (pdf.getNumberOfPages() <= p.page) pdf.addPage(); pdf.setPage(p.page + 1); pdf.addImage(shots[k].img, 'JPEG', p.x, p.y, p.w, p.h); });
+    const role = $('cardRoleFilter').value === 'guru' ? 'Guru' : `Siswa${$('cardClassFilter').value ? '_' + slugf($('cardClassFilter').value) : ''}`;
+    pdf.save(`Kartu_${role}.pdf`);
+  });
+};
+window.downloadCardsZip = async () => {
+  if (!needLib(typeof html2canvas !== 'undefined', 'html2canvas') || !needLib(typeof JSZip !== 'undefined', 'JSZip') || !cardList.length) return;
+  const ids = targets();
+  await withProgress('Membuat ZIP', async (tick) => {
+    const zip = new JSZip(), used = new Set();
+    for (let k = 0; k < ids.length; k++) {
+      tick(k + 1, ids.length);
+      let name = cardName(cardList[ids[k]]); if (used.has(name)) name += `_${k + 1}`; used.add(name);
+      zip.file(`${name}.png`, await toBlob(await grab(ids[k]))); await new Promise((r) => setTimeout(r, 0));
+    }
+    saveBlob(await zip.generateAsync({ type: 'blob' }), `Kartu_${$('cardRoleFilter').value === 'guru' ? 'Guru' : 'Siswa'}.zip`);
+  });
 };
 
 // ---------- Log (dibaca sekali, 200 terbaru; bukan listener realtime) ----------
